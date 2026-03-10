@@ -1,0 +1,17 @@
+{
+  "name": "Smart Energy Insights Dev Environment",
+  "image": "mcr.microsoft.com/devcontainers/python:3.13-bookworm",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "keesschollaart.vscode-home-assistant",
+        "charliermarsh.ruff"
+      ]
+    }
+  },
+  "forwardPorts": [8123],
+  "postCreateCommand": "pip3 install homeassistant ruff",
+  "remoteUser": "vscode"
+}
