@@ -1,0 +1,10 @@
+# Home Assistant test config
+config/
+
+# Python environment
+__pycache__/
+*.py[cod]
+*$py.class
+
+# OS junk
+.DS_Store
