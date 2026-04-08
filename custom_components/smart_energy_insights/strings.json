@@ -1,0 +1,10 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Smart Energy Insights Setup",
+        "description": "Would you like to install the integration?"
+      }
+    }
+  }
+}
