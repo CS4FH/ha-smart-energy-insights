@@ -1,0 +1,10 @@
+homeassistant==2026.2.3
+pyspeex-noise
+hassil
+home-assistant-intents
+numpy
+PyTurboJPEG<2
+mutagen
+ha-ffmpeg
+pymicro-vad
+ruff
