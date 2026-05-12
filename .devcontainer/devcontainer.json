@@ -1,6 +1,9 @@
 {
   "name": "Smart Energy Insights Dev Environment",
   "image": "mcr.microsoft.com/devcontainers/python:3.13-bookworm",
+  "mounts": [
+    "source=${localWorkspaceFolder}/config,target=/home/vscode/.homeassistant,type=bind"
+  ],
   "customizations": {
     "vscode": {
       "extensions": [
