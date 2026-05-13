@@ -1,25 +1,64 @@
+import logging
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.components.recorder import get_instance
+from homeassistant.components.recorder.db_schema import StatisticsMeta
+from homeassistant.components.recorder.util import session_scope
+from homeassistant.helpers import entity_registry as er
+from homeassistant.util import slugify
+
 from .const import DOMAIN
+
+_LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[str] = ["sensor"]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    '''Will be called when the integration is set up.'''
-
-    # 1. Create a data storage for this instance
     hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = entry.data
+    hass.data[DOMAIN][entry.entry_id] = {
+        "cache": {
+            "last_update": None,
+        },
+    }
 
-    # 2. Load the platforms (forwards to sensor.py)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    '''Will be called when the integration is deleted.'''
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
+        registry = er.async_get(hass)
+        unique_id = f"{entry.entry_id}_sei_spot_price"
+        entity_id = registry.async_get_entity_id("sensor", DOMAIN, unique_id)
+        stat_ids = [
+            stat_id
+            for stat_id in [
+                entity_id,
+                f"{DOMAIN}:{slugify(entry.entry_id)}_spot_price",
+            ]
+            if stat_id
+        ]
+
+        if stat_ids:
+            instance = get_instance(hass)
+
+            def _purge_statistics(instance, stat_ids):
+                with session_scope(session=instance.get_session()) as session:
+                    return (
+                        session.query(StatisticsMeta)
+                        .filter(StatisticsMeta.statistic_id.in_(stat_ids))
+                        .delete(synchronize_session=False)
+                    )
+
+            deleted = await instance.async_add_executor_job(
+                _purge_statistics,
+                instance,
+                stat_ids,
+            )
+            _LOGGER.info("Deleted %s statistics meta rows", deleted)
+
         hass.data[DOMAIN].pop(entry.entry_id)
 
     return unload_ok
