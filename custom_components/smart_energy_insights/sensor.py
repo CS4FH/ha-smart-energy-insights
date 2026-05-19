@@ -1,14 +1,16 @@
-import logging
-from datetime import timedelta
 import inspect
+import logging
 
 from homeassistant.components.sensor import SensorEntity, SensorStateClass
+from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.statistics import (
     StatisticData,
     StatisticMetaData,
     async_import_statistics,
+    statistics_during_period,
 )
 from homeassistant.components.recorder.models.statistics import StatisticMeanType
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.util import dt as dt_util
 
@@ -30,6 +32,53 @@ def _safe_float(value):
 
 def _get_cache(hass, entry_id):
     return hass.data.setdefault(DOMAIN, {}).setdefault(entry_id, {})
+
+
+def _average(values):
+    if not values:
+        return None
+    return sum(values) / len(values)
+
+
+async def _get_spot_price_statistic_id(hass):
+    entries = hass.config_entries.async_entries(DOMAIN)
+    if not entries:
+        return None
+
+    registry = er.async_get(hass)
+    for entry in entries:
+        unique_id = f"{entry.entry_id}_sei_spot_price"
+        entity_id = registry.async_get_entity_id("sensor", DOMAIN, unique_id)
+        if entity_id:
+            return entity_id
+
+    return None
+
+
+async def _get_existing_price_starts(hass, stat_id, start_time, end_time):
+    def _query():
+        stats = statistics_during_period(
+            hass,
+            start_time,
+            end_time,
+            {stat_id},
+            period="hour",
+            units=None,
+            types={"mean"},
+        )
+        return stats.get(stat_id, [])
+
+    instance = get_instance(hass)
+    rows = await instance.async_add_executor_job(_query)
+    starts = set()
+    for row in rows:
+        start = row.get("start")
+        if start:
+            if isinstance(start, (int, float)):
+                starts.add(dt_util.utc_from_timestamp(start))
+            else:
+                starts.add(dt_util.as_utc(start))
+    return starts
 
 
 async def _fetch_spot_prices(hass, start_time, end_time):
@@ -107,6 +156,51 @@ async def _write_price_statistics(hass, stat_id, series, last_written):
     return last_stat.start if hasattr(last_stat, "start") else last_stat.get("start")
 
 
+async def async_import_spot_prices_for_range(
+    hass,
+    start_time,
+    end_time,
+    missing_only=True,
+):
+    stat_id = await _get_spot_price_statistic_id(hass)
+    if not stat_id:
+        _LOGGER.warning("Spot price statistic_id not available")
+        return {
+            "imported_count": 0,
+            "average_price": None,
+            "series_count": 0,
+        }
+
+    series = await _fetch_spot_prices(hass, start_time, end_time)
+    average_price = _average([point["value"] for point in series])
+
+    existing_starts = set()
+    if missing_only and series:
+        existing_starts = await _get_existing_price_starts(
+            hass,
+            stat_id,
+            start_time,
+            end_time,
+        )
+
+    if existing_starts:
+        series_to_write = [
+            point
+            for point in series
+            if dt_util.as_utc(point["start"]) not in existing_starts
+        ]
+    else:
+        series_to_write = series
+
+    await _write_price_statistics(hass, stat_id, series_to_write, None)
+
+    return {
+        "imported_count": len(series_to_write),
+        "average_price": average_price,
+        "series_count": len(series),
+    }
+
+
 class SpotPriceSensor(SensorEntity):
     def __init__(self, entry):
         self._entry = entry
@@ -114,22 +208,11 @@ class SpotPriceSensor(SensorEntity):
         self._attr_name = "Spot Price"
         self._attr_native_unit_of_measurement = "ct/kWh"
         self._attr_state_class = SensorStateClass.MEASUREMENT
-        self._attr_should_poll = True
+        self._attr_should_poll = False
+
+    async def async_added_to_hass(self):
+        cache = _get_cache(self.hass, self._entry.entry_id)
+        cache["spot_price_stat_id"] = self.entity_id
 
     async def async_update(self):
-        cache = _get_cache(self.hass, self._entry.entry_id)
-        now = dt_util.utcnow()
-        start_time = now - timedelta(days=365)
-
-        series = await _fetch_spot_prices(self.hass, start_time, now)
-        cache["last_written"] = await _write_price_statistics(
-            self.hass,
-            self.entity_id,
-            series,
-            cache.get("last_written"),
-        )
-
-        if series:
-            self._attr_native_value = series[-1]["value"]
-        else:
-            self._attr_native_value = None
+        return

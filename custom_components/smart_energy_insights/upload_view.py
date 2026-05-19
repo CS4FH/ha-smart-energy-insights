@@ -2,6 +2,7 @@
 
 import csv
 import io
+import json
 import logging
 import re
 from datetime import datetime, timedelta
@@ -9,7 +10,6 @@ from datetime import datetime, timedelta
 from aiohttp.web import Request, Response
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.components.recorder.statistics import (
-    StatisticData,
     StatisticMetaData,
     async_add_external_statistics,
 )
@@ -23,6 +23,7 @@ from .const import (
     DOMAIN,
     UPLOAD_API_ENDPOINT,
 )
+from .sensor import async_import_spot_prices_for_range
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -139,9 +140,39 @@ class SmartEnergyInsightsUploadView(HomeAssistantView):
             start_iso = statistics[0]["start"].isoformat()
             end_iso = statistics[-1]["start"].isoformat()
 
+            avg_consumption = None
+            if statistics:
+                avg_consumption = sum(item["state"] for item in statistics) / len(statistics)
+
+            price_result = {
+                "imported_count": 0,
+                "average_price": None,
+                "series_count": 0,
+            }
+            try:
+                price_end = statistics[-1]["start"] + timedelta(hours=1)
+                price_result = await async_import_spot_prices_for_range(
+                    hass,
+                    statistics[0]["start"],
+                    price_end,
+                    missing_only=True,
+                )
+            except Exception as err:
+                _LOGGER.warning("Spot price import failed: %s", err, exc_info=True)
+
             return Response(
                 status=200,
-                text=f'{{"success": true, "count": {len(statistics)}, "statistic_id": "{stat_id}", "start": "{start_iso}", "end": "{end_iso}"}}',
+                text=json.dumps({
+                    "success": True,
+                    "count": len(statistics),
+                    "statistic_id": stat_id,
+                    "start": start_iso,
+                    "end": end_iso,
+                    "avg_consumption_kwh": avg_consumption,
+                    "avg_price_ct_kwh": price_result.get("average_price"),
+                    "price_imported_count": price_result.get("imported_count"),
+                    "price_series_count": price_result.get("series_count"),
+                }),
                 content_type="application/json",
             )
 

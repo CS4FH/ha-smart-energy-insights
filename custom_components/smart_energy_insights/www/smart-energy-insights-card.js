@@ -156,50 +156,20 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     formData.append("obis_code", obisCode);
 
     try {
-      const token = await this.getAuthToken();
-      const xhr = new XMLHttpRequest();
+      if (this._hass?.callApi) {
+        const response = await this._hass.callApi(
+          "POST",
+          "smart_energy_insights/upload",
+          formData,
+        );
+        this.showSuccessMessage(response);
+        this.resetUI();
+        return;
+      }
 
-      // Progress tracking
-      xhr.upload.addEventListener("progress", (e) => {
-        if (e.lengthComputable) {
-          const percentComplete = (e.loaded / e.total) * 100;
-          this.updateProgress(percentComplete);
-        }
-      });
-
-      // Handle completion
-      xhr.addEventListener("load", () => {
-        if (xhr.status === 200) {
-          try {
-            const response = JSON.parse(xhr.responseText);
-            this.showSuccessMessage(response);
-          } catch {
-            this.showErrorMessage("Upload successful but response was invalid");
-          }
-          this.resetUI();
-        } else {
-          try {
-            const response = JSON.parse(xhr.responseText);
-            this.showErrorMessage(response.error || `Upload failed: ${xhr.status}`);
-          } catch {
-            this.showErrorMessage(`Upload failed with status ${xhr.status}`);
-          }
-          uploadBtn.disabled = false;
-          cancelBtn.disabled = false;
-        }
-      });
-
-      // Handle errors
-      xhr.addEventListener("error", () => {
-        this.showErrorMessage("Network error during upload");
-        uploadBtn.disabled = false;
-        cancelBtn.disabled = false;
-      });
-
-      // Send request
-      xhr.open("POST", "/api/smart_energy_insights/upload");
-      xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-      xhr.send(formData);
+      this.showErrorMessage("Home Assistant API client not available");
+      uploadBtn.disabled = false;
+      cancelBtn.disabled = false;
     } catch (error) {
       this.showErrorMessage(`Error: ${error.message}`);
       uploadBtn.disabled = false;
@@ -208,26 +178,6 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
   }
 
   async getAuthToken() {
-    // Try to get token from localStorage (if user is logged in via UI)
-    let token = localStorage.getItem("hassAuthToken");
-    if (token) {
-      return token;
-    }
-
-    // Fallback: get from Home Assistant auth API
-    try {
-      const response = await fetch("/auth/authorize", {
-        method: "POST",
-      });
-      if (response.ok) {
-        const data = await response.json();
-        return data.access_token;
-      }
-    } catch {
-      // Ignore
-    }
-
-    // If no token, assume session auth is sufficient (requires_auth will handle it)
     return "";
   }
 
@@ -243,11 +193,17 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     const count = response.count || 0;
     const start = response.start || "N/A";
     const end = response.end || "N/A";
+    const avgConsumption = this.formatNumber(response.avg_consumption_kwh, 3);
+    const avgPrice = this.formatNumber(response.avg_price_ct_kwh, 3);
+    const priceImported = response.price_imported_count ?? 0;
     message.className = "response-message success";
     message.innerHTML = `
       <div class="success-icon">✓</div>
       <p><strong>Upload Successful!</strong></p>
-      <p>${count} statistics imported</p>
+      <p>${count} consumption records imported</p>
+      <p>Average consumption: ${avgConsumption} kWh</p>
+      <p>Average spot price: ${avgPrice} ct/kWh</p>
+      <p>${priceImported} spot price records imported</p>
       <p><small>Period: ${start} to ${end}</small></p>
     `;
   }
@@ -270,6 +226,14 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     this.querySelector("#fileInput").value = "";
     this.selectedFile = null;
     this.updateProgress(0);
+  }
+
+  formatNumber(value, decimals) {
+    const num = Number(value);
+    if (!Number.isFinite(num)) {
+      return "N/A";
+    }
+    return num.toFixed(decimals);
   }
 
   applyStyles() {
