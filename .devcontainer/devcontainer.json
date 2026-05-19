@@ -1,9 +1,6 @@
 {
   "name": "Smart Energy Insights Dev Environment",
   "image": "mcr.microsoft.com/devcontainers/python:3.13-bookworm",
-  "mounts": [
-    "source=${localWorkspaceFolder}/config,target=/home/vscode/.homeassistant,type=bind"
-  ],
   "customizations": {
     "vscode": {
       "extensions": [
@@ -15,6 +12,6 @@
     }
   },
   "forwardPorts": [8123],
-  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y ffmpeg libpcap-dev libturbojpeg0 && pip3 install -r /workspaces/${localWorkspaceFolderBasename}/requirements-dev.txt && mkdir -p /home/vscode/.homeassistant/custom_components && ln -sf /workspaces/${localWorkspaceFolderBasename}/custom_components/* /home/vscode/.homeassistant/custom_components/",
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y ffmpeg libpcap-dev libturbojpeg0 && pip install -r requirements-dev.txt && mkdir -p config/custom_components && ln -sfn ${containerWorkspaceFolder}/custom_components/smart_energy_insights ${containerWorkspaceFolder}/config/custom_components/smart_energy_insights",
   "remoteUser": "vscode"
 }
