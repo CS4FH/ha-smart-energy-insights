@@ -17,6 +17,7 @@ from homeassistant.components.lovelace.const import (
     LOVELACE_DATA,
     MODE_STORAGE,
 )
+from homeassistant.const import EVENT_COMPONENT_LOADED
 from homeassistant.core import HomeAssistant
 
 from .const import (
@@ -79,6 +80,7 @@ async def _ensure_card_resource(hass: HomeAssistant) -> None:
         lovelace_data = hass.data.get(LOVELACE_DATA)
         if not lovelace_data:
             _LOGGER.debug("Lovelace config not yet loaded, skipping resource setup")
+            _schedule_resource_retry(hass)
             return
 
         resources = lovelace_data.resources
@@ -112,6 +114,26 @@ async def _ensure_card_resource(hass: HomeAssistant) -> None:
     except Exception as err:
         _LOGGER.error("Failed to setup card resource: %s", err)
         raise
+
+
+def _schedule_resource_retry(hass: HomeAssistant) -> None:
+    """Retry resource registration once Lovelace is loaded."""
+    listener_key = "lovelace_resource_listener"
+    if hass.data[DOMAIN].get(listener_key):
+        return
+
+    def _on_component_loaded(event):
+        if event.data.get("component") != "lovelace":
+            return
+        remove = hass.data[DOMAIN].pop(listener_key, None)
+        if remove:
+            remove()
+        hass.async_create_task(_ensure_card_resource(hass))
+
+    hass.data[DOMAIN][listener_key] = hass.bus.async_listen(
+        EVENT_COMPONENT_LOADED,
+        _on_component_loaded,
+    )
 
 
 async def _ensure_dashboard_config(hass: HomeAssistant) -> None:

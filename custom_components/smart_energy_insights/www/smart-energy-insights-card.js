@@ -156,20 +156,29 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     formData.append("obis_code", obisCode);
 
     try {
-      if (this._hass?.callApi) {
-        const response = await this._hass.callApi(
-          "POST",
-          "smart_energy_insights/upload",
-          formData,
-        );
-        this.showSuccessMessage(response);
-        this.resetUI();
-        return;
+      if (!this._hass) {
+        throw new Error("Home Assistant instance not found");
       }
 
-      this.showErrorMessage("Home Assistant API client not available");
-      uploadBtn.disabled = false;
-      cancelBtn.disabled = false;
+      // Wir nutzen natives fetch() anstatt hass.callApi, um den multipart/form-data Header nicht zu zerstören
+      const response = await fetch("/api/smart_energy_insights/upload", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${this._hass.auth.data.access_token}`
+          // WICHTIG: Setze hier NIEMALS manuell den "Content-Type"! 
+          // Der Browser generiert bei FormData automatisch den richtigen "multipart/form-data" Header inkl. Boundary.
+        },
+        body: formData
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        throw new Error(responseData.error || `HTTP error! status: ${response.status}`);
+      }
+
+      this.showSuccessMessage(responseData);
+      this.resetUI();
     } catch (error) {
       this.showErrorMessage(`Error: ${error.message}`);
       uploadBtn.disabled = false;
@@ -439,11 +448,19 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
   }
 }
 
-// Register the card
-customElements.define(
-  "smart-energy-insights-upload-card",
-  SmartEnergyInsightsUploadCard
-);
+// Register the card (guard against double-define on reloads)
+try {
+  if (!customElements.get("smart-energy-insights-upload-card")) {
+    customElements.define(
+      "smart-energy-insights-upload-card",
+      SmartEnergyInsightsUploadCard
+    );
+  }
+} catch (err) {
+  if (!(err && String(err).includes("already been used"))) {
+    throw err;
+  }
+}
 
 // Register the card as a custom card
 window.customCards = window.customCards || [];

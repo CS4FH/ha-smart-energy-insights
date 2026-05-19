@@ -90,9 +90,20 @@ async def _fetch_spot_prices(hass, start_time, end_time):
         "end": end_ms,
     }
 
+    _LOGGER.debug(
+        "Fetching spot prices from %s (start_ms=%s end_ms=%s)",
+        SPOT_API_URL,
+        start_ms,
+        end_ms,
+    )
     session = async_get_clientsession(hass)
     async with session.get(SPOT_API_URL, params=params, timeout=30) as resp:
         payload = await resp.json()
+
+    _LOGGER.debug(
+        "Spot price API returned %s points",
+        len(payload.get("data", [])),
+    )
 
     series = []
     for point in payload.get("data", []):
@@ -171,8 +182,19 @@ async def async_import_spot_prices_for_range(
             "series_count": 0,
         }
 
+    _LOGGER.debug(
+        "Spot price statistic_id resolved to %s",
+        stat_id,
+    )
+
     series = await _fetch_spot_prices(hass, start_time, end_time)
     average_price = _average([point["value"] for point in series])
+
+    _LOGGER.debug(
+        "Spot price series_count=%s average_price=%s",
+        len(series),
+        average_price,
+    )
 
     existing_starts = set()
     if missing_only and series:
@@ -191,6 +213,13 @@ async def async_import_spot_prices_for_range(
         ]
     else:
         series_to_write = series
+
+    _LOGGER.debug(
+        "Spot price series_to_write=%s missing_only=%s existing_starts=%s",
+        len(series_to_write),
+        missing_only,
+        len(existing_starts),
+    )
 
     await _write_price_statistics(hass, stat_id, series_to_write, None)
 

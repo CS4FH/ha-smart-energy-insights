@@ -157,6 +157,10 @@ class SmartEnergyInsightsUploadView(HomeAssistantView):
                     price_end,
                     missing_only=True,
                 )
+                _LOGGER.debug(
+                    "Spot price import result: %s",
+                    price_result,
+                )
             except Exception as err:
                 _LOGGER.warning("Spot price import failed: %s", err, exc_info=True)
 
