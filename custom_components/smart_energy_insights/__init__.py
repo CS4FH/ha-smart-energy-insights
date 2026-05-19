@@ -9,6 +9,8 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.util import slugify
 
 from .const import DOMAIN
+from .upload_view import SmartEnergyInsightsUploadView
+from .panel import async_setup_panel, async_unload_panel
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -21,6 +23,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "last_update": None,
         },
     }
+
+    # Register HTTP view for CSV uploads
+    hass.http.register_view(SmartEnergyInsightsUploadView())
+
+    # Setup Smart Energy Insights Lovelace panel with auto-registered resource
+    await async_setup_panel(hass)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
@@ -60,5 +68,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.info("Deleted %s statistics meta rows", deleted)
 
         hass.data[DOMAIN].pop(entry.entry_id)
+
+        # Unload panel if this is the last entry
+        if not hass.data[DOMAIN]:
+            await async_unload_panel(hass)
 
     return unload_ok
