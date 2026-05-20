@@ -3,9 +3,50 @@
     "step": {
       "user": {
         "title": "Smart Energy Insights Setup",
-        "description": "Spotpreise werden geladen und als Langzeitstatistik gespeichert.",
-        "data": {}
+        "description": "Spot prices are loaded and stored as long-term statistics.",
+        "data": {
+          "fixed_price": "Fixed price (ct/kWh)",
+          "fixed_base_fee": "Fixed base fee (EUR)",
+          "spot_markup": "Spot markup (ct/kWh)",
+          "spot_base_fee": "Spot base fee (EUR)",
+          "tax_rate": "Tax rate (%)"
+        }
       }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Smart Energy Insights Options",
+        "data": {
+          "fixed_price": "Fixed price (ct/kWh)",
+          "fixed_base_fee": "Fixed base fee (EUR)",
+          "spot_markup": "Spot markup (ct/kWh)",
+          "spot_base_fee": "Spot base fee (EUR)",
+          "tax_rate": "Tax rate (%)"
+        }
+      }
+    }
+  },
+  "panel": {
+    "title": "Smart Energy Insights",
+    "card_title": "Load Profile Upload"
+  },
+  "api": {
+    "default_filename": "Unknown.csv",
+    "error": {
+      "file_too_large": "File too large",
+      "encoding_not_supported": "File encoding not supported.",
+      "no_file_provided": "No file provided",
+      "empty_csv": "Empty CSV file",
+      "missing_columns": "Missing required columns: {columns}",
+      "invalid_unit": "Row {row}: Invalid unit '{unit}'",
+      "missing_timestamps": "Row {row}: Missing timestamps",
+      "invalid_date": "Row {row}: Invalid date format.",
+      "invalid_value": "Row {row}: Invalid value.",
+      "no_valid_rows": "No valid data rows found",
+      "parse_failed": "Error parsing CSV: {message}",
+      "internal_server": "Internal server error"
     }
   }
 }

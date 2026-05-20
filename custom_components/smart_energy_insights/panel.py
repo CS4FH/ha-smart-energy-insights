@@ -31,6 +31,7 @@ from .const import (
     CARD_TITLE,
     DEFAULT_OBIS_CODE,
 )
+from .utils.translation import async_translate
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -56,11 +57,13 @@ async def async_setup_panel(hass: HomeAssistant) -> bool:
         # Step 1: Ensure Lovelace resource is registered
         await _ensure_card_resource(hass)
 
+        panel_title, card_title = await _get_panel_texts(hass)
+
         # Step 2: Create/update dedicated dashboard
-        await _ensure_dashboard_config(hass)
+        await _ensure_dashboard_config(hass, panel_title, card_title)
 
         # Step 3: Register built-in panel
-        _register_panel(hass)
+        _register_panel(hass, panel_title)
 
         # Mark setup as complete
         hass.data[DOMAIN][PANEL_SETUP_KEY] = True
@@ -116,6 +119,20 @@ async def _ensure_card_resource(hass: HomeAssistant) -> None:
         raise
 
 
+async def _get_panel_texts(hass: HomeAssistant) -> tuple[str, str]:
+    panel_title = await async_translate(
+        hass,
+        "panel.title",
+        default=PANEL_TITLE,
+    )
+    card_title = await async_translate(
+        hass,
+        "panel.card_title",
+        default=CARD_TITLE,
+    )
+    return panel_title, card_title
+
+
 def _schedule_resource_retry(hass: HomeAssistant) -> None:
     """Retry resource registration once Lovelace is loaded."""
     listener_key = "lovelace_resource_listener"
@@ -136,7 +153,11 @@ def _schedule_resource_retry(hass: HomeAssistant) -> None:
     )
 
 
-async def _ensure_dashboard_config(hass: HomeAssistant) -> None:
+async def _ensure_dashboard_config(
+    hass: HomeAssistant,
+    panel_title: str,
+    card_title: str,
+) -> None:
     """Create/update a dedicated Lovelace dashboard with the upload card."""
     try:
         lovelace_data = hass.data.get(LOVELACE_DATA)
@@ -157,7 +178,7 @@ async def _ensure_dashboard_config(hass: HomeAssistant) -> None:
             existing = await dashboards_collection.async_create_item(
                 {
                     CONF_URL_PATH: PANEL_URL,
-                    CONF_TITLE: PANEL_TITLE,
+                    CONF_TITLE: panel_title,
                     CONF_ICON: PANEL_ICON,
                     CONF_SHOW_IN_SIDEBAR: True,
                     CONF_REQUIRE_ADMIN: False,
@@ -173,16 +194,16 @@ async def _ensure_dashboard_config(hass: HomeAssistant) -> None:
             lovelace_data.dashboards[PANEL_URL] = dashboard_config
 
         config = {
-            "title": PANEL_TITLE,
+            "title": panel_title,
             "views": [
                 {
-                    "title": PANEL_TITLE,
+                    "title": panel_title,
                     "path": PANEL_URL,
                     "panel": True,
                     "cards": [
                         {
                             "type": CARD_TYPE,
-                            "title": CARD_TITLE,
+                            "title": card_title,
                             "obis_code": DEFAULT_OBIS_CODE,
                         }
                     ],
@@ -201,14 +222,14 @@ async def _ensure_dashboard_config(hass: HomeAssistant) -> None:
         raise
 
 
-def _register_panel(hass: HomeAssistant) -> None:
+def _register_panel(hass: HomeAssistant, panel_title: str) -> None:
     """Register the built-in Lovelace panel in the sidebar."""
     try:
         async_register_built_in_panel(
             hass,
             "lovelace",
             frontend_url_path=PANEL_URL,
-            sidebar_title=PANEL_TITLE,
+            sidebar_title=panel_title,
             sidebar_icon=PANEL_ICON,
             require_admin=False,
             config={"mode": MODE_STORAGE},

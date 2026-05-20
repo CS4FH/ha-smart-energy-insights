@@ -1,0 +1,52 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Smart Energy Insights Einrichtung",
+        "description": "Spotpreise werden geladen und als Langzeitstatistik gespeichert.",
+        "data": {
+          "fixed_price": "Festpreis (ct/kWh)",
+          "fixed_base_fee": "Grundgebuehr Fix (EUR)",
+          "spot_markup": "Spot-Aufschlag (ct/kWh)",
+          "spot_base_fee": "Grundgebuehr Spot (EUR)",
+          "tax_rate": "Steuersatz (%)"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Smart Energy Insights Optionen",
+        "data": {
+          "fixed_price": "Festpreis (ct/kWh)",
+          "fixed_base_fee": "Grundgebuehr Fix (EUR)",
+          "spot_markup": "Spot-Aufschlag (ct/kWh)",
+          "spot_base_fee": "Grundgebuehr Spot (EUR)",
+          "tax_rate": "Steuersatz (%)"
+        }
+      }
+    }
+  },
+  "panel": {
+    "title": "Smart Energy Insights",
+    "card_title": "Lastprofil Upload"
+  },
+  "api": {
+    "default_filename": "Unbekannt.csv",
+    "error": {
+      "file_too_large": "Datei zu gross",
+      "encoding_not_supported": "Datei-Kodierung wird nicht unterstuetzt.",
+      "no_file_provided": "Keine Datei bereitgestellt",
+      "empty_csv": "Leere CSV-Datei",
+      "missing_columns": "Fehlende Pflichtspalten: {columns}",
+      "invalid_unit": "Zeile {row}: Ungueltige Einheit '{unit}'",
+      "missing_timestamps": "Zeile {row}: Fehlende Zeitstempel",
+      "invalid_date": "Zeile {row}: Ungueltiges Datumsformat.",
+      "invalid_value": "Zeile {row}: Ungueltiger Wert.",
+      "no_valid_rows": "Keine gueltigen Datenzeilen gefunden",
+      "parse_failed": "Fehler beim Parsen der CSV: {message}",
+      "internal_server": "Interner Serverfehler"
+    }
+  }
+}
