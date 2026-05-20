@@ -6,7 +6,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.components.http import StaticPathConfig
 
 from .const import DOMAIN
-from .upload_view import SmartEnergyInsightsUploadView
+from .insights_view import SmartEnergyInsightsUploadView
 from .panel import async_setup_panel, async_unload_panel
 
 _LOGGER = logging.getLogger(__name__)

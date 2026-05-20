@@ -174,7 +174,7 @@ class SmartEnergyInsightsUploadView(HomeAssistantView):
                 "price_imported_count": price_result.get("imported_count"),
                 "price_series_count": price_result.get("series_count"),
                 "consumption_heatmap": result.get("consumption_heatmap", []),
-                "price_heatmap": price_heatmap,
+                "price_heatmap": spot_stats["price_heatmap"],
                 
                 "matched_hours": spot_stats["matched_hours"],
                 "duration_months": spot_stats["duration_months"],
