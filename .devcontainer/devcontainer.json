@@ -5,6 +5,7 @@
     "vscode": {
       "extensions": [
         "ms-python.python",
+        "ms-python.debugpy",
         "ms-python.vscode-pylance",
         "keesschollaart.vscode-home-assistant",
         "charliermarsh.ruff"
