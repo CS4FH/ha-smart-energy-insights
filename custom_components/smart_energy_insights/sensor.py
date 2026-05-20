@@ -227,6 +227,7 @@ async def async_import_spot_prices_for_range(
         "imported_count": len(series_to_write),
         "average_price": average_price,
         "series_count": len(series),
+        "series": series,
     }
 
 
