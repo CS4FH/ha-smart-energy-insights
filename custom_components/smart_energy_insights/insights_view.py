@@ -50,6 +50,8 @@ class SmartEnergyInsightsUploadView(HomeAssistantView):
 
     async def get(self, request: Request) -> Response:
         hass = request.app["hass"]
+        if not hass.config_entries.async_entries(DOMAIN):
+            return Response(status=404, text="{}", content_type="application/json")
         last_data = await async_load_cache(hass)
         if last_data:
             return Response(
@@ -61,6 +63,8 @@ class SmartEnergyInsightsUploadView(HomeAssistantView):
 
     async def post(self, request: Request) -> Response:
         hass = request.app["hass"]
+        if not hass.config_entries.async_entries(DOMAIN):
+            return Response(status=404, text="{}", content_type="application/json")
 
         # --- ROUTE 1: LEISE EINSTELLUNGS-UPDATES VOM FRONTEND ---
         if request.content_type and request.content_type.startswith("application/json"):

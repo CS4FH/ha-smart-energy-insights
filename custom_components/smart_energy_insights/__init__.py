@@ -7,7 +7,12 @@ from homeassistant.components.http import StaticPathConfig
 
 from .const import DOMAIN
 from .insights_view import SmartEnergyInsightsUploadView
-from .panel import async_setup_panel, async_unload_panel
+from .panel import (
+    async_cleanup_panel_storage,
+    async_setup_panel,
+    async_unload_panel,
+)
+from .repositories.cache_repository import async_clear_cache
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -49,6 +54,18 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         # Unload panel if this is the last entry
         if not hass.data[DOMAIN]:
+            await async_clear_cache(hass)
             await async_unload_panel(hass)
+            hass.data.pop(DOMAIN, None)
 
     return unload_ok
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Handle removal of a config entry.
+
+    Ensure Lovelace storage artifacts are cleaned even if Lovelace isn't loaded.
+    """
+    if not hass.config_entries.async_entries(DOMAIN):
+        await async_cleanup_panel_storage(hass)
+        await async_clear_cache(hass)

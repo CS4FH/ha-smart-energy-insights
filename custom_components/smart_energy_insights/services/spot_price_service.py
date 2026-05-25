@@ -132,18 +132,38 @@ async def _write_price_statistics(hass, stat_id, series, last_written):
     if not stats:
         return last_written
 
+    # Determine human-readable start/end for logging in a robust way
+    try:
+        first_start = stats[0].start if hasattr(stats[0], "start") else stats[0].get("start")
+    except Exception:
+        first_start = None
+
+    try:
+        last_start = stats[-1].start if hasattr(stats[-1], "start") else stats[-1].get("start")
+    except Exception:
+        last_start = None
+
     _LOGGER.info(
         "Importing %s price statistics for %s (%s -> %s)",
         len(stats),
         stat_id,
-        stats[0].start,
-        stats[-1].start,
+        first_start,
+        last_start,
     )
 
-    await async_import_stats(hass, metadata, stats)
+    try:
+        await async_import_stats(hass, metadata, stats)
+    except Exception as err:
+        _LOGGER.error("Failed to import spot price statistics: %s", err, exc_info=True)
+        return last_written
 
     last_stat = stats[-1]
-    return last_stat.start if hasattr(last_stat, "start") else last_stat.get("start")
+    if hasattr(last_stat, "start"):
+        return last_stat.start
+    if isinstance(last_stat, dict):
+        return last_stat.get("start")
+    # Fallback: try attribute access via getattr
+    return getattr(last_stat, "start", last_written)
 
 
 async def async_import_spot_prices_for_range(

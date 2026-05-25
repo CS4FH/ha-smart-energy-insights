@@ -24,3 +24,8 @@ async def async_update_cache(hass: HomeAssistant, patch: dict) -> dict:
     data.update(patch)
     await async_save_cache(hass, data)
     return data
+
+
+async def async_clear_cache(hass: HomeAssistant) -> None:
+    store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
+    await store.async_remove()

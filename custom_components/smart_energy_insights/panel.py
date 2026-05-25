@@ -19,6 +19,8 @@ from homeassistant.components.lovelace.const import (
 )
 from homeassistant.const import EVENT_COMPONENT_LOADED
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.storage import Store
+from homeassistant.util import slugify
 
 from .const import (
     DOMAIN,
@@ -34,6 +36,9 @@ from .const import (
 from .utils.translation import async_translate
 
 _LOGGER = logging.getLogger(__name__)
+RESOURCE_LISTENER_KEY = "lovelace_resource_listener"
+_LOVELACE_DASHBOARDS_KEY = "lovelace_dashboards"
+_LOVELACE_RESOURCES_KEY = "lovelace_resources"
 
 
 async def async_setup_panel(hass: HomeAssistant) -> bool:
@@ -135,22 +140,95 @@ async def _get_panel_texts(hass: HomeAssistant) -> tuple[str, str]:
 
 def _schedule_resource_retry(hass: HomeAssistant) -> None:
     """Retry resource registration once Lovelace is loaded."""
-    listener_key = "lovelace_resource_listener"
-    if hass.data[DOMAIN].get(listener_key):
+    if hass.data[DOMAIN].get(RESOURCE_LISTENER_KEY):
         return
 
     def _on_component_loaded(event):
         if event.data.get("component") != "lovelace":
             return
-        remove = hass.data[DOMAIN].pop(listener_key, None)
+        remove = hass.data[DOMAIN].pop(RESOURCE_LISTENER_KEY, None)
         if remove:
             remove()
         hass.async_create_task(_ensure_card_resource(hass))
 
-    hass.data[DOMAIN][listener_key] = hass.bus.async_listen(
+    hass.data[DOMAIN][RESOURCE_LISTENER_KEY] = hass.bus.async_listen(
         EVENT_COMPONENT_LOADED,
         _on_component_loaded,
     )
+
+
+async def _remove_card_resource(hass: HomeAssistant) -> None:
+    """Remove the custom card resource from Lovelace storage if present."""
+    lovelace_data = hass.data.get(LOVELACE_DATA)
+    if not lovelace_data:
+        return
+
+    resources = lovelace_data.resources
+    if isinstance(resources, lovelace_resources.ResourceYAMLCollection):
+        return
+
+    if isinstance(resources, lovelace_resources.ResourceStorageCollection):
+        await resources.async_load()
+        resource = next(
+            (res for res in resources.async_items() if res.get(CONF_URL) == CARD_RESOURCE_URL),
+            None,
+        )
+        if resource:
+            await resources.async_delete_item(resource["id"])
+            _LOGGER.debug("Removed custom card resource: %s", CARD_RESOURCE_URL)
+
+
+async def _remove_dashboard_config(hass: HomeAssistant) -> None:
+    """Remove the dedicated Lovelace dashboard entry and config if present."""
+    lovelace_data = hass.data.get(LOVELACE_DATA)
+    if not lovelace_data:
+        return
+
+    dashboards_collection = lovelace_dashboard.DashboardsCollection(hass)
+    await dashboards_collection.async_load()
+    existing = next(
+        (item for item in dashboards_collection.async_items() if item.get(CONF_URL_PATH) == PANEL_URL),
+        None,
+    )
+
+    if existing:
+        await dashboards_collection.async_delete_item(existing["id"])
+        _LOGGER.debug("Removed Lovelace dashboard entry for %s", PANEL_URL)
+
+    if PANEL_URL in lovelace_data.dashboards:
+        lovelace_data.dashboards.pop(PANEL_URL, None)
+
+
+async def _cleanup_lovelace_storage(hass: HomeAssistant) -> None:
+    """Remove dashboard, config, and resource entries from Lovelace storage."""
+    dashboard_id = slugify(PANEL_URL)
+
+    dashboards_store = Store(hass, 1, _LOVELACE_DASHBOARDS_KEY)
+    dashboards_data = await dashboards_store.async_load() or {}
+    dashboards_items = dashboards_data.get("items", [])
+    filtered_dashboards = [
+        item
+        for item in dashboards_items
+        if item.get(CONF_URL_PATH) != PANEL_URL and item.get("id") != dashboard_id
+    ]
+    if len(filtered_dashboards) != len(dashboards_items):
+        dashboards_data["items"] = filtered_dashboards
+        await dashboards_store.async_save(dashboards_data)
+
+    resources_store = Store(hass, 1, _LOVELACE_RESOURCES_KEY)
+    resources_data = await resources_store.async_load() or {}
+    resources_items = resources_data.get("items", [])
+    filtered_resources = [
+        item
+        for item in resources_items
+        if item.get(CONF_URL) != CARD_RESOURCE_URL
+    ]
+    if len(filtered_resources) != len(resources_items):
+        resources_data["items"] = filtered_resources
+        await resources_store.async_save(resources_data)
+
+    config_store = Store(hass, 1, f"lovelace.{dashboard_id}")
+    await config_store.async_remove()
 
 
 async def _ensure_dashboard_config(
@@ -244,13 +322,23 @@ def _register_panel(hass: HomeAssistant, panel_title: str) -> None:
 async def async_unload_panel(hass: HomeAssistant) -> bool:
     """Clean up the Smart Energy Insights panel.
     
-    This function removes the built-in panel from the sidebar.
-    The Lovelace resource and dashboard are left in place for potential reuse.
+    This function removes the built-in panel from the sidebar and cleans up
+    associated Lovelace storage artifacts.
     """
     try:
+        # Remove scheduled listener if still present
+        remove = hass.data[DOMAIN].pop(RESOURCE_LISTENER_KEY, None)
+        if remove:
+            remove()
+
         # Remove the panel from the sidebar
         await async_remove_panel(hass, PANEL_URL)
         _LOGGER.debug("Removed Smart Energy Insights panel from sidebar")
+
+        # Remove associated dashboard and resource
+        await _remove_dashboard_config(hass)
+        await _remove_card_resource(hass)
+        await _cleanup_lovelace_storage(hass)
 
         # Reset setup guard so next entry can set it up again if needed
         if PANEL_SETUP_KEY in hass.data[DOMAIN]:
@@ -261,3 +349,8 @@ async def async_unload_panel(hass: HomeAssistant) -> bool:
     except Exception as err:
         _LOGGER.error("Error during panel unload: %s", err)
         return False
+
+
+async def async_cleanup_panel_storage(hass: HomeAssistant) -> None:
+    """Cleanup Lovelace storage artifacts for the panel."""
+    await _cleanup_lovelace_storage(hass)
