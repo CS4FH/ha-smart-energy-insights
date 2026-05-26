@@ -31,7 +31,6 @@ from .const import (
     CARD_RESOURCE_URL,
     CARD_TYPE,
     CARD_TITLE,
-    DEFAULT_OBIS_CODE,
 )
 from .utils.translation import async_translate
 
@@ -282,7 +281,6 @@ async def _ensure_dashboard_config(
                         {
                             "type": CARD_TYPE,
                             "title": card_title,
-                            "obis_code": DEFAULT_OBIS_CODE,
                         }
                     ],
                 }

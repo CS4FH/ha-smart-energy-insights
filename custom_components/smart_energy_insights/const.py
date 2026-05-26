@@ -6,12 +6,14 @@ SPOT_API_URL = "https://api.awattar.at/v1/marketdata"
 UPLOAD_API_ENDPOINT = "/api/smart_energy_insights/upload"
 UPLOAD_API_NAME = "api:smart_energy_insights:upload"
 
+# Sensor Import Configuration
+SENSOR_API_ENDPOINT = "/api/smart_energy_insights/sensor"
+SENSOR_API_NAME = "api:smart_energy_insights:sensor"
+
 # CSV Parsing Configuration
 CSV_DELIMITER = "\t"
 TIMESTAMP_FORMAT = "%d.%m.%Y %H:%M"
 ALLOWED_UNITS = ["KWH", "kWh", "kWH", "KWh"]  # Case-insensitive handling
-DEFAULT_OBIS_CODE = "1.8.0"  # Positive active energy (import)
-ALLOWED_OBIS_CODES = ["1.8.0", "1.8.1", "1.8.2"]  # Import codes
 
 # CSV Column Names (exact matching)
 CSV_COLUMNS_REQUIRED = [

@@ -6,7 +6,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.components.http import StaticPathConfig
 
 from .const import DOMAIN
-from .insights_view import SmartEnergyInsightsUploadView
+from .insights_view import SmartEnergyInsightsSensorView, SmartEnergyInsightsUploadView
 from .panel import (
     async_cleanup_panel_storage,
     async_setup_panel,
@@ -39,6 +39,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Register HTTP view for CSV uploads
     hass.http.register_view(SmartEnergyInsightsUploadView())
+    # Register HTTP view for sensor imports
+    hass.http.register_view(SmartEnergyInsightsSensorView())
 
     # Setup Smart Energy Insights Lovelace panel with auto-registered resource
     await async_setup_panel(hass)
