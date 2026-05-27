@@ -9,3 +9,5 @@ ha-ffmpeg
 pymicro-vad
 ruff
 pytest
+pytest-cov
+pytest-asyncio
