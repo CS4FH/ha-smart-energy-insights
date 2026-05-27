@@ -143,7 +143,7 @@
     "savings_daily_help": "Ersparnis pro Tag basierend auf dem gewaehlten Zeitraum.",
     "savings_monthly_help": "Ersparnis pro 30-Tage-Monat, hochgerechnet aus dem Zeitraum.",
     "savings_yearly_help": "Ersparnis pro 365-Tage-Jahr, hochgerechnet aus dem Zeitraum.",
-    "card_tax_note": "Alle Werte in dieser Karte enthalten Steuer."
+    "card_tax_note": "Alle Werte enthalten {taxRate}% Steuer."
   },
   "api": {
     "default_filename": "Unbekannt.csv",

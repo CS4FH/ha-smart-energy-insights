@@ -251,10 +251,6 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
         "card.cost_spot_help",
         "Total cost of the spot tariff for the selected period."
       ),
-      cardTaxNote: this.localize(
-        "card.card_tax_note",
-        "All values in this card include tax."
-      ),
       savingsDailyHelp: this.localize(
         "card.savings_daily_help",
         "Savings per day based on the selected period."
@@ -268,6 +264,14 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
         "Savings per 365-day year extrapolated from the selected period."
       )
     };
+  }
+
+  getTaxNote(taxRate) {
+    return this.localize(
+      "card.card_tax_note",
+      "All values include {taxRate}% tax.",
+      { taxRate: formatNumber(taxRate, 1) }
+    );
   }
 
   render() {
@@ -980,6 +984,8 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     const yearlySavings = dailySavings !== null ? dailySavings * 365 : null;
     const fixPerDay = matchedDays > 0 ? costFixEur / matchedDays : null;
     const spotPerDay = matchedDays > 0 ? costSpotEur / matchedDays : null;
+    const taxRate = this.latestData?.tax_rate ?? this._tariffState?.taxRate ?? 20.0;
+    const taxNote = this.getTaxNote(taxRate);
     const breakEvenFixed = this.calculateBreakEvenFixed({
       matchedConsumption: this.latestData.matched_consumption,
       durationMonths: this.latestData.duration_months,
@@ -1058,6 +1064,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
             <span><strong>${texts.savingsYearlyLabel}</strong></span>
             <span>${yearlySavings !== null ? formatNumber(yearlySavings, 2) : "-"} € <span class="info-icon" title="${texts.savingsYearlyHelp}">i</span></span>
           </div>
+          <div class="card-tax-note">${taxNote}</div>
           ${extrapolatedNote ? `<div style="font-size: 11px; color: var(--secondary-text-color);">${extrapolatedNote} <span class="info-icon" title="${texts.savingsExtrapolatedHelp}">i</span></div>` : ""}
         </div>
       </div>
@@ -1081,6 +1088,8 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
 
   buildAnalysisGroups(summary) {
     const texts = this._texts || this.getTexts();
+    const taxRate = this.latestData?.tax_rate ?? this._tariffState?.taxRate ?? 20.0;
+    const taxNote = this.getTaxNote(taxRate);
     const buildItems = (items) => items
       .map((item) => `<div class="summary-item"><span>${item.label}</span><strong>${item.value}</strong></div>`)
       .join("");
@@ -1131,6 +1140,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
         <div class="analysis-group-title">${texts.analysisGroupPriceTitle}</div>
         <div class="analysis-summary-grid">${priceItems}</div>
       </div>
+      <div class="card-tax-note">${taxNote}</div>
     `;
   }
 

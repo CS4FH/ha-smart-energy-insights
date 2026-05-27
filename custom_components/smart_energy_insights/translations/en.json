@@ -114,7 +114,7 @@
     "savings_yearly_help": "Savings per 365-day year extrapolated from the selected period.",
     "cost_fixed_label": "Fixed tariff cost:",
     "cost_spot_label": "Spot tariff cost:",
-    "card_tax_note": "All values in this card include tax."
+    "card_tax_note": "All values include {taxRate}% tax."
   },
   "api": {
     "default_filename": "Unknown.csv",

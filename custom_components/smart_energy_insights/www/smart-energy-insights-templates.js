@@ -181,8 +181,6 @@ export function renderDashboardHtml({
       <div class="heatmaps-grid">
         ${heatmapsHtml}
       </div>
-
-      <div class="card-tax-note">${texts.cardTaxNote}</div>
     </div>
   `;
 }
