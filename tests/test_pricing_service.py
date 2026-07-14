@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import pytest
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -37,8 +36,7 @@ class FakeHass:
         self.config_entries = FakeConfigEntries(entries)
 
 
-@pytest.fixture
-def fake_entry() -> SimpleNamespace:
+def _fake_entry() -> SimpleNamespace:
     """Provide a standard ConfigEntry populated with realistic fallback data."""
     return SimpleNamespace(
         data={
@@ -52,21 +50,14 @@ def fake_entry() -> SimpleNamespace:
     )
 
 
-@pytest.fixture
-def empty_hass() -> FakeHass:
+def _empty_hass() -> FakeHass:
     """Provide a mock Home Assistant instance without any integration entries."""
     return FakeHass([])
 
 
-@pytest.fixture
-def configured_hass(fake_entry: SimpleNamespace) -> FakeHass:
-    """Provide a mock Home Assistant instance initialized with a single integration entry."""
-    return FakeHass([fake_entry])
-
-
-def test_get_pricing_config_uses_defaults_when_no_entry(empty_hass: FakeHass) -> None:
+def test_get_pricing_config_uses_defaults_when_no_entry() -> None:
     """Verify that hardcoded fallback values are used if no config entry exists."""
-    config = get_pricing_config(empty_hass)
+    config = get_pricing_config(_empty_hass())
 
     assert config == PricingConfig(
         fixed_price=15.0,
@@ -77,8 +68,9 @@ def test_get_pricing_config_uses_defaults_when_no_entry(empty_hass: FakeHass) ->
     )
 
 
-def test_get_pricing_config_prefers_options_over_data(fake_entry: SimpleNamespace) -> None:
+def test_get_pricing_config_prefers_options_over_data() -> None:
     """Verify that user-configured options override initial entry setup data."""
+    fake_entry = _fake_entry()
     fake_entry.options = {
         "fixed_price": 16.0,
         "fixed_base_fee": 4.1,
@@ -98,10 +90,10 @@ def test_get_pricing_config_prefers_options_over_data(fake_entry: SimpleNamespac
     )
 
 
-def test_update_pricing_config_maps_payload_to_options(
-    configured_hass: FakeHass, fake_entry: SimpleNamespace
-) -> None:
+def test_update_pricing_config_maps_payload_to_options() -> None:
     """Verify that external API/service payloads are correctly mapped to internal configuration keys."""
+    fake_entry = _fake_entry()
+    configured_hass = FakeHass([fake_entry])
     payload = {
         "fixed_price_ct": 17.5,
         "fixed_base_fee_eur": 4.2,
@@ -144,3 +136,24 @@ def test_build_price_heatmap_averages_values_by_weekday_hour() -> None:
 def test_build_price_heatmap_returns_empty_list_for_empty_series() -> None:
     """Verify that an empty input time-series handles gracefully without throwing exceptions."""
     assert build_price_heatmap([]) == []
+
+
+def test_compute_spot_price_matches_tracks_only_matching_hours() -> None:
+    statistics = [
+        {"start": datetime(2026, 1, 5, 12, tzinfo=timezone.utc), "state": 2.0},
+        {"start": datetime(2026, 1, 5, 13, tzinfo=timezone.utc), "state": 1.0},
+    ]
+    price_series = [
+        {"start": datetime(2026, 1, 5, 12, tzinfo=timezone.utc), "value": 30.0},
+    ]
+
+    with patch(
+        "custom_components.smart_energy_insights.services.pricing_service.dt_util.as_local",
+        side_effect=lambda dt: dt,
+    ):
+        result = compute_spot_price_matches(statistics, price_series)
+
+    assert result["matched_hours"] == 1
+    assert result["matched_consumption"] == 2.0
+    assert result["base_spot_cost_cents"] == 60.0
+    assert result["duration_months"] > 0

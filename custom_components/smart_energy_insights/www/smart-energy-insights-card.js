@@ -10,7 +10,6 @@ import {
   uploadCsv
 } from "./smart-energy-insights-api.js";
 import { generateHeatmapHTML } from "./smart-energy-insights-heatmap.js";
-import { calculateSavings } from "./smart-energy-insights-savings.js";
 import { renderBaseCard, renderDashboardHtml } from "./smart-energy-insights-templates.js";
 import { debounce, formatNumber, formatUploadDate } from "./smart-energy-insights-utils.js";
 
@@ -124,11 +123,27 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
           }
         ),
       dateRangeLabel: this.localize("card.date_range_label", "Date range"),
+      dateRangeModeLabel: this.localize("card.date_range_mode_label", "View"),
+      dateRangeModeTotal: this.localize("card.date_range_mode_total", "Total"),
+      dateRangeModeCustom: this.localize("card.date_range_mode_custom", "Custom range"),
+      dateRangeModeQuarter: this.localize("card.date_range_mode_quarter", "Quarter/Season"),
+      dateRangeModeMonth: this.localize("card.date_range_mode_month", "Month"),
+      dateRangeModeWeek: this.localize("card.date_range_mode_week", "Week"),
+      dateRangeWeekLabel: this.localize("card.date_range_week_label", "Week"),
+      dateRangeMonthLabel: this.localize("card.date_range_month_label", "Month"),
+      dateRangeQuarterLabel: this.localize("card.date_range_quarter_label", "Quarter"),
+      dateRangeQuarterQ1: this.localize("card.date_range_quarter_q1", "Q1 (Jan-Mar)"),
+      dateRangeQuarterQ2: this.localize("card.date_range_quarter_q2", "Q2 (Apr-Jun)"),
+      dateRangeQuarterQ3: this.localize("card.date_range_quarter_q3", "Q3 (Jul-Sep)"),
+      dateRangeQuarterQ4: this.localize("card.date_range_quarter_q4", "Q4 (Oct-Dec)"),
       dateRangeFrom: this.localize("card.date_range_from", "From"),
       dateRangeTo: this.localize("card.date_range_to", "To"),
       dateRangeApply: this.localize("card.date_range_apply", "Apply"),
       dateRangeReset: this.localize("card.date_range_reset", "Reset"),
       dateRangeMissing: this.localize("card.date_range_missing", "Please select both dates."),
+      dateRangeWeekMissing: this.localize("card.date_range_week_missing", "Please select a week."),
+      dateRangeMonthMissing: this.localize("card.date_range_month_missing", "Please select a month."),
+      dateRangeQuarterMissing: this.localize("card.date_range_quarter_missing", "Please select quarter and year."),
       dateRangeInvalid: this.localize("card.date_range_invalid", "Start date must be before end date."),
       dateRangeClamped: this.localize(
         "card.date_range_clamped",
@@ -183,6 +198,26 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
         "card.heatmap_price_title",
         "Avg spot price per hour (ct/kWh)"
       ),
+      monthlyTariffTitle: this.localize(
+        "card.monthly_tariff_title",
+        "Monthly tariff comparison (dynamic vs fixed)"
+      ),
+      monthlyTariffSavingsLabel: this.localize("card.monthly_tariff_savings_label", "Savings vs fixed"),
+      monthlyTariffExtraLabel: this.localize("card.monthly_tariff_extra_label", "Extra costs vs fixed"),
+      monthlyTariffTotalLabel: this.localize("card.monthly_tariff_total_label", "Total"),
+      monthlyTariffNoData: this.localize("card.monthly_tariff_no_data", "No matched tariff data in this period."),
+      monthJan: this.localize("card.month_jan", "Jan"),
+      monthFeb: this.localize("card.month_feb", "Feb"),
+      monthMar: this.localize("card.month_mar", "Mar"),
+      monthApr: this.localize("card.month_apr", "Apr"),
+      monthMay: this.localize("card.month_may", "May"),
+      monthJun: this.localize("card.month_jun", "Jun"),
+      monthJul: this.localize("card.month_jul", "Jul"),
+      monthAug: this.localize("card.month_aug", "Aug"),
+      monthSep: this.localize("card.month_sep", "Sep"),
+      monthOct: this.localize("card.month_oct", "Oct"),
+      monthNov: this.localize("card.month_nov", "Nov"),
+      monthDec: this.localize("card.month_dec", "Dec"),
       savingsTitlePositive: this.localize(
         "card.savings_title_positive",
         "Savings with dynamic tariff"
@@ -361,52 +396,103 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     }
   }
 
-  syncSensorPicker() {
-    const picker = this.querySelector("#sensorPicker");
+syncSensorPicker() {
+    let picker = this.querySelector("#sensorPicker");
     if (!picker || !this._hass) return;
 
     const texts = this._texts || this.getTexts();
     const matches = Object.values(this._hass.states || {}).filter((state) => {
       const attrs = state.attributes || {};
-      return attrs.device_class === "energy" && attrs.state_class === "total_increasing";
+      return attrs.device_class === "energy" && (attrs.state_class === "total_increasing" || attrs.state_class === "total");
     });
 
-    if (picker.tagName === "HA-ENTITY-PICKER") {
-      picker.hass = this._hass;
-      picker.label = texts.sensorPickerLabel;
-      picker.placeholder = texts.sensorPickerPlaceholder;
-      picker.value = this._selectedSensor || "";
-      picker.includeDomains = ["sensor"];
-    } else {
-      picker.innerHTML = "";
-      const placeholder = document.createElement("option");
-      placeholder.value = "";
-      placeholder.textContent = texts.sensorPickerPlaceholder;
-      picker.appendChild(placeholder);
-
-      matches
-        .map((state) => {
-          const attrs = state.attributes || {};
-          return {
-            id: state.entity_id,
-            name: attrs.friendly_name || state.entity_id
-          };
-        })
-        .sort((a, b) => a.name.localeCompare(b.name))
-        .forEach((sensor) => {
-          const option = document.createElement("option");
-          option.value = sensor.id;
-          option.textContent = sensor.name;
-          picker.appendChild(option);
-        });
-
-      picker.value = this._selectedSensor || "";
-      picker.disabled = matches.length === 0;
+    if (picker.tagName === "HA-ENTITY-PICKER" && !customElements.get("ha-entity-picker")) {
+      const select = document.createElement("select");
+      select.id = "sensorPicker";
+      select.className = "sensor-select";
+      select.addEventListener("change", (e) => {
+        this._selectedSensor = e.target.value || null;
+        this.saveUiState();
+        const sensorLoadBtn = this.querySelector("#sensorLoadBtn");
+        if (sensorLoadBtn) sensorLoadBtn.disabled = !this._selectedSensor;
+      });
+      picker.replaceWith(select);
+      picker = select;
     }
 
+    const currentSensorsHash = matches.map(m => m.entity_id).sort().join(",");
+    const shouldRebuild = picker.dataset.sensorsHash !== currentSensorsHash;
+
+    if (shouldRebuild) {
+      picker.dataset.sensorsHash = currentSensorsHash;
+    }
+
+    const targetValue = this._selectedSensor || "";
+    const isDisabled = matches.length === 0;
+
+    if (picker.tagName === "HA-ENTITY-PICKER") {
+      if (picker.hass !== this._hass) {
+        picker.hass = this._hass;
+      }
+      if (picker.label !== texts.sensorPickerLabel) {
+        picker.label = texts.sensorPickerLabel;
+      }
+      if (picker.placeholder !== texts.sensorPickerPlaceholder) {
+        picker.placeholder = texts.sensorPickerPlaceholder;
+      }
+      
+      if (!picker.includeDomains || picker.includeDomains.length === 0 || picker.includeDomains[0] !== "sensor") {
+        picker.includeDomains = ["sensor"];
+      }
+
+      if (picker.value !== targetValue) {
+        picker.value = targetValue;
+      }
+      if (picker.disabled !== isDisabled) {
+        picker.disabled = isDisabled;
+      }
+    } else {
+      if (shouldRebuild) {
+        picker.innerHTML = "";
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = texts.sensorPickerPlaceholder;
+        placeholder.disabled = true;
+        picker.appendChild(placeholder);
+
+        matches
+          .map((state) => {
+            const attrs = state.attributes || {};
+            return {
+              id: state.entity_id,
+              name: attrs.friendly_name || state.entity_id
+            };
+          })
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .forEach((sensor) => {
+            const option = document.createElement("option");
+            option.value = sensor.id;
+            option.textContent = sensor.name;
+            picker.appendChild(option);
+          });
+      }
+
+      if (picker.value !== targetValue) {
+        picker.value = targetValue;
+      }
+      if (picker.disabled !== isDisabled) {
+        picker.disabled = isDisabled;
+      }
+    }
+
+    this.updateSensorMessageAndButton(matches.length, texts);
+  }
+
+  updateSensorMessageAndButton(matchesCount, texts) {
     const infoMessage = texts.sensorNoneOption;
     const messageEl = this.querySelector("#sensorMessage");
-    if (!this._selectedSensor && matches.length === 0) {
+    
+    if (!this._selectedSensor && matchesCount === 0) {
       this.showSensorMessage(infoMessage, "info");
     } else if (messageEl && messageEl.classList.contains("info")) {
       messageEl.style.display = "none";
@@ -416,7 +502,10 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
 
     const sensorLoadBtn = this.querySelector("#sensorLoadBtn");
     if (sensorLoadBtn) {
-      sensorLoadBtn.disabled = !this._selectedSensor;
+      const targetDisabled = !this._selectedSensor;
+      if (sensorLoadBtn.disabled !== targetDisabled) {
+        sensorLoadBtn.disabled = targetDisabled;
+      }
     }
   }
 
@@ -604,40 +693,132 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
 
   async applyDateRange() {
     const texts = this._texts || this.getTexts();
-    const rangeStartInput = this.querySelector("#rangeStart");
-    const rangeEndInput = this.querySelector("#rangeEnd");
-    if (!rangeStartInput || !rangeEndInput) return;
-
-    const start = rangeStartInput.value;
-    const end = rangeEndInput.value;
-
-    if (!start || !end) {
-      this.showRangeMessage(texts.dateRangeMissing, "error");
+    const selection = this.collectRangeSelection();
+    if (selection.error) {
+      this.showRangeMessage(selection.error, "error");
       return;
     }
 
-    if (start > end) {
+    this._rangePreset = selection.preset;
+    this._rangeWeek = selection.week;
+    this._rangeMonth = selection.month;
+    this._rangeQuarter = selection.quarter;
+    this._rangeQuarterYear = selection.quarterYear;
+
+    if (!selection.start || !selection.end) {
+      this._rangeStart = null;
+      this._rangeEnd = null;
+      this.showRangeMessage("", "");
+      this.saveUiState();
+      await this.reloadRangeData();
+      return;
+    }
+
+    if (selection.start > selection.end) {
       this.showRangeMessage(texts.dateRangeInvalid, "error");
       return;
     }
 
-    const clamped = this.clampDateRange(start, end);
+    const clamped = this.clampDateRange(selection.start, selection.end);
     this._rangeStart = clamped.start;
     this._rangeEnd = clamped.end;
     if (clamped.changed) {
       this.showRangeMessage(texts.dateRangeClamped, "info");
-      rangeStartInput.value = clamped.start;
-      rangeEndInput.value = clamped.end;
     }
     this.saveUiState();
     await this.reloadRangeData();
   }
 
   async resetDateRange() {
+    this._rangePreset = "total";
+    this._rangeWeek = null;
+    this._rangeMonth = null;
+    this._rangeQuarter = null;
+    this._rangeQuarterYear = null;
     this._rangeStart = null;
     this._rangeEnd = null;
     this.saveUiState();
     await this.reloadRangeData();
+  }
+
+  collectRangeSelection() {
+    const texts = this._texts || this.getTexts();
+    const preset = this.querySelector("#rangePreset")?.value || "total";
+    const from = this.querySelector("#rangeFrom")?.value || null;
+    const to = this.querySelector("#rangeTo")?.value || null;
+    const week = this.querySelector("#rangeWeek")?.value || null;
+    const month = this.querySelector("#rangeMonth")?.value || null;
+    const quarter = this.querySelector("#rangeQuarter")?.value || null;
+    const quarterYearRaw = this.querySelector("#rangeQuarterYear")?.value || "";
+    const quarterYear = quarterYearRaw ? Number(quarterYearRaw) : null;
+
+    if (preset === "total") {
+      return { preset, from, to, week, month, quarter, quarterYear, start: null, end: null, error: null };
+    }
+
+    if (preset === "custom") {
+      if (!from || !to) {
+        return { preset, from, to, week, month, quarter, quarterYear, start: null, end: null, error: texts.dateRangeMissing };
+      }
+      return { preset, from, to, week, month, quarter, quarterYear, start: from, end: to, error: null };
+    }
+
+    if (preset === "week") {
+      if (!week) {
+        return { preset, from, to, week, month, quarter, quarterYear, start: null, end: null, error: texts.dateRangeWeekMissing };
+      }
+      const range = this.isoWeekToDateRange(week);
+      if (!range) {
+        return { preset, from, to, week, month, quarter, quarterYear, start: null, end: null, error: texts.dateRangeInvalid };
+      }
+      return { preset, from, to, week, month, quarter, quarterYear, start: range.start, end: range.end, error: null };
+    }
+
+    if (preset === "month") {
+      if (!month) {
+        return { preset, from, to, week, month, quarter, quarterYear, start: null, end: null, error: texts.dateRangeMonthMissing };
+      }
+      const range = this.monthToDateRange(month);
+      return { preset, from, to, week, month, quarter, quarterYear, start: range.start, end: range.end, error: null };
+    }
+
+    if (!quarter || !quarterYear || !Number.isInteger(quarterYear)) {
+      return { preset, from, to, week, month, quarter, quarterYear, start: null, end: null, error: texts.dateRangeQuarterMissing };
+    }
+
+    const range = this.quarterToDateRange(quarterYear, Number(quarter));
+    return { preset, from, to, week, month, quarter, quarterYear, start: range.start, end: range.end, error: null };
+  }
+
+  getCurrentRequestRange() {
+    const hasRangeControls = Boolean(this.querySelector("#rangePreset"));
+    if (!hasRangeControls) {
+      return { start: this._rangeStart, end: this._rangeEnd };
+    }
+
+    const selection = this.collectRangeSelection();
+    if (selection.error) {
+      return { start: this._rangeStart, end: this._rangeEnd };
+    }
+
+    this._rangePreset = selection.preset;
+    this._rangeWeek = selection.week;
+    this._rangeMonth = selection.month;
+    this._rangeQuarter = selection.quarter;
+    this._rangeQuarterYear = selection.quarterYear;
+
+    if (!selection.start || !selection.end) {
+      this._rangeStart = null;
+      this._rangeEnd = null;
+      this.saveUiState();
+      return { start: null, end: null };
+    }
+
+    const clamped = this.clampDateRange(selection.start, selection.end);
+    this._rangeStart = clamped.start;
+    this._rangeEnd = clamped.end;
+    this.saveUiState();
+    return { start: clamped.start, end: clamped.end };
   }
 
   async reloadRangeData() {
@@ -724,6 +905,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
         { low: texts.heatmapLegendLow, high: texts.heatmapLegendHigh }
       );
     }
+    heatmapsHtml += this.buildMonthlyTariffComparisonHtml(response);
 
     const start = response.start ? response.start.split('T')[0] : 'N/A';
     const end = response.end ? response.end.split('T')[0] : 'N/A';
@@ -785,6 +967,23 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       spotCheaperShare: response.spot_cheaper_share
     });
 
+    this._availableStart = availableStart !== "N/A" ? availableStart : null;
+    this._availableEnd = availableEnd !== "N/A" ? availableEnd : null;
+
+    const fallbackDate = end !== "N/A" ? end : (this._availableEnd || this._availableStart || "");
+    const fallbackMonth = fallbackDate ? fallbackDate.slice(0, 7) : "";
+    const fallbackWeek = fallbackDate ? this.dateToIsoWeek(fallbackDate) : "";
+    const fallbackYear = fallbackDate ? Number(fallbackDate.slice(0, 4)) : new Date().getUTCFullYear();
+    const fallbackQuarter = fallbackDate ? String(Math.floor((Number(fallbackDate.slice(5, 7)) - 1) / 3) + 1) : "1";
+
+    if (!this._rangePreset) this._rangePreset = "total";
+    if (!this._rangeMonth) this._rangeMonth = fallbackMonth;
+    if (!this._rangeWeek) this._rangeWeek = fallbackWeek;
+    if (!this._rangeQuarterYear) this._rangeQuarterYear = fallbackYear;
+    if (!this._rangeQuarter) this._rangeQuarter = fallbackQuarter;
+    if (!this._rangeStart) this._rangeStart = this._availableStart || start;
+    if (!this._rangeEnd) this._rangeEnd = this._availableEnd || end;
+
     container.innerHTML = renderDashboardHtml({
       filename: filenameStr,
       profileTitle: texts.profileTitle,
@@ -797,29 +996,73 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       initialSpotBase,
       initialTax,
       initialTaxChecked,
-      texts
+      texts,
+      rangePreset: this._rangePreset,
+      rangeFrom: this._rangeStart,
+      rangeTo: this._rangeEnd,
+      rangeWeek: this._rangeWeek,
+      rangeMonth: this._rangeMonth,
+      rangeQuarter: this._rangeQuarter,
+      rangeQuarterYear: this._rangeQuarterYear,
+      availableStart: this._availableStart,
+      availableEnd: this._availableEnd
     });
 
-    const rangeStartInput = this.querySelector("#rangeStart");
-    const rangeEndInput = this.querySelector("#rangeEnd");
+    const rangePreset = this.querySelector("#rangePreset");
+    const rangeFromInput = this.querySelector("#rangeFrom");
+    const rangeToInput = this.querySelector("#rangeTo");
+    const rangeWeekInput = this.querySelector("#rangeWeek");
+    const rangeMonthInput = this.querySelector("#rangeMonth");
+    const rangeQuarterInput = this.querySelector("#rangeQuarter");
+    const rangeQuarterYearInput = this.querySelector("#rangeQuarterYear");
     const applyRangeBtn = this.querySelector("#applyRangeBtn");
     const resetRangeBtn = this.querySelector("#resetRangeBtn");
 
-    this._availableStart = availableStart !== "N/A" ? availableStart : null;
-    this._availableEnd = availableEnd !== "N/A" ? availableEnd : null;
-
-    const defaultRangeStart = this._rangeStart || (start !== "N/A" ? start : "");
-    const defaultRangeEnd = this._rangeEnd || (end !== "N/A" ? end : "");
-
-    if (rangeStartInput) {
-      rangeStartInput.value = defaultRangeStart;
-      if (this._availableStart) rangeStartInput.min = this._availableStart;
-      if (this._availableEnd) rangeStartInput.max = this._availableEnd;
+    if (rangePreset) {
+      rangePreset.addEventListener("change", () => {
+        this._rangePreset = rangePreset.value || "total";
+        this.updateRangePickerVisibility();
+        this.saveUiState();
+      });
+      this.updateRangePickerVisibility();
     }
-    if (rangeEndInput) {
-      rangeEndInput.value = defaultRangeEnd;
-      if (this._availableStart) rangeEndInput.min = this._availableStart;
-      if (this._availableEnd) rangeEndInput.max = this._availableEnd;
+
+    if (rangeFromInput) {
+      rangeFromInput.addEventListener("change", () => {
+        this._rangeStart = rangeFromInput.value || null;
+        this.saveUiState();
+      });
+    }
+    if (rangeToInput) {
+      rangeToInput.addEventListener("change", () => {
+        this._rangeEnd = rangeToInput.value || null;
+        this.saveUiState();
+      });
+    }
+    if (rangeWeekInput) {
+      rangeWeekInput.addEventListener("change", () => {
+        this._rangeWeek = rangeWeekInput.value || null;
+        this.saveUiState();
+      });
+    }
+    if (rangeMonthInput) {
+      rangeMonthInput.addEventListener("change", () => {
+        this._rangeMonth = rangeMonthInput.value || null;
+        this.saveUiState();
+      });
+    }
+    if (rangeQuarterInput) {
+      rangeQuarterInput.addEventListener("change", () => {
+        this._rangeQuarter = rangeQuarterInput.value || null;
+        this.saveUiState();
+      });
+    }
+    if (rangeQuarterYearInput) {
+      rangeQuarterYearInput.addEventListener("change", () => {
+        const parsedYear = Number(rangeQuarterYearInput.value);
+        this._rangeQuarterYear = Number.isInteger(parsedYear) ? parsedYear : null;
+        this.saveUiState();
+      });
     }
 
     if (applyRangeBtn) {
@@ -900,6 +1143,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     };
 
     try {
+      const requestRange = this.getCurrentRequestRange();
       await saveSettings(this._hass, {
         fixed_price_ct: valFix,
         fixed_base_fee_eur: valFixBase,
@@ -918,16 +1162,16 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
         data = await loadSensorData(
           this._hass,
           this._selectedSensor,
-          this._rangeStart,
-          this._rangeEnd,
+          requestRange.start,
+          requestRange.end,
           { allowEmpty: false }
         );
         this._lastSensorData = data;
       } else {
         data = await loadHeatmaps(
           this._hass,
-          this._rangeStart,
-          this._rangeEnd,
+          requestRange.start,
+          requestRange.end,
           { allowEmpty: false }
         );
         this._lastCsvData = data;
@@ -942,39 +1186,15 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     }
   }
 
-  updateSavingsBanner(isInitialLoad = false) {
+  updateSavingsBanner() {
     if (!this.latestData || this.latestData.matched_hours === 0) return;
     const texts = this._texts || this.getTexts();
+    const totals = this.latestData.tariff_totals;
+    if (!totals) return;
 
-    const valFix = parseFloat(this.querySelector("#inputFix").value) || 0;
-    const valFixBase = parseFloat(this.querySelector("#inputFixBase").value) || 0;
-    const valMarkup = parseFloat(this.querySelector("#inputMarkup").value) || 0;
-    const valSpotBase = parseFloat(this.querySelector("#inputSpotBase").value) || 0;
-    const valTaxRate = parseFloat(this.querySelector("#inputTaxRate").value) || 0;
-    const inputsAreNet = this.querySelector("#chkTax").checked;
-
-    if (!isInitialLoad) {
-      this._tariffState = {
-        fixPrice: valFix,
-        fixBase: valFixBase,
-        markup: valMarkup,
-        spotBase: valSpotBase,
-        taxRate: valTaxRate,
-        inputsAreNet
-      };
-    }
-
-    const savings = calculateSavings(this.latestData, {
-      fixPrice: valFix,
-      fixBase: valFixBase,
-      markup: valMarkup,
-      spotBase: valSpotBase,
-      taxRate: valTaxRate,
-      inputsAreNet
-    });
-    if (!savings) return;
-
-    const { savingsEur, costFixEur, costSpotEur } = savings;
+    const costFixEur = Number(totals.fixed_cost_eur || 0);
+    const costSpotEur = Number(totals.spot_cost_eur || 0);
+    const savingsEur = costFixEur - costSpotEur;
 
     const matchedHours = this.latestData.matched_hours || 0;
     const matchedDays = matchedHours > 0 ? matchedHours / 24 : 0;
@@ -986,16 +1206,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     const spotPerDay = matchedDays > 0 ? costSpotEur / matchedDays : null;
     const taxRate = this.latestData?.tax_rate ?? this._tariffState?.taxRate ?? 20.0;
     const taxNote = this.getTaxNote(taxRate);
-    const breakEvenFixed = this.calculateBreakEvenFixed({
-      matchedConsumption: this.latestData.matched_consumption,
-      durationMonths: this.latestData.duration_months,
-      baseSpotCostEur: this.latestData.base_spot_cost_eur,
-      fixBase: valFixBase,
-      markup: valMarkup,
-      spotBase: valSpotBase,
-      taxRate: valTaxRate,
-      inputsAreNet
-    });
+    const breakEvenFixed = this.latestData.break_even_fixed_ct_kwh;
     const spotCheaperShare = this.latestData.spot_cheaper_share;
     const isFullYear = matchedDaysRoundedUp === 365;
     const extrapolatedNote = matchedDays > 0 && !isFullYear
@@ -1071,19 +1282,149 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     `;
   }
 
-  calculateBreakEvenFixed(inputs) {
-    if (!inputs.matchedConsumption || !inputs.durationMonths || inputs.baseSpotCostEur === undefined) return null;
-    const taxMultiplier = inputs.inputsAreNet ? 1.0 + inputs.taxRate / 100.0 : 1.0;
-    const grossMarkup = inputs.inputsAreNet ? inputs.markup * taxMultiplier : inputs.markup;
-    const grossSpotBase = inputs.inputsAreNet ? inputs.spotBase * taxMultiplier : inputs.spotBase;
-    const grossFixBase = inputs.inputsAreNet ? inputs.fixBase * taxMultiplier : inputs.fixBase;
+  updateRangePickerVisibility() {
+    const preset = this.querySelector("#rangePreset")?.value || this._rangePreset || "total";
+    const custom = this.querySelector("#rangeCustomPicker");
+    const week = this.querySelector("#rangeWeekPicker");
+    const month = this.querySelector("#rangeMonthPicker");
+    const quarter = this.querySelector("#rangeQuarterPicker");
+    if (custom) custom.style.display = preset === "custom" ? "grid" : "none";
+    if (week) week.style.display = preset === "week" ? "flex" : "none";
+    if (month) month.style.display = preset === "month" ? "flex" : "none";
+    if (quarter) quarter.style.display = preset === "quarter" ? "flex" : "none";
+  }
 
-    const baseSpotCostEurAdjusted = inputs.inputsAreNet
-      ? inputs.baseSpotCostEur
-      : inputs.baseSpotCostEur * (1.0 + inputs.taxRate / 100.0);
-    const avgSpotPrice = (baseSpotCostEurAdjusted * 100.0 / inputs.matchedConsumption);
-    const breakEvenFixed = avgSpotPrice + grossMarkup + (inputs.durationMonths * (grossSpotBase - grossFixBase) * 100.0 / inputs.matchedConsumption);
-    return Number.isFinite(breakEvenFixed) ? breakEvenFixed : null;
+  dateToIsoWeek(dateString) {
+    if (!dateString) return "";
+    const date = new Date(`${dateString}T00:00:00Z`);
+    const dayNr = (date.getUTCDay() + 6) % 7;
+    date.setUTCDate(date.getUTCDate() - dayNr + 3);
+    const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
+    const firstThursdayDay = (firstThursday.getUTCDay() + 6) % 7;
+    firstThursday.setUTCDate(firstThursday.getUTCDate() - firstThursdayDay + 3);
+    const week = 1 + Math.round((date - firstThursday) / 604800000);
+    return `${date.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+  }
+
+  isoWeekToDateRange(weekString) {
+    const match = /^([0-9]{4})-W([0-9]{2})$/.exec(String(weekString || ""));
+    if (!match) return null;
+    const year = Number(match[1]);
+    const week = Number(match[2]);
+    const jan4 = new Date(Date.UTC(year, 0, 4));
+    const jan4Day = (jan4.getUTCDay() + 6) % 7;
+    const monday = new Date(jan4);
+    monday.setUTCDate(jan4.getUTCDate() - jan4Day + (week - 1) * 7);
+    const sunday = new Date(monday);
+    sunday.setUTCDate(monday.getUTCDate() + 6);
+    const toDate = (d) => d.toISOString().slice(0, 10);
+    return { start: toDate(monday), end: toDate(sunday) };
+  }
+
+  monthToDateRange(monthString) {
+    const match = /^([0-9]{4})-([0-9]{2})$/.exec(String(monthString || ""));
+    if (!match) return { start: null, end: null };
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const start = `${year}-${String(month).padStart(2, "0")}-01`;
+    const endDate = new Date(Date.UTC(year, month, 0));
+    const end = endDate.toISOString().slice(0, 10);
+    return { start, end };
+  }
+
+  quarterToDateRange(year, quarter) {
+    const quarterIndex = Math.max(1, Math.min(4, Number(quarter || 1))) - 1;
+    const startMonth = quarterIndex * 3 + 1;
+    const endMonth = startMonth + 2;
+    const start = `${year}-${String(startMonth).padStart(2, "0")}-01`;
+    const endDate = new Date(Date.UTC(year, endMonth, 0));
+    const end = endDate.toISOString().slice(0, 10);
+    return { start, end };
+  }
+
+  buildMonthlyTariffComparisonHtml(response) {
+    const texts = this._texts || this.getTexts();
+    const months = Array.isArray(response.tariff_monthly)
+      ? response.tariff_monthly
+      : Array.isArray(response.monthly_tariff_comparison?.months)
+        ? response.monthly_tariff_comparison.months
+        : [];
+    const matchedHoursTotal = Number(response.matched_hours || response.monthly_tariff_comparison?.matched_hours || 0);
+
+    if (months.length === 0 || matchedHoursTotal === 0) {
+      return `
+        <div class="monthly-tariff-panel">
+          <div class="monthly-tariff-title">${texts.monthlyTariffTitle}</div>
+          <div class="monthly-tariff-empty">${texts.monthlyTariffNoData}</div>
+        </div>
+      `;
+    }
+
+    const monthLabels = [
+      texts.monthJan,
+      texts.monthFeb,
+      texts.monthMar,
+      texts.monthApr,
+      texts.monthMay,
+      texts.monthJun,
+      texts.monthJul,
+      texts.monthAug,
+      texts.monthSep,
+      texts.monthOct,
+      texts.monthNov,
+      texts.monthDec
+    ];
+
+    const thresholdEur = 0.15;
+    const maxAbs = Math.max(0.01, ...months.map((item) => Math.abs(Number(item.delta_eur || 0))));
+
+    const cells = months
+      .slice()
+      .sort((a, b) => Number(a.month || 0) - Number(b.month || 0))
+      .map((item) => {
+        const monthIndex = Math.max(1, Math.min(12, Number(item.month || 1))) - 1;
+        const delta = Number(item.delta_eur || 0);
+        const matchedHours = Number(item.matched_hours || 0);
+        const intensity = Math.min(1, Math.abs(delta) / maxAbs);
+        const hasData = matchedHours > 0;
+
+        let cellClass = "neutral";
+        if (!hasData) {
+          cellClass = "nodata";
+        } else if (delta > thresholdEur) {
+          cellClass = "extra";
+        } else if (delta < -thresholdEur) {
+          cellClass = "savings";
+        }
+
+        const centerValue = !hasData
+          ? "-"
+          : `${delta > 0 ? "+" : ""}${formatNumber(delta, 2)} EUR`;
+
+        return `
+          <div class="monthly-cell-card ${cellClass}" title="${monthLabels[monthIndex]} | Delta: ${delta > 0 ? "+" : ""}${formatNumber(delta, 2)} EUR | Stunden: ${formatNumber(matchedHours, 0)}" style="--intensity:${intensity.toFixed(3)}">
+            <div class="monthly-cell-head">${monthLabels[monthIndex]}</div>
+            <div class="monthly-cell-center">${centerValue}</div>
+          </div>
+        `;
+      })
+      .join("");
+
+    const totalDelta = response.tariff_totals
+      ? Number(response.tariff_totals.delta_eur || 0)
+      : months.reduce((sum, item) => sum + Number(item.delta_eur || 0), 0);
+    const totalText = totalDelta < 0
+      ? `${texts.monthlyTariffTotalLabel}: ${texts.monthlyTariffSavingsLabel} ${formatNumber(Math.abs(totalDelta), 2)} EUR`
+      : `${texts.monthlyTariffTotalLabel}: ${texts.monthlyTariffExtraLabel} ${formatNumber(totalDelta, 2)} EUR`;
+    const totalClass = totalDelta < -thresholdEur ? "savings" : totalDelta > thresholdEur ? "extra" : "neutral";
+
+    return `
+      <div class="monthly-tariff-panel">
+        <div class="monthly-tariff-title">${texts.monthlyTariffTitle}</div>
+        <div class="monthly-tariff-grid">${cells}</div>
+        <div class="monthly-tariff-total ${totalClass}">${totalText}</div>
+      </div>
+    `;
   }
 
   buildAnalysisGroups(summary) {
@@ -1172,8 +1513,13 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       if (!raw) return;
       const parsed = JSON.parse(raw);
       this._storedSource = parsed.activeSource || null;
+      this._rangePreset = parsed.rangePreset || "total";
       this._rangeStart = parsed.rangeStart || null;
       this._rangeEnd = parsed.rangeEnd || null;
+      this._rangeWeek = parsed.rangeWeek || null;
+      this._rangeMonth = parsed.rangeMonth || null;
+      this._rangeQuarter = parsed.rangeQuarter || null;
+      this._rangeQuarterYear = parsed.rangeQuarterYear || null;
       this._selectedSensor = parsed.selectedSensor || this._selectedSensor;
     } catch (err) {
       console.warn("Failed to load UI state", err);
@@ -1184,8 +1530,13 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     try {
       const payload = {
         activeSource: this._activeSource,
+        rangePreset: this._rangePreset || "total",
         rangeStart: this._rangeStart,
         rangeEnd: this._rangeEnd,
+        rangeWeek: this._rangeWeek,
+        rangeMonth: this._rangeMonth,
+        rangeQuarter: this._rangeQuarter,
+        rangeQuarterYear: this._rangeQuarterYear,
         selectedSensor: this._selectedSensor || null
       };
       localStorage.setItem("sei_ui_state", JSON.stringify(payload));
@@ -1242,7 +1593,14 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       .range-fields { display: flex; gap: 8px; flex-wrap: wrap; }
       .range-field { display: flex; flex-direction: column; gap: 4px; }
       .range-field label { font-size: 11px; color: var(--secondary-text-color); }
-      .range-field input[type="date"] { padding: 6px 10px; border: 1px solid var(--divider-color); border-radius: 6px; background: var(--card-background-color); color: var(--primary-text-color); font-size: 12px; }
+      .range-field input[type="date"],
+      .range-field input[type="week"],
+      .range-field input[type="month"],
+      .range-field input[type="number"],
+      .range-field select { padding: 6px 10px; border: 1px solid var(--divider-color); border-radius: 6px; background: var(--card-background-color); color: var(--primary-text-color); font-size: 12px; }
+      .range-picker { width: 100%; }
+      .range-quarter-fields { display: flex; gap: 6px; }
+      .range-quarter-fields input[type="number"] { width: 92px; }
       .range-actions { display: flex; gap: 8px; }
       .range-actions button { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--divider-color); background: var(--card-background-color); color: var(--primary-text-color); font-size: 12px; cursor: pointer; }
       .range-actions button:first-child { background: var(--primary-color); color: white; border-color: var(--primary-color); }
@@ -1308,6 +1666,27 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       .heatmap-header-x { text-align: center; color: var(--secondary-text-color); padding-bottom: 4px; }
       .heatmap-cell { aspect-ratio: 1; border-radius: 2px; cursor: crosshair; transition: transform 0.1s; }
       .heatmap-cell:hover { transform: scale(1.2); box-shadow: 0 0 4px rgba(0,0,0,0.3); z-index: 2; position: relative; }
+      .monthly-tariff-panel { background: linear-gradient(160deg, rgba(var(--rgb-primary-text-color), 0.02), rgba(var(--rgb-primary-text-color), 0.04)); border: 1px solid rgba(var(--rgb-divider-color), 0.6); border-radius: 10px; padding: 14px; }
+      .monthly-tariff-title { font-size: 15px; font-weight: 600; color: var(--primary-text-color); margin-bottom: 10px; }
+      .monthly-tariff-empty { font-size: 13px; color: var(--secondary-text-color); padding: 8px 4px; }
+      .monthly-tariff-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+      @media(min-width: 900px) { .monthly-tariff-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+      @media(min-width: 1300px) { .monthly-tariff-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+      .monthly-cell-card { border: 1px solid rgba(var(--rgb-divider-color), 0.45); border-radius: 8px; padding: 10px; min-height: 72px; display: flex; flex-direction: column; justify-content: space-between; }
+      .monthly-cell-card.savings { background: color-mix(in srgb, #dff4e8 calc(68% + var(--intensity) * 25%), rgba(var(--rgb-card-background-color), 0.95)); }
+      .monthly-cell-card.neutral { background: color-mix(in srgb, #f7f0d9 calc(70% + var(--intensity) * 20%), rgba(var(--rgb-card-background-color), 0.95)); }
+      .monthly-cell-card.extra { background: color-mix(in srgb, #f8e0df calc(68% + var(--intensity) * 25%), rgba(var(--rgb-card-background-color), 0.95)); }
+      .monthly-cell-card.nodata { background: rgba(var(--rgb-primary-text-color), 0.04); opacity: 0.72; }
+      .monthly-cell-head { font-size: 12px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: var(--secondary-text-color); margin-bottom: 8px; }
+      .monthly-cell-center { font-size: 13px; font-weight: 700; text-align: center; color: var(--primary-text-color); letter-spacing: 0.1px; }
+      .monthly-cell-card.savings .monthly-cell-center { color: #317a4e; }
+      .monthly-cell-card.neutral .monthly-cell-center { color: #8f7a26; }
+      .monthly-cell-card.extra .monthly-cell-center { color: #9b3b3b; }
+      .monthly-cell-card.nodata .monthly-cell-center { color: var(--secondary-text-color); }
+      .monthly-tariff-total { margin-top: 10px; padding: 8px 10px; border-radius: 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.2px; border: 1px solid rgba(var(--rgb-divider-color), 0.5); }
+      .monthly-tariff-total.savings { background: rgba(70, 194, 111, 0.12); color: #4fb978; }
+      .monthly-tariff-total.neutral { background: rgba(216, 191, 66, 0.14); color: #d4b84b; }
+      .monthly-tariff-total.extra { background: rgba(219, 95, 95, 0.14); color: #d86a6a; }
       .card-tax-note { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--divider-color); color: var(--secondary-text-color); text-align: center; font-size: 12px; opacity: 0.9; }
 
       /* Upload Formular wenn Daten geladen sind */

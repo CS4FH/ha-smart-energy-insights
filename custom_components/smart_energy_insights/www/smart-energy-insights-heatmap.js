@@ -12,23 +12,28 @@ export function generateHeatmapHTML(data, title, unit, reverseColors, formatNumb
 
   const legendLow = legendLabels && legendLabels.low ? legendLabels.low : "Low";
   const legendHigh = legendLabels && legendLabels.high ? legendLabels.high : "High";
-  const legend = `
-    <div class="heatmap-legend">
-      <span class="heatmap-legend-value">${formatNumber(min, 2)} ${unit}</span>
-      <span>${legendLow}</span>
-      <div class="heatmap-legend-bar"></div>
-      <span>${legendHigh}</span>
-      <span class="heatmap-legend-value">${formatNumber(max, 2)} ${unit}</span>
-    </div>
+
+  let html = `
+    <div class="heatmap-section">
+      <div class="heatmap-title">${title}</div>
+      <div class="heatmap-legend">
+        <span class="heatmap-legend-value">${formatNumber(min, 2)} ${unit}</span>
+        <span>${legendLow}</span>
+        <div class="heatmap-legend-bar"></div>
+        <span>${legendHigh}</span>
+        <span class="heatmap-legend-value">${formatNumber(max, 2)} ${unit}</span>
+      </div>
+      <div class="heatmap-grid">
+        <div></div>
   `;
 
-  let html = `<div class="heatmap-section"><div class="heatmap-title">${title}</div>${legend}<div class="heatmap-grid">`;
-  html += "<div></div>";
-  for (let h = 0; h < 24; h++) html += `<div class="heatmap-header-x">${h}</div>`;
+  for (let h = 0; h < 24; h += 1) {
+    html += `<div class="heatmap-header-x">${h}</div>`;
+  }
 
-  for (let d = 0; d < 7; d++) {
+  for (let d = 0; d < 7; d += 1) {
     html += `<div class="heatmap-header-y">${days[d]}</div>`;
-    for (let h = 0; h < 24; h++) {
+    for (let h = 0; h < 24; h += 1) {
       const val = data[d][h] || 0;
       const clampedVal = Math.max(min, Math.min(max, val));
       let intensity = (clampedVal - min) / range;
@@ -37,9 +42,11 @@ export function generateHeatmapHTML(data, title, unit, reverseColors, formatNumb
       const lightness = 45 + 15 * (1 - Math.abs(intensity - 0.5) * 2);
       const alpha = val === 0 ? 0.1 : 1;
       const bgColor = `hsla(${hue}, 85%, ${lightness}%, ${alpha})`;
-      html += `<div class="heatmap-cell" style="background-color: ${bgColor}" title="${days[d]} ${h}:00 Uhr&#10;${formatNumber(val, 2)} ${unit}"></div>`;
+      const tooltip = `${days[d]} ${h}:00 Uhr\n${formatNumber(val, 2)} ${unit}`;
+      html += `<div class="heatmap-cell" style="background-color: ${bgColor}" title="${tooltip}"></div>`;
     }
   }
+
   html += "</div></div>";
   return html;
 }

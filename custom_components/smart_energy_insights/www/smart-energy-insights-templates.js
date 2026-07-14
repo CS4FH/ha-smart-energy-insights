@@ -53,7 +53,7 @@ export function renderBaseCard(title, texts) {
           </div>
           <div class="sensor-picker">
             <label class="sensor-label" for="sensorPicker">${texts.sensorPickerLabel}</label>
-            <select id="sensorPicker" class="sensor-select"></select>
+            <ha-entity-picker id="sensorPicker" class="sensor-select"></ha-entity-picker>
           </div>
           <div class="sensor-hint" id="sensorHint">${texts.sensorHint}</div>
           <div class="section-actions">
@@ -80,8 +80,22 @@ export function renderDashboardHtml({
   initialSpotBase,
   initialTax,
   initialTaxChecked,
-  texts
+  texts,
+  rangePreset,
+  rangeFrom,
+  rangeTo,
+  rangeWeek,
+  rangeMonth,
+  rangeQuarter,
+  rangeQuarterYear,
+  availableStart,
+  availableEnd
 }) {
+  const showCustom = rangePreset === "custom";
+  const showWeek = rangePreset === "week";
+  const showMonth = rangePreset === "month";
+  const showQuarter = rangePreset === "quarter";
+
   return `
     <div class="dashboard-wrapper">
       <div class="profile-header">
@@ -100,14 +114,42 @@ export function renderDashboardHtml({
         </div>
         <div class="profile-range">
           <div class="range-title">${texts.dateRangeLabel}</div>
+          <div class="range-field">
+            <label for="rangePreset">${texts.dateRangeModeLabel}</label>
+            <select id="rangePreset">
+              <option value="total" ${rangePreset === "total" ? "selected" : ""}>${texts.dateRangeModeTotal}</option>
+              <option value="custom" ${showCustom ? "selected" : ""}>${texts.dateRangeModeCustom}</option>
+              <option value="quarter" ${showQuarter ? "selected" : ""}>${texts.dateRangeModeQuarter}</option>
+              <option value="month" ${showMonth ? "selected" : ""}>${texts.dateRangeModeMonth}</option>
+              <option value="week" ${showWeek ? "selected" : ""}>${texts.dateRangeModeWeek}</option>
+            </select>
+          </div>
           <div class="range-fields">
-            <div class="range-field">
-              <label for="rangeStart">${texts.dateRangeFrom}</label>
-              <input type="date" id="rangeStart">
+            <div class="range-field range-picker" id="rangeCustomPicker" style="display: ${showCustom ? "grid" : "none"};">
+              <label for="rangeFrom">${texts.dateRangeFrom}</label>
+              <input type="date" id="rangeFrom" value="${rangeFrom || ""}" min="${availableStart || ""}" max="${availableEnd || ""}">
+              <label for="rangeTo">${texts.dateRangeTo}</label>
+              <input type="date" id="rangeTo" value="${rangeTo || ""}" min="${availableStart || ""}" max="${availableEnd || ""}">
             </div>
-            <div class="range-field">
-              <label for="rangeEnd">${texts.dateRangeTo}</label>
-              <input type="date" id="rangeEnd">
+            <div class="range-field range-picker" id="rangeWeekPicker" style="display: ${showWeek ? "flex" : "none"};">
+              <label for="rangeWeek">${texts.dateRangeWeekLabel}</label>
+              <input type="week" id="rangeWeek" value="${rangeWeek || ""}">
+            </div>
+            <div class="range-field range-picker" id="rangeMonthPicker" style="display: ${showMonth ? "flex" : "none"};">
+              <label for="rangeMonth">${texts.dateRangeMonthLabel}</label>
+              <input type="month" id="rangeMonth" value="${rangeMonth || ""}">
+            </div>
+            <div class="range-field range-picker" id="rangeQuarterPicker" style="display: ${showQuarter ? "flex" : "none"};">
+              <label>${texts.dateRangeQuarterLabel}</label>
+              <div class="range-quarter-fields">
+                <input type="number" id="rangeQuarterYear" min="1970" max="2100" step="1" placeholder="YYYY" value="${rangeQuarterYear ? String(rangeQuarterYear) : ""}">
+                <select id="rangeQuarter">
+                  <option value="1" ${String(rangeQuarter || "1") === "1" ? "selected" : ""}>${texts.dateRangeQuarterQ1}</option>
+                  <option value="2" ${String(rangeQuarter || "1") === "2" ? "selected" : ""}>${texts.dateRangeQuarterQ2}</option>
+                  <option value="3" ${String(rangeQuarter || "1") === "3" ? "selected" : ""}>${texts.dateRangeQuarterQ3}</option>
+                  <option value="4" ${String(rangeQuarter || "1") === "4" ? "selected" : ""}>${texts.dateRangeQuarterQ4}</option>
+                </select>
+              </div>
             </div>
           </div>
           <div class="range-actions">

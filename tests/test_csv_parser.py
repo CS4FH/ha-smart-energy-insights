@@ -39,8 +39,8 @@ def test_parse_successful_valid_csv() -> None:
 
     # 01.01.2026 is a Thursday (Index 3)
     heatmap = result["consumption_heatmap"]
-    assert heatmap[3][0] == 1.5  # Hour 0
-    assert heatmap[3][1] == 2.5  # Hour 1
+    assert heatmap[3][1] == 1.5  # Interval 00:00-01:00 shown at 01:00
+    assert heatmap[3][2] == 2.5  # Interval 01:00-02:00 shown at 02:00
 
 
 def test_parse_empty_csv() -> None:

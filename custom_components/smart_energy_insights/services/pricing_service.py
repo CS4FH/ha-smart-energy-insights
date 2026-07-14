@@ -33,9 +33,13 @@ def get_pricing_config(hass: HomeAssistant) -> PricingConfig:
     entry = entries[0]
     return PricingConfig(
         fixed_price=entry.options.get("fixed_price", entry.data.get("fixed_price", defaults["fixed_price"])),
-        fixed_base_fee=entry.options.get("fixed_base_fee", entry.data.get("fixed_base_fee", defaults["fixed_base_fee"])),
+        fixed_base_fee=entry.options.get(
+            "fixed_base_fee", entry.data.get("fixed_base_fee", defaults["fixed_base_fee"])
+        ),
         spot_markup=entry.options.get("spot_markup", entry.data.get("spot_markup", defaults["spot_markup"])),
-        spot_base_fee=entry.options.get("spot_base_fee", entry.data.get("spot_base_fee", defaults["spot_base_fee"])),
+        spot_base_fee=entry.options.get(
+            "spot_base_fee", entry.data.get("spot_base_fee", defaults["spot_base_fee"])
+        ),
         tax_rate=entry.options.get("tax_rate", entry.data.get("tax_rate", defaults["tax_rate"])),
     )
 
@@ -66,22 +70,24 @@ def build_price_heatmap(price_series: list) -> list:
     if not price_series:
         return []
 
-    sums = {d: {h: 0.0 for h in range(24)} for d in range(7)}
-    counts = {d: {h: 0 for h in range(24)} for d in range(7)}
+    sums = {day: {hour: 0.0 for hour in range(24)} for day in range(7)}
+    counts = {day: {hour: 0 for hour in range(24)} for day in range(7)}
+
     for point in price_series:
         dt_local = dt_util.as_local(point["start"])
-        d = dt_local.weekday()
-        h = dt_local.hour
-        sums[d][h] += point["value"]
-        counts[d][h] += 1
+        day = dt_local.weekday()
+        hour = dt_local.hour
+        sums[day][hour] += float(point["value"])
+        counts[day][hour] += 1
 
     heatmap = []
-    for d in range(7):
+    for day in range(7):
         row = []
-        for h in range(24):
-            avg = sums[d][h] / counts[d][h] if counts[d][h] > 0 else 0
+        for hour in range(24):
+            avg = sums[day][hour] / counts[day][hour] if counts[day][hour] > 0 else 0.0
             row.append(round(avg, 3))
         heatmap.append(row)
+
     return heatmap
 
 
@@ -99,10 +105,10 @@ def compute_spot_price_matches(statistics: list, price_series: list) -> dict:
             "duration_months": 0.0,
         }
 
-    price_dict = {p["start"]: p["value"] for p in price_series}
+    price_dict = {point["start"]: float(point["value"]) for point in price_series}
 
     for stat in statistics:
-        cons = stat["state"]
+        cons = float(stat["state"])
         spot_price = price_dict.get(stat["start"])
         if spot_price is not None:
             matched_hours += 1

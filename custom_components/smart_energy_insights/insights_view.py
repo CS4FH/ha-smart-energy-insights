@@ -21,11 +21,12 @@ from .repositories.csv_repository import parse_and_validate_csv
 from .repositories.statistics_repository import async_add_external_stats
 from .repositories.statistics_repository import async_get_statistics_during_period
 from .services.pricing_service import (
-    compute_spot_price_matches,
+    build_price_heatmap,
     get_pricing_config,
     update_pricing_config,
 )
 from .services.spot_price_service import async_import_spot_prices_for_range
+from .services.tariff_analysis_service import analyze_tariffs
 from .utils.translation import async_translate
 
 _LOGGER = logging.getLogger(__name__)
@@ -84,9 +85,10 @@ class SmartEnergyInsightsUploadView(HomeAssistantView):
                         if not start_time or not end_time or start_time >= end_time:
                             return await _error_response(hass, "api.error.invalid_date_range")
 
+                        fetch_start = start_time - timedelta(hours=1)
                         stats = await async_get_statistics_during_period(
                             hass,
-                            start_time,
+                            fetch_start,
                             end_time,
                             {stat_id},
                             period="hour",
@@ -94,7 +96,7 @@ class SmartEnergyInsightsUploadView(HomeAssistantView):
                             units=None,
                         )
                         rows = stats.get(stat_id, [])
-                        statistics = _statistics_from_rows(rows)
+                        statistics = _statistics_from_rows(rows, min_start=start_time, prefer_state=True)
                         if not statistics:
                             return await _error_response(hass, "api.error.no_data_in_range")
 
@@ -255,7 +257,6 @@ class SmartEnergyInsightsUploadView(HomeAssistantView):
                 available_start=statistics[0]["start"].isoformat(),
                 available_end=statistics[-1]["start"].isoformat(),
             )
-            response_data["consumption_heatmap"] = result.get("consumption_heatmap", [])
 
             await async_update_cache(
                 hass,
@@ -279,9 +280,10 @@ def _build_consumption_heatmap(statistics: list) -> list:
         start = stat.get("start")
         if not start:
             continue
-        dt_local = dt_util.as_local(start)
-        d = dt_local.weekday()
-        h = dt_local.hour
+        # Hourly statistics represent the interval ending at +1h in HA history.
+        bucket_dt = dt_util.as_local(start) + timedelta(hours=1)
+        d = bucket_dt.weekday()
+        h = bucket_dt.hour
         sums[d][h] += stat.get("state", 0.0)
         counts[d][h] += 1
 
@@ -365,6 +367,18 @@ def _calculate_summary(statistics: list) -> dict:
 def _stat_start_to_datetime(start_value):
     if isinstance(start_value, (int, float)):
         return dt_util.utc_from_timestamp(start_value)
+
+    if isinstance(start_value, str):
+        parsed = dt_util.parse_datetime(start_value)
+        if parsed is None:
+            raise ValueError(f"Invalid datetime value: {start_value}")
+        start_value = parsed
+
+    if start_value.tzinfo is None:
+        # Recorder can return naive UTC datetimes. Interpreting them as local
+        # shifts all buckets by one hour.
+        start_value = start_value.replace(tzinfo=dt_util.UTC)
+
     return dt_util.as_utc(start_value)
 
 
@@ -397,7 +411,12 @@ def _resolve_date_range(start_value: str | None, end_value: str | None, default_
     return start_time, end_time
 
 
-def _statistics_from_rows(rows: list, unit_factor: float = 1.0) -> list:
+def _statistics_from_rows(
+    rows: list,
+    unit_factor: float = 1.0,
+    min_start: datetime | None = None,
+    prefer_state: bool = False,
+) -> list:
     rows_sorted = sorted(rows, key=lambda row: row.get("start") or 0)
     statistics = []
     running_sum = 0.0
@@ -412,6 +431,18 @@ def _statistics_from_rows(rows: list, unit_factor: float = 1.0) -> list:
         raw_state = row.get("state")
         raw_sum = row.get("sum")
 
+        if prefer_state and raw_state is not None:
+            state_kwh = float(raw_state) * unit_factor
+            if state_kwh < 0:
+                continue
+
+            if min_start and start_dt < min_start:
+                continue
+
+            running_sum += state_kwh
+            statistics.append({"start": start_dt, "state": state_kwh, "sum": running_sum})
+            continue
+
         if raw_sum is not None:
             sum_kwh = float(raw_sum) * unit_factor
             if previous_sum is None:
@@ -421,6 +452,9 @@ def _statistics_from_rows(rows: list, unit_factor: float = 1.0) -> list:
             delta = sum_kwh - previous_sum
             previous_sum = sum_kwh
             if delta < 0:
+                continue
+
+            if min_start and start_dt < min_start:
                 continue
 
             running_sum += delta
@@ -433,6 +467,10 @@ def _statistics_from_rows(rows: list, unit_factor: float = 1.0) -> list:
         state_kwh = float(raw_state) * unit_factor
         if state_kwh < 0:
             continue
+
+        if min_start and start_dt < min_start:
+            continue
+
         running_sum += state_kwh
         statistics.append({"start": start_dt, "state": state_kwh, "sum": running_sum})
         continue
@@ -469,48 +507,19 @@ async def _build_analysis_response(
 
     price_series = price_result.get("series", [])
     pricing_config = get_pricing_config(hass)
-    spot_stats = compute_spot_price_matches(statistics, price_series)
+    price_heatmap = build_price_heatmap(price_series)
     consumption_heatmap = _build_consumption_heatmap(statistics)
     summary = _calculate_summary(statistics)
 
-    tax_multiplier = 1.0 + pricing_config.tax_rate / 100.0 if inputs_are_net else 1.0
-    gross_fix_price = pricing_config.fixed_price * tax_multiplier if inputs_are_net else pricing_config.fixed_price
-    gross_fix_base = pricing_config.fixed_base_fee * tax_multiplier if inputs_are_net else pricing_config.fixed_base_fee
-    gross_spot_markup = pricing_config.spot_markup * tax_multiplier if inputs_are_net else pricing_config.spot_markup
-    gross_spot_base = pricing_config.spot_base_fee * tax_multiplier if inputs_are_net else pricing_config.spot_base_fee
-
-    matched_consumption = spot_stats.get("matched_consumption", 0.0)
-    duration_months = spot_stats.get("duration_months", 0.0)
-    break_even_fixed = None
-    if matched_consumption > 0 and price_series:
-        base_spot_cost_eur = spot_stats.get("base_spot_cost_cents", 0) / 100.0
-        base_spot_cost_eur_adjusted = (
-            base_spot_cost_eur
-            if inputs_are_net
-            else base_spot_cost_eur * (1.0 + pricing_config.tax_rate / 100.0)
-        )
-        avg_spot_price = (base_spot_cost_eur_adjusted * 100.0 / matched_consumption)
-        break_even_fixed = avg_spot_price + gross_spot_markup + (duration_months * (gross_spot_base - gross_fix_base) * 100.0 / matched_consumption)
-
-    price_dict = {p["start"]: p["value"] for p in price_series}
-    cheaper_hours = 0
-    matched_hours = 0
-    matched_hours_total = spot_stats.get("matched_hours", 0)
-    fix_base_per_hour = (duration_months * gross_fix_base) / matched_hours_total if matched_hours_total else 0
-    spot_base_per_hour = (duration_months * gross_spot_base) / matched_hours_total if matched_hours_total else 0
-    for stat in statistics:
-        spot_price = price_dict.get(stat.get("start"))
-        if spot_price is None:
-            continue
-        matched_hours += 1
-        cons = stat.get("state", 0.0) or 0.0
-        gross_spot_energy = (spot_price + pricing_config.spot_markup) * tax_multiplier
-        fix_cost_hour = (cons * gross_fix_price) / 100.0 + fix_base_per_hour
-        spot_cost_hour = (cons * gross_spot_energy) / 100.0 + spot_base_per_hour
-        if spot_cost_hour < fix_cost_hour:
-            cheaper_hours += 1
-
-    spot_cheaper_share = cheaper_hours / matched_hours if matched_hours > 0 else None
+    tariff_analysis = analyze_tariffs(
+        statistics,
+        price_series,
+        pricing_config,
+        inputs_are_net,
+    )
+    break_even_fixed = tariff_analysis.get("break_even_fixed_ct_kwh")
+    spot_cheaper_share = tariff_analysis.get("spot_cheaper_share")
+    monthly_tariff_comparison = tariff_analysis.get("monthly_tariff_comparison")
 
     range_start = available_start or start_iso
     range_end = available_end or end_iso
@@ -539,11 +548,21 @@ async def _build_analysis_response(
         "price_imported_count": price_result.get("imported_count"),
         "price_series_count": price_result.get("series_count"),
         "consumption_heatmap": consumption_heatmap,
-        "price_heatmap": spot_stats["price_heatmap"],
-        "matched_hours": spot_stats["matched_hours"],
-        "duration_months": spot_stats["duration_months"],
-        "matched_consumption": spot_stats["matched_consumption"],
-        "base_spot_cost_eur": spot_stats["base_spot_cost_cents"] / 100.0,
+        "price_heatmap": price_heatmap,
+        "matched_hours": tariff_analysis["matched_hours"],
+        "duration_months": tariff_analysis["duration_months"],
+        "matched_consumption": tariff_analysis["matched_consumption"],
+        "base_spot_cost_eur": tariff_analysis["base_spot_cost_cents"] / 100.0,
+        "monthly_tariff_comparison": monthly_tariff_comparison,
+        "tariff_totals": {
+            "fixed_cost_eur": tariff_analysis["fixed_total_eur"],
+            "spot_cost_eur": tariff_analysis["spot_total_eur"],
+            "delta_eur": tariff_analysis["delta_total_eur"],
+            "savings_eur": tariff_analysis["total_savings_eur"],
+            "extra_cost_eur": tariff_analysis["total_extra_cost_eur"],
+        },
+        "tariff_monthly": tariff_analysis["monthly"],
+        "tariff_debug_version": "v1",
         "fixed_price_ct": pricing_config.fixed_price,
         "fixed_base_fee_eur": pricing_config.fixed_base_fee,
         "spot_markup_ct": pricing_config.spot_markup,
@@ -611,9 +630,10 @@ class SmartEnergyInsightsSensorView(HomeAssistantView):
             start_time = range_start_time
             end_time = range_end_time
 
+        fetch_start = start_time - timedelta(hours=1)
         stats = await async_get_statistics_during_period(
             hass,
-            start_time,
+            fetch_start,
             end_time,
             {entity_id},
             period="hour",
@@ -625,7 +645,7 @@ class SmartEnergyInsightsSensorView(HomeAssistantView):
         if not rows:
             return await _error_response(hass, "api.error.no_sensor_data")
 
-        statistics = _statistics_from_rows(rows, unit_factor=unit_factor)
+        statistics = _statistics_from_rows(rows, unit_factor=unit_factor, min_start=start_time)
 
         if not statistics:
             return await _error_response(hass, "api.error.no_sensor_data")

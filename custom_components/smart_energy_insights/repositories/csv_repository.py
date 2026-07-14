@@ -4,6 +4,7 @@ import csv
 import io
 import logging
 from datetime import datetime
+from datetime import timedelta
 
 from homeassistant.util import dt as dt_util
 
@@ -87,8 +88,9 @@ def parse_and_validate_csv(csv_content: str) -> dict:
         heatmap_sums = {d: {h: 0.0 for h in range(24)} for d in range(7)}
         heatmap_counts = {d: {h: 0 for h in range(24)} for d in range(7)}
         for hour_local, val in hourly_data.items():
-            d = hour_local.weekday()
-            h = hour_local.hour
+            bucket_dt = hour_local + timedelta(hours=1)
+            d = bucket_dt.weekday()
+            h = bucket_dt.hour
             heatmap_sums[d][h] += val
             heatmap_counts[d][h] += 1
 
