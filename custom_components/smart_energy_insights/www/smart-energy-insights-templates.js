@@ -81,8 +81,10 @@ export function renderDashboardHtml({
   profileTitle,
   profileMeta,
   heatmapsHtml,
+  monthlyTariffHtml,
   analysisGroups,
   texts,
+  dashboardTab,
   rangePreset,
   rangeFrom,
   rangeTo,
@@ -166,16 +168,32 @@ export function renderDashboardHtml({
         <div class="banner-column" id="dynamicSavingsBanner"></div>
       </div>
 
-      <div class="info-box">
-        <h3>📊 ${texts.analysisTitle}</h3>
-        <div class="analysis-groups">
-          ${analysisGroups}
+      <section class="dashboard-tabs" aria-label="Dashboard sections">
+        <div class="dashboard-tab-navigation" role="tablist">
+          <button class="dashboard-tab-button${dashboardTab === "monthly" ? " active" : ""}" data-dashboard-tab="monthly" role="tab" aria-selected="${String(dashboardTab === "monthly")}" aria-controls="dashboardTabMonthly">${texts.dashboardTabMonthly}</button>
+          <button class="dashboard-tab-button${dashboardTab === "usage" ? " active" : ""}" data-dashboard-tab="usage" role="tab" aria-selected="${String(dashboardTab === "usage")}" aria-controls="dashboardTabUsage">${texts.dashboardTabUsage}</button>
+          <button class="dashboard-tab-button${dashboardTab === "technical" ? " active" : ""}" data-dashboard-tab="technical" role="tab" aria-selected="${String(dashboardTab === "technical")}" aria-controls="dashboardTabTechnical">${texts.dashboardTabTechnical}</button>
         </div>
-      </div>
 
-      <div class="heatmap-area">
-        ${heatmapsHtml}
-      </div>
+        <div id="dashboardTabMonthly" class="dashboard-tab-panel" data-dashboard-tab-panel="monthly" role="tabpanel"${dashboardTab === "monthly" ? "" : " hidden"}>
+          ${monthlyTariffHtml}
+        </div>
+
+        <div id="dashboardTabUsage" class="dashboard-tab-panel" data-dashboard-tab-panel="usage" role="tabpanel"${dashboardTab === "usage" ? "" : " hidden"}>
+          <div class="heatmap-area">
+            ${heatmapsHtml}
+          </div>
+        </div>
+
+        <div id="dashboardTabTechnical" class="dashboard-tab-panel" data-dashboard-tab-panel="technical" role="tabpanel"${dashboardTab === "technical" ? "" : " hidden"}>
+          <div class="info-box">
+            <h3>📊 ${texts.analysisTitle}</h3>
+            <div class="analysis-groups">
+              ${analysisGroups}
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
   `;
 }

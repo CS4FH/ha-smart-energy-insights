@@ -157,6 +157,9 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       dateRangeSensorRequired: this.localize("card.date_range_sensor_required", "Please select a sensor first."),
       dateRangeError: this.localize("card.date_range_error", "No data found for this range."),
       analysisTitle: this.localize("card.analysis_title", "Load profile analysis"),
+      dashboardTabMonthly: this.localize("card.dashboard_tab_monthly", "Monatsvergleich"),
+      dashboardTabUsage: this.localize("card.dashboard_tab_usage", "Nutzungsverhalten"),
+      dashboardTabTechnical: this.localize("card.dashboard_tab_technical", "Technische Details"),
       analysisSummaryTitle: this.localize("card.analysis_summary_title", "Summary"),
       analysisGroupPeriodTitle: this.localize("card.analysis_group_period", "Period"),
       analysisGroupConsumptionTitle: this.localize("card.analysis_group_consumption", "Consumption"),
@@ -950,6 +953,7 @@ syncSensorPicker() {
     }
 
     const heatmapsHtml = this.buildSeasonalHeatmapsHtml(response);
+    const monthlyTariffHtml = this.buildMonthlyTariffComparisonHtml(response);
 
     const start = response.start ? response.start.split('T')[0] : 'N/A';
     const end = response.end ? response.end.split('T')[0] : 'N/A';
@@ -1007,14 +1011,17 @@ syncSensorPicker() {
     if (!this._rangeQuarter) this._rangeQuarter = fallbackQuarter;
     if (!this._rangeStart) this._rangeStart = this._availableStart || start;
     if (!this._rangeEnd) this._rangeEnd = this._availableEnd || end;
+    if (!this._dashboardTab) this._dashboardTab = "monthly";
 
     container.innerHTML = renderDashboardHtml({
       filename: filenameStr,
       profileTitle: texts.profileTitle,
       profileMeta,
       heatmapsHtml,
+      monthlyTariffHtml,
       analysisGroups,
       texts,
+      dashboardTab: this._dashboardTab,
       rangePreset: this._rangePreset,
       rangeFrom: this._rangeStart,
       rangeTo: this._rangeEnd,
@@ -1094,6 +1101,22 @@ syncSensorPicker() {
         this.resetDateRange();
       });
     }
+
+    this.querySelectorAll("[data-dashboard-tab]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const tab = button.dataset.dashboardTab || "monthly";
+        this._dashboardTab = tab;
+        this.saveUiState();
+        this.querySelectorAll("[data-dashboard-tab]").forEach((tabButton) => {
+          const isActive = tabButton.dataset.dashboardTab === tab;
+          tabButton.classList.toggle("active", isActive);
+          tabButton.setAttribute("aria-selected", String(isActive));
+        });
+        this.querySelectorAll("[data-dashboard-tab-panel]").forEach((panel) => {
+          panel.hidden = panel.dataset.dashboardTabPanel !== tab;
+        });
+      });
+    });
 
     this.querySelectorAll("[data-heatmap-season]").forEach((button) => {
       button.addEventListener("click", () => {
@@ -1303,7 +1326,6 @@ syncSensorPicker() {
         </div>
         ${panels}
       </section>
-      ${this.buildMonthlyTariffComparisonHtml(response)}
     `;
   }
 
@@ -1759,6 +1781,7 @@ syncSensorPicker() {
       this._heatmapSeason = parsed.heatmapSeason || "whole_year";
       this._consumptionMode = parsed.consumptionMode || "absolute";
       this._spotPriceMode = parsed.spotPriceMode || "break_even";
+      this._dashboardTab = parsed.dashboardTab || "monthly";
       this._selectedSensor = parsed.selectedSensor || this._selectedSensor;
     } catch (err) {
       console.warn("Failed to load UI state", err);
@@ -1779,6 +1802,7 @@ syncSensorPicker() {
         heatmapSeason: this._heatmapSeason || "whole_year",
         consumptionMode: this._consumptionMode || "absolute",
         spotPriceMode: this._spotPriceMode || "break_even",
+        dashboardTab: this._dashboardTab || "monthly",
         selectedSensor: this._selectedSensor || null
       };
       localStorage.setItem("sei_ui_state", JSON.stringify(payload));
@@ -1867,6 +1891,12 @@ syncSensorPicker() {
       .kpi-card { background: rgba(var(--rgb-primary-text-color), 0.04); border: 1px solid rgba(var(--rgb-divider-color), 0.45); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; justify-content: center; gap: 10px; min-height: 88px; }
       .kpi-simple-title { font-size: 11px; letter-spacing: 0.45px; text-transform: uppercase; color: var(--secondary-text-color); font-weight: 700; }
       .kpi-simple-value { font-size: 18px; line-height: 1.2; color: var(--primary-text-color); font-weight: 700; }
+      .dashboard-tabs { margin-top: 24px; }
+      .dashboard-tab-navigation { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
+      .dashboard-tab-button { min-height: 40px; padding: 8px 12px; border: 1px solid var(--divider-color); border-radius: 8px; background: var(--card-background-color); color: var(--primary-text-color); font-size: 13px; font-weight: 600; cursor: pointer; }
+      .dashboard-tab-button:hover { border-color: var(--primary-color); }
+      .dashboard-tab-button.active { background: var(--primary-color); border-color: var(--primary-color); color: white; }
+      .dashboard-tab-panel[hidden] { display: none; }
       
       .info-box { background-color: rgba(var(--rgb-primary-color), 0.05); border-left: 4px solid var(--primary-color); padding: 16px; margin-bottom: 24px; border-radius: 0 4px 4px 0; }
       .info-box h3 { margin: 0 0 8px 0; font-size: 16px; color: var(--primary-text-color); }
@@ -1977,6 +2007,7 @@ syncSensorPicker() {
         .savings-hero-icon { font-size: 36px; }
         .savings-hero-value { font-size: 28px; }
         .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .dashboard-tab-navigation { grid-template-columns: 1fr; }
         .heatmap-season-navigation { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .heatmap-season-button:last-child { grid-column: span 2; }
         .heatmap-subcard { padding: 12px; }
