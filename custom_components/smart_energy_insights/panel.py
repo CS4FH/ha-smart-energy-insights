@@ -38,6 +38,7 @@ _LOGGER = logging.getLogger(__name__)
 RESOURCE_LISTENER_KEY = "lovelace_resource_listener"
 _LOVELACE_DASHBOARDS_KEY = "lovelace_dashboards"
 _LOVELACE_RESOURCES_KEY = "lovelace_resources"
+_CARD_RESOURCE_BASE = CARD_RESOURCE_URL.split("?", 1)[0]
 
 
 async def async_setup_panel(hass: HomeAssistant) -> bool:
@@ -100,6 +101,14 @@ async def _ensure_card_resource(hass: HomeAssistant) -> None:
 
         if isinstance(resources, lovelace_resources.ResourceStorageCollection):
             await resources.async_load()
+
+            # Remove stale resource URLs with the same base path to avoid loading old bundles.
+            for resource in list(resources.async_items()):
+                url = resource.get(CONF_URL)
+                if isinstance(url, str) and url.startswith(_CARD_RESOURCE_BASE) and url != CARD_RESOURCE_URL:
+                    await resources.async_delete_item(resource["id"])
+                    _LOGGER.debug("Removed stale custom card resource: %s", url)
+
             resource_exists = any(
                 res.get(CONF_URL) == CARD_RESOURCE_URL
                 for res in resources.async_items()
@@ -168,13 +177,11 @@ async def _remove_card_resource(hass: HomeAssistant) -> None:
 
     if isinstance(resources, lovelace_resources.ResourceStorageCollection):
         await resources.async_load()
-        resource = next(
-            (res for res in resources.async_items() if res.get(CONF_URL) == CARD_RESOURCE_URL),
-            None,
-        )
-        if resource:
-            await resources.async_delete_item(resource["id"])
-            _LOGGER.debug("Removed custom card resource: %s", CARD_RESOURCE_URL)
+        for resource in list(resources.async_items()):
+            url = resource.get(CONF_URL)
+            if isinstance(url, str) and url.startswith(_CARD_RESOURCE_BASE):
+                await resources.async_delete_item(resource["id"])
+                _LOGGER.debug("Removed custom card resource: %s", url)
 
 
 async def _remove_dashboard_config(hass: HomeAssistant) -> None:

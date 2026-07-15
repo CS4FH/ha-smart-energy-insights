@@ -173,7 +173,7 @@ export function renderDashboardHtml({
         </div>
       </div>
 
-      <div class="heatmaps-grid">
+      <div class="heatmap-area">
         ${heatmapsHtml}
       </div>
     </div>

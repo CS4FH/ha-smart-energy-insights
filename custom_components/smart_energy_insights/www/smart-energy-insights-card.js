@@ -8,7 +8,7 @@ import {
   setActiveSource,
   uploadCsv
 } from "./smart-energy-insights-api.js";
-import { generateHeatmapHTML } from "./smart-energy-insights-heatmap.js";
+import { generateHeatmapHTML } from "./smart-energy-insights-heatmap.js?v=20260715a";
 import { renderBaseCard, renderDashboardHtml } from "./smart-energy-insights-templates.js";
 import { formatNumber, formatUploadDate } from "./smart-energy-insights-utils.js";
 
@@ -180,12 +180,56 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       heatmapLegendHigh: this.localize("card.heatmap_legend_high", "High"),
       heatmapConsumptionTitle: this.localize(
         "card.heatmap_consumption_title",
-        "Avg consumption per hour (kWh)"
+        "Consumption heatmap (kWh)"
       ),
       heatmapPriceTitle: this.localize(
         "card.heatmap_price_title",
-        "Avg spot price per hour (ct/kWh)"
+        "Spot price heatmap (ct/kWh)"
       ),
+      heatmapConsumptionModeLabel: this.localize("card.heatmap_consumption_mode_label", "Consumption view"),
+      heatmapConsumptionModeAbsolute: this.localize("card.heatmap_consumption_mode_absolute", "Absolute"),
+      heatmapConsumptionModeRelativeMean: this.localize("card.heatmap_consumption_mode_relative_mean", "Relative to average"),
+      heatmapConsumptionModeRelativeWeekday: this.localize("card.heatmap_consumption_mode_relative_weekday", "Relative to weekday profile"),
+      heatmapConsumptionAbsoluteInfo: this.localize(
+        "card.heatmap_consumption_absolute_info",
+        "Ref: absolute consumption"
+      ),
+      heatmapConsumptionRefMean: (reference) => this.localize(
+        "card.heatmap_consumption_ref_mean",
+        "Ref: {reference} kWh (Average)",
+        { reference }
+      ),
+      heatmapConsumptionRefWeekday: this.localize(
+        "card.heatmap_consumption_ref_weekday",
+        "Ref: 0 kWh (Weekday profile)"
+      ),
+      heatmapSpotModeLabel: this.localize("card.heatmap_spot_mode_label", "Spot view"),
+      heatmapSpotModeAbsolute: this.localize("card.heatmap_spot_mode_absolute", "Absolute"),
+      heatmapSpotModeFixed: this.localize("card.heatmap_spot_mode_fixed", "Relative to fixed"),
+      heatmapSpotModeBreakEven: this.localize("card.heatmap_spot_mode_break_even", "Relative to break-even"),
+      heatmapPriceAbsoluteInfo: this.localize(
+        "card.heatmap_price_absolute_info",
+        "Ref: absolute spot price"
+      ),
+      heatmapPriceRefFixed: (reference) => this.localize(
+        "card.heatmap_price_ref_fixed",
+        "Ref: {reference} ct/kWh (Fixed)",
+        { reference }
+      ),
+      heatmapPriceRefBreakEven: (reference) => this.localize(
+        "card.heatmap_price_ref_break_even",
+        "Ref: {reference} ct/kWh (Break-even)",
+        { reference }
+      ),
+      heatmapSeasonWholeYear: this.localize("card.heatmap_season_whole_year", "Whole year"),
+      heatmapSeasonSpring: this.localize("card.heatmap_season_spring", "Spring"),
+      heatmapSeasonSummer: this.localize("card.heatmap_season_summer", "Summer"),
+      heatmapSeasonAutumn: this.localize("card.heatmap_season_autumn", "Autumn"),
+      heatmapSeasonWinter: this.localize("card.heatmap_season_winter", "Winter"),
+      heatmapLegendLower: this.localize("card.heatmap_legend_lower", "Lower"),
+      heatmapLegendHigher: this.localize("card.heatmap_legend_higher", "Higher"),
+      heatmapLegendCheaper: this.localize("card.heatmap_legend_cheaper", "Cheaper"),
+      heatmapLegendExpensive: this.localize("card.heatmap_legend_expensive", "More expensive"),
       monthlyTariffTitle: this.localize(
         "card.monthly_tariff_title",
         "Monthly tariff comparison (dynamic vs fixed)"
@@ -905,28 +949,7 @@ syncSensorPicker() {
       this.querySelector("#uploadTitle").textContent = texts.uploadAnotherTitle;
     }
 
-    let heatmapsHtml = '';
-    if (response.consumption_heatmap && response.consumption_heatmap.length > 0) {
-      heatmapsHtml += generateHeatmapHTML(
-        response.consumption_heatmap,
-        texts.heatmapConsumptionTitle,
-        "kWh",
-        false,
-        formatNumber,
-        { low: texts.heatmapLegendLow, high: texts.heatmapLegendHigh }
-      );
-    }
-    if (response.price_heatmap && response.price_heatmap.length > 0) {
-      heatmapsHtml += generateHeatmapHTML(
-        response.price_heatmap,
-        texts.heatmapPriceTitle,
-        "ct/kWh",
-        false,
-        formatNumber,
-        { low: texts.heatmapLegendLow, high: texts.heatmapLegendHigh }
-      );
-    }
-    heatmapsHtml += this.buildMonthlyTariffComparisonHtml(response);
+    const heatmapsHtml = this.buildSeasonalHeatmapsHtml(response);
 
     const start = response.start ? response.start.split('T')[0] : 'N/A';
     const end = response.end ? response.end.split('T')[0] : 'N/A';
@@ -1072,8 +1095,365 @@ syncSensorPicker() {
       });
     }
 
+    this.querySelectorAll("[data-heatmap-season]").forEach((button) => {
+      button.addEventListener("click", () => {
+        this._heatmapSeason = button.dataset.heatmapSeason || "whole_year";
+        this.saveUiState();
+        this.renderDashboard(this.latestData);
+      });
+    });
+
+    this.querySelectorAll("[data-consumption-mode]").forEach((button) => {
+      button.addEventListener("click", () => {
+        this._consumptionMode = button.dataset.consumptionMode || "absolute";
+        this.saveUiState();
+        this.renderDashboard(this.latestData);
+      });
+    });
+
+    this.querySelectorAll("[data-spot-price-mode]").forEach((button) => {
+      button.addEventListener("click", () => {
+        this._spotPriceMode = button.dataset.spotPriceMode || "break_even";
+        this.saveUiState();
+        this.renderDashboard(this.latestData);
+      });
+    });
+
     this.updateSourceState();
     this.updateSavingsBanner(true);
+  }
+
+  buildSeasonalHeatmapsHtml(response) {
+    const texts = this._texts || this.getTexts();
+    const seasons = [
+      { key: "whole_year", label: texts.heatmapSeasonWholeYear },
+      { key: "spring", label: texts.heatmapSeasonSpring },
+      { key: "summer", label: texts.heatmapSeasonSummer },
+      { key: "autumn", label: texts.heatmapSeasonAutumn },
+      { key: "winter", label: texts.heatmapSeasonWinter },
+    ];
+    const selectedSeason = this._heatmapSeason || "whole_year";
+    const selectedConsumptionMode = this._consumptionMode || "absolute";
+    const selectedSpotMode = this._spotPriceMode || "break_even";
+    const wholeYearHeatmaps = {
+      consumption_heatmap: response.consumption_heatmap,
+      price_heatmap: response.price_heatmap,
+    };
+    const fixedPrice = Number(response.fixed_price_ct);
+    const breakEvenFixed = Number(response.break_even_fixed_ct_kwh);
+    const hasFixedPrice = Number.isFinite(fixedPrice);
+    const hasBreakEven = Number.isFinite(breakEvenFixed);
+
+    const resolvedSpotMode = this.resolveSpotPriceMode(selectedSpotMode, hasFixedPrice, hasBreakEven);
+    const priceReference = resolvedSpotMode === "break_even"
+      ? breakEvenFixed
+      : resolvedSpotMode === "fixed"
+        ? fixedPrice
+        : null;
+
+    const wholeYearPriceDisplayHeatmap = Number.isFinite(priceReference)
+      ? this.computePriceDeltaHeatmap(wholeYearHeatmaps.price_heatmap, priceReference)
+      : wholeYearHeatmaps.price_heatmap;
+    const seasonalHeatmaps = response.seasonal_heatmaps || {};
+
+    const seasonHeatmaps = seasons.map((season) => (
+      season.key === "whole_year"
+        ? wholeYearHeatmaps
+        : seasonalHeatmaps[season.key] || wholeYearHeatmaps
+    ));
+
+    const consumptionDisplayHeatmaps = seasonHeatmaps.map((heatmaps) =>
+      this.computeConsumptionDisplayHeatmap(
+        heatmaps.consumption_heatmap,
+        selectedConsumptionMode
+      )
+    );
+    const consumptionScale = selectedConsumptionMode === "absolute"
+      ? this.computeAbsoluteConsumptionScaleFromMany(consumptionDisplayHeatmaps)
+      : this.computeSymmetricHeatmapScaleFromMany(consumptionDisplayHeatmaps);
+
+    const priceDisplayHeatmaps = seasonHeatmaps.map((heatmaps) =>
+      Number.isFinite(priceReference)
+        ? this.computePriceDeltaHeatmap(heatmaps.price_heatmap, priceReference)
+        : heatmaps.price_heatmap
+    );
+    const priceScale = Number.isFinite(priceReference)
+      ? this.computeSymmetricHeatmapScaleFromMany(priceDisplayHeatmaps)
+      : this.computeRobustHeatmapScaleFromMany(priceDisplayHeatmaps);
+
+    const buttons = seasons
+      .map((season) => `
+        <button class="heatmap-season-button${season.key === selectedSeason ? " active" : ""}" data-heatmap-season="${season.key}" aria-pressed="${String(season.key === selectedSeason)}">${season.label}</button>
+      `)
+      .join("");
+
+    const consumptionModeButtons = [
+      { key: "absolute", label: texts.heatmapConsumptionModeAbsolute },
+      { key: "relative_mean", label: texts.heatmapConsumptionModeRelativeMean },
+      { key: "relative_weekday", label: texts.heatmapConsumptionModeRelativeWeekday },
+    ]
+      .map((mode) => {
+        const isActive = selectedConsumptionMode === mode.key;
+        return `
+          <button
+            class="consumption-mode-button${isActive ? " active" : ""}"
+            data-consumption-mode="${mode.key}"
+            aria-pressed="${String(isActive)}"
+          >${mode.label}</button>
+        `;
+      })
+      .join("");
+
+    const spotModeButtons = [
+      { key: "absolute", label: texts.heatmapSpotModeAbsolute },
+      { key: "fixed", label: texts.heatmapSpotModeFixed, disabled: !hasFixedPrice },
+      { key: "break_even", label: texts.heatmapSpotModeBreakEven, disabled: !hasBreakEven },
+    ]
+      .map((mode) => {
+        const isActive = resolvedSpotMode === mode.key;
+        return `
+          <button
+            class="spot-mode-button${isActive ? " active" : ""}"
+            data-spot-price-mode="${mode.key}"
+            aria-pressed="${String(isActive)}"
+            ${mode.disabled ? "disabled" : ""}
+          >${mode.label}</button>
+        `;
+      })
+      .join("");
+
+    const panels = seasons
+      .map((season) => {
+        const data = season.key === "whole_year"
+          ? wholeYearHeatmaps
+          : seasonalHeatmaps[season.key] || wholeYearHeatmaps;
+        const seasonPriceHeatmap = Number.isFinite(priceReference)
+          ? this.computePriceDeltaHeatmap(data.price_heatmap, priceReference)
+          : data.price_heatmap;
+        const seasonConsumptionHeatmap = this.computeConsumptionDisplayHeatmap(
+          data.consumption_heatmap,
+          selectedConsumptionMode
+        );
+        let consumptionInfoText = texts.heatmapConsumptionAbsoluteInfo;
+        if (selectedConsumptionMode === "relative_mean") {
+          const meanRef = this.computeHeatmapMean(data.consumption_heatmap);
+          consumptionInfoText = texts.heatmapConsumptionRefMean(formatNumber(meanRef, 3));
+        } else if (selectedConsumptionMode === "relative_weekday") {
+          consumptionInfoText = texts.heatmapConsumptionRefWeekday;
+        }
+
+        const consumptionHtml = generateHeatmapHTML(
+          seasonConsumptionHeatmap,
+          texts.heatmapConsumptionTitle,
+          "kWh",
+          false,
+          formatNumber,
+          selectedConsumptionMode === "absolute"
+            ? { low: texts.heatmapLegendLow, high: texts.heatmapLegendHigh }
+            : { low: texts.heatmapLegendLower, high: texts.heatmapLegendHigher },
+          consumptionScale,
+          consumptionInfoText ? { infoText: consumptionInfoText } : null
+        );
+        const referenceFormatted = Number.isFinite(priceReference) ? formatNumber(priceReference, 2) : "-";
+        let priceInfoText = texts.heatmapPriceAbsoluteInfo;
+        if (resolvedSpotMode === "fixed") {
+          priceInfoText = texts.heatmapPriceRefFixed(referenceFormatted);
+        } else if (resolvedSpotMode === "break_even") {
+          priceInfoText = texts.heatmapPriceRefBreakEven(referenceFormatted);
+        }
+
+        const priceHtml = generateHeatmapHTML(
+          seasonPriceHeatmap,
+          texts.heatmapPriceTitle,
+          "ct/kWh",
+          false,
+          formatNumber,
+          Number.isFinite(priceReference)
+            ? { low: texts.heatmapLegendCheaper, high: texts.heatmapLegendExpensive }
+            : { low: texts.heatmapLegendLow, high: texts.heatmapLegendHigh },
+          priceScale,
+          priceInfoText ? { infoText: priceInfoText } : null
+        );
+
+        return `
+          <div class="heatmap-season-panel" data-heatmap-panel="${season.key}"${season.key === selectedSeason ? "" : " hidden"}>
+            <section class="heatmap-subcard heatmap-subcard-consumption">
+              <div class="heatmap-subcard-controls consumption-mode-navigation" role="group" aria-label="Consumption mode">
+                <span class="spot-mode-label">${texts.heatmapConsumptionModeLabel}</span>
+                <div class="consumption-mode-buttons">${consumptionModeButtons}</div>
+              </div>
+              ${consumptionHtml}
+            </section>
+            <section class="heatmap-subcard heatmap-subcard-spot">
+              <div class="heatmap-subcard-controls spot-mode-navigation" role="group" aria-label="Spot mode">
+                <span class="spot-mode-label">${texts.heatmapSpotModeLabel}</span>
+                <div class="spot-mode-buttons">${spotModeButtons}</div>
+              </div>
+              ${priceHtml}
+            </section>
+          </div>
+        `;
+      })
+      .join("");
+
+    return `
+      <section class="seasonal-heatmaps">
+        <div class="heatmap-season-navigation" role="group" aria-label="Heatmap season">
+          ${buttons}
+        </div>
+        ${panels}
+      </section>
+      ${this.buildMonthlyTariffComparisonHtml(response)}
+    `;
+  }
+
+  resolveSpotPriceMode(requestedMode, hasFixedPrice, hasBreakEven) {
+    if (requestedMode === "fixed") {
+      return hasFixedPrice ? "fixed" : (hasBreakEven ? "break_even" : "absolute");
+    }
+    if (requestedMode === "break_even") {
+      return hasBreakEven ? "break_even" : (hasFixedPrice ? "fixed" : "absolute");
+    }
+    return "absolute";
+  }
+
+  computeConsumptionDisplayHeatmap(consumptionHeatmap, mode) {
+    const base = (consumptionHeatmap || []).map((row) => (row || []).map((value) => Number(value) || 0));
+    if (mode === "relative_mean") {
+      const mean = this.computeHeatmapMean(base);
+      return base.map((row) => row.map((value) => Number((value - mean).toFixed(4))));
+    }
+    if (mode === "relative_weekday") {
+      return this.computeHourProfileDeltaHeatmap(base);
+    }
+    return base;
+  }
+
+  computeHourProfileDeltaHeatmap(heatmapData) {
+    const columnMeans = Array.from({ length: 24 }, (_, hour) => {
+      let sum = 0;
+      let count = 0;
+      for (let day = 0; day < heatmapData.length; day += 1) {
+        const value = heatmapData[day]?.[hour];
+        if (Number.isFinite(value)) {
+          sum += value;
+          count += 1;
+        }
+      }
+      return count > 0 ? sum / count : 0;
+    });
+
+    return heatmapData.map((row) =>
+      row.map((value, hour) => Number((value - columnMeans[hour]).toFixed(4)))
+    );
+  }
+
+  computeHeatmapMean(heatmapData) {
+    const values = (heatmapData || [])
+      .flat()
+      .filter((value) => Number.isFinite(value));
+    if (values.length === 0) return 0;
+    return values.reduce((sum, value) => sum + value, 0) / values.length;
+  }
+
+  computeRobustHeatmapScale(heatmapData) {
+    const flatValues = this.flattenHeatmapValues(heatmapData);
+    if (flatValues.length === 0) {
+      return { min: 0, max: 1 };
+    }
+
+    const sorted = flatValues.slice().sort((a, b) => a - b);
+    const percentile = (p) => {
+      const idx = Math.max(0, Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * p)));
+      return sorted[idx];
+    };
+
+    let min = percentile(0.05);
+    let max = percentile(0.95);
+    if (!(Number.isFinite(min) && Number.isFinite(max)) || max <= min) {
+      min = sorted[0];
+      max = sorted[sorted.length - 1];
+    }
+    if (!Number.isFinite(min) || !Number.isFinite(max)) {
+      return { min: 0, max: 1 };
+    }
+
+    if (max <= min) {
+      max = min + 1;
+    }
+
+    return { min, max };
+  }
+
+  computeRobustHeatmapScaleFromMany(heatmapDataList) {
+    return this.computeRobustHeatmapScale(
+      this.flattenHeatmapValues(heatmapDataList)
+    );
+  }
+
+  computeAbsoluteConsumptionScaleFromMany(heatmapDataList) {
+    const observedValues = this.flattenHeatmapValues(heatmapDataList, { excludeZero: true });
+    if (observedValues.length === 0) {
+      return this.computeRobustHeatmapScaleFromMany(heatmapDataList);
+    }
+
+    const sorted = observedValues.slice().sort((a, b) => a - b);
+    const maxIdx = Math.max(0, Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * 0.98)));
+    const min = sorted[0];
+    let max = sorted[maxIdx];
+
+    if (!Number.isFinite(min) || !Number.isFinite(max)) {
+      return this.computeRobustHeatmapScaleFromMany(heatmapDataList);
+    }
+
+    if (max <= min) {
+      max = min + 1;
+    }
+
+    return { min, max };
+  }
+
+  computePriceDeltaHeatmap(priceHeatmap, breakEvenFixed) {
+    return (priceHeatmap || []).map((row) =>
+      (row || []).map((value) => {
+        const numericValue = Number(value);
+        if (!Number.isFinite(numericValue)) {
+          return 0;
+        }
+        return Number((numericValue - breakEvenFixed).toFixed(4));
+      })
+    );
+  }
+
+  computeSymmetricHeatmapScale(heatmapData) {
+    const values = this.flattenHeatmapValues(heatmapData);
+    if (values.length === 0) {
+      return { min: -1, max: 1, center: 0 };
+    }
+
+    const absValues = values.map((value) => Math.abs(value)).sort((a, b) => a - b);
+    const idx = Math.max(0, Math.min(absValues.length - 1, Math.floor((absValues.length - 1) * 0.95)));
+    const limit = absValues[idx] > 0 ? absValues[idx] : (absValues[absValues.length - 1] || 1);
+
+    return {
+      min: -limit,
+      max: limit,
+      center: 0,
+    };
+  }
+
+  computeSymmetricHeatmapScaleFromMany(heatmapDataList) {
+    return this.computeSymmetricHeatmapScale(
+      this.flattenHeatmapValues(heatmapDataList)
+    );
+  }
+
+  flattenHeatmapValues(heatmapData, options = {}) {
+    const excludeZero = options.excludeZero === true;
+    return (heatmapData || [])
+      .flat(Infinity)
+      .filter((value) => Number.isFinite(value))
+      .filter((value) => !excludeZero || value !== 0);
   }
 
   updateSavingsBanner() {
@@ -1410,6 +1790,9 @@ syncSensorPicker() {
       this._rangeMonth = parsed.rangeMonth || null;
       this._rangeQuarter = parsed.rangeQuarter || null;
       this._rangeQuarterYear = parsed.rangeQuarterYear || null;
+      this._heatmapSeason = parsed.heatmapSeason || "whole_year";
+      this._consumptionMode = parsed.consumptionMode || "absolute";
+      this._spotPriceMode = parsed.spotPriceMode || "break_even";
       this._selectedSensor = parsed.selectedSensor || this._selectedSensor;
     } catch (err) {
       console.warn("Failed to load UI state", err);
@@ -1427,6 +1810,9 @@ syncSensorPicker() {
         rangeMonth: this._rangeMonth,
         rangeQuarter: this._rangeQuarter,
         rangeQuarterYear: this._rangeQuarterYear,
+        heatmapSeason: this._heatmapSeason || "whole_year",
+        consumptionMode: this._consumptionMode || "absolute",
+        spotPriceMode: this._spotPriceMode || "break_even",
         selectedSensor: this._selectedSensor || null
       };
       localStorage.setItem("sei_ui_state", JSON.stringify(payload));
@@ -1516,14 +1902,37 @@ syncSensorPicker() {
       .summary-item span { color: var(--secondary-text-color); }
       .info-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 999px; background: rgba(var(--rgb-primary-text-color), 0.08); color: var(--secondary-text-color); font-size: 11px; margin-left: 6px; cursor: help; }
 
-      /* Heatmaps Grid */
+      /* Seasonal Heatmaps */
+      .seasonal-heatmaps { margin-top: 24px; }
+      .heatmap-season-navigation { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
+      .heatmap-season-button { min-height: 36px; padding: 8px 10px; border: 1px solid var(--divider-color); border-radius: 6px; background: var(--card-background-color); color: var(--primary-text-color); font-size: 13px; cursor: pointer; }
+      .heatmap-season-button:hover { border-color: var(--primary-color); }
+      .heatmap-season-button.active { background: var(--primary-color); border-color: var(--primary-color); color: white; }
+      .heatmap-subcard { background: rgba(var(--rgb-primary-text-color), 0.025); border: 1px solid rgba(var(--rgb-divider-color), 0.5); border-radius: 12px; padding: 14px 14px 16px; }
+      .heatmap-subcard + .heatmap-subcard { margin-top: 18px; }
+      .heatmap-subcard-controls,
+      .consumption-mode-navigation,
+      .spot-mode-navigation { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 16px 0; flex-wrap: wrap; }
+      .spot-mode-label { color: var(--secondary-text-color); font-size: 12px; text-transform: uppercase; letter-spacing: 0.4px; }
+      .consumption-mode-buttons,
+      .spot-mode-buttons { display: inline-flex; border: 1px solid var(--divider-color); border-radius: 999px; overflow: hidden; background: var(--secondary-background-color); }
+      .consumption-mode-button,
+      .spot-mode-button { min-height: 34px; padding: 6px 12px; border: none; background: transparent; color: var(--primary-text-color); font-size: 12px; cursor: pointer; }
+      .consumption-mode-button.active,
+      .spot-mode-button.active { background: var(--primary-color); color: white; }
+      .spot-mode-button:disabled { opacity: 0.45; cursor: not-allowed; }
       .heatmaps-grid { display: grid; grid-template-columns: 1fr; gap: 32px; }
       @media(min-width: 1300px) { .heatmaps-grid { grid-template-columns: 1fr 1fr; } }
       
       .heatmap-title { font-size: 15px; font-weight: 600; margin-bottom: 12px; text-align: left; color: var(--primary-text-color); }
       .heatmap-legend { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--secondary-text-color); margin-bottom: 10px; flex-wrap: wrap; }
+      .heatmap-info-note { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--secondary-text-color); margin: -2px 0 10px; min-height: 18px; }
+      .heatmap-info-note.is-empty { opacity: 0; }
+      .heatmap-info-badge { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 999px; background: rgba(var(--rgb-primary-text-color), 0.12); color: var(--secondary-text-color); font-size: 10px; }
       .heatmap-legend-bar { width: 120px; height: 8px; border-radius: 999px; background: linear-gradient(90deg, hsl(120, 85%, 55%), hsl(0, 85%, 55%)); }
       .heatmap-legend-value { font-size: 11px; color: var(--secondary-text-color); }
+      .heatmap-info-note { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 10px; font-size: 11px; color: var(--secondary-text-color); line-height: 1.4; }
+      .heatmap-info-badge { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 999px; background: rgba(var(--rgb-primary-text-color), 0.08); color: var(--secondary-text-color); font-size: 11px; flex: 0 0 auto; }
       .heatmap-grid { display: grid; grid-template-columns: auto repeat(24, 1fr); gap: 2px; font-size: 10px; }
       .heatmap-header-y { display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; color: var(--secondary-text-color); font-weight: 500; }
       .heatmap-header-x { text-align: center; color: var(--secondary-text-color); padding-bottom: 4px; }
@@ -1586,6 +1995,11 @@ syncSensorPicker() {
         .dashboard-title { font-size: 20px; }
         .source-card { margin: 12px; }
         .source-chooser-header { align-items: flex-start; flex-direction: column; }
+        .heatmap-season-navigation { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .heatmap-season-button:last-child { grid-column: span 2; }
+        .heatmap-subcard { padding: 12px; }
+        .consumption-mode-buttons,
+        .spot-mode-buttons { width: 100%; display: grid; grid-template-columns: 1fr; border-radius: 8px; }
       }
     `;
     this.appendChild(style);

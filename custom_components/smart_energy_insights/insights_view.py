@@ -31,6 +31,14 @@ from .utils.translation import async_translate
 
 _LOGGER = logging.getLogger(__name__)
 
+HEATMAP_SEASONS = {
+    "whole_year": None,
+    "spring": {3, 4, 5},
+    "summer": {6, 7, 8},
+    "autumn": {9, 10, 11},
+    "winter": {12, 1, 2},
+}
+
 
 async def _error_response(hass, key, placeholders=None, status=400) -> Response:
     message = await async_translate(
@@ -297,6 +305,34 @@ def _build_consumption_heatmap(statistics: list) -> list:
     return heatmap
 
 
+def _build_seasonal_heatmaps(statistics: list, price_series: list) -> dict:
+    """Build whole-year and Northern Hemisphere seasonal heatmap matrices."""
+    seasonal_heatmaps = {}
+
+    for season, months in HEATMAP_SEASONS.items():
+        if months is None:
+            seasonal_statistics = statistics
+            seasonal_prices = price_series
+        else:
+            seasonal_statistics = [
+                stat
+                for stat in statistics
+                if (dt_util.as_local(stat["start"]) + timedelta(hours=1)).month in months
+            ]
+            seasonal_prices = [
+                point
+                for point in price_series
+                if dt_util.as_local(point["start"]).month in months
+            ]
+
+        seasonal_heatmaps[season] = {
+            "consumption_heatmap": _build_consumption_heatmap(seasonal_statistics),
+            "price_heatmap": build_price_heatmap(seasonal_prices),
+        }
+
+    return seasonal_heatmaps
+
+
 def _calculate_summary(statistics: list) -> dict:
     if not statistics:
         return {
@@ -509,6 +545,7 @@ async def _build_analysis_response(
     pricing_config = get_pricing_config(hass)
     price_heatmap = build_price_heatmap(price_series)
     consumption_heatmap = _build_consumption_heatmap(statistics)
+    seasonal_heatmaps = _build_seasonal_heatmaps(statistics, price_series)
     summary = _calculate_summary(statistics)
 
     tariff_analysis = analyze_tariffs(
@@ -549,6 +586,7 @@ async def _build_analysis_response(
         "price_series_count": price_result.get("series_count"),
         "consumption_heatmap": consumption_heatmap,
         "price_heatmap": price_heatmap,
+        "seasonal_heatmaps": seasonal_heatmaps,
         "matched_hours": tariff_analysis["matched_hours"],
         "duration_months": tariff_analysis["duration_months"],
         "matched_consumption": tariff_analysis["matched_consumption"],
