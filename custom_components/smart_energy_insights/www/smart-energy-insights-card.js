@@ -374,6 +374,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     this.syncSensorPicker();
     this.updateSourceUI();
     this.updateSourceState();
+    this.updateProfileSummaryFromData(null);
     this.applyStyles();
   }
 
@@ -423,6 +424,9 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
           this._selectedSensor = value;
           this.saveUiState();
           this.updateSourceState();
+          if (this._activeSource === "sensor" && !this._lastSensorData) {
+            this.updateProfileSummaryFromData(null);
+          }
           const sensorLoadBtn = this.querySelector("#sensorLoadBtn");
           if (sensorLoadBtn) sensorLoadBtn.disabled = !value;
         });
@@ -432,6 +436,9 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
           this._selectedSensor = value;
           this.saveUiState();
           this.updateSourceState();
+          if (this._activeSource === "sensor" && !this._lastSensorData) {
+            this.updateProfileSummaryFromData(null);
+          }
           const sensorLoadBtn = this.querySelector("#sensorLoadBtn");
           if (sensorLoadBtn) sensorLoadBtn.disabled = !value;
         });
@@ -587,7 +594,7 @@ syncSensorPicker() {
 
     const texts = this._texts || this.getTexts();
     if (this._activeSource === "sensor") {
-      const entityId = this._loadedSensorEntityId || this.latestData?.sensor_entity_id;
+      const entityId = this._selectedSensor || this._loadedSensorEntityId || this.latestData?.sensor_entity_id;
       const state = this._hass?.states?.[entityId];
       const name = state?.attributes?.friendly_name || entityId;
       sourceState.textContent = name ? texts.sourceStateSensor(name) : texts.sourceStateLoading;
@@ -596,6 +603,47 @@ syncSensorPicker() {
 
     const filename = this._lastCsvData?.filename || this.latestData?.filename;
     sourceState.textContent = filename ? texts.sourceStateCsv(filename) : texts.sourceStateLoading;
+  }
+
+  clearDashboardForSourceSwitch() {
+    const container = this.querySelector("#dashboardContainer");
+    if (container) {
+      container.innerHTML = "";
+    }
+  }
+
+  updateProfileSummaryFromData(data) {
+    const texts = this._texts || this.getTexts();
+    const profileNameEl = this.querySelector("#profileSummaryName");
+    const profileMetaEl = this.querySelector("#profileSummaryMeta");
+    if (!profileNameEl || !profileMetaEl) return;
+
+    if (data && data.filename) {
+      const start = data.start ? data.start.split("T")[0] : "N/A";
+      const end = data.end ? data.end.split("T")[0] : "N/A";
+      const uploadDateStr = formatUploadDate(data.upload_date, texts.lastImported);
+      const countStr = formatNumber(data.count, 0);
+      profileNameEl.textContent = data.filename;
+      profileMetaEl.innerHTML = texts.profileMeta({
+        count: countStr,
+        start,
+        end,
+        uploadDate: uploadDateStr
+      });
+      return;
+    }
+
+    if (this._activeSource === "sensor") {
+      const entityId = this._selectedSensor || this._loadedSensorEntityId;
+      const state = entityId ? this._hass?.states?.[entityId] : null;
+      const sensorName = state?.attributes?.friendly_name || entityId || texts.sourceSensor;
+      profileNameEl.textContent = sensorName;
+      profileMetaEl.textContent = texts.sourceSensorDescription;
+      return;
+    }
+
+    profileNameEl.textContent = this._lastCsvData?.filename || texts.profileDefaultFilename;
+    profileMetaEl.textContent = texts.sourceCsvDescription;
   }
 
   navigateToIntegrations() {
@@ -608,6 +656,7 @@ syncSensorPicker() {
     this._activeSource = source;
     this.saveUiState();
     this.updateSourceUI();
+    this.updateProfileSummaryFromData(null);
 
     try {
       await setActiveSource(this._hass, source);
@@ -616,7 +665,14 @@ syncSensorPicker() {
     }
 
     if (source === "csv" && this._lastCsvData) {
+      this.showSensorMessage("", "");
       this.renderDashboard(this._lastCsvData);
+      return;
+    }
+
+    if (source === "csv") {
+      this.showSensorMessage("", "");
+      this.clearDashboardForSourceSwitch();
       return;
     }
 
@@ -624,7 +680,8 @@ syncSensorPicker() {
       if (this._lastSensorData) {
         this.renderDashboard(this._lastSensorData);
       } else {
-        this.showSensorMessage((this._texts || this.getTexts()).sensorHint, "info");
+        this.clearDashboardForSourceSwitch();
+        this.showSensorMessage("", "");
       }
     }
   }
@@ -632,6 +689,12 @@ syncSensorPicker() {
   showSensorMessage(message, type) {
     const el = this.querySelector("#sensorMessage");
     if (!el) return;
+    if (!message) {
+      el.style.display = "none";
+      el.className = "sensor-message";
+      el.textContent = "";
+      return;
+    }
     el.style.display = "block";
     el.className = `sensor-message ${type || ""}`.trim();
     el.textContent = message;
@@ -758,187 +821,6 @@ syncSensorPicker() {
     message.innerHTML = `<div class="error-icon">✗</div><p><strong>${texts.uploadErrorTitle}</strong></p><p>${error}</p>`;
   }
 
-  showRangeMessage(message, type) {
-    const el = this.querySelector("#rangeMessage");
-    if (!el) return;
-    if (!message) {
-      el.style.display = "none";
-      el.textContent = "";
-      el.className = "range-message";
-      return;
-    }
-    el.style.display = "block";
-    el.className = `range-message ${type || ""}`.trim();
-    el.textContent = message;
-  }
-
-  async applyDateRange() {
-    const texts = this._texts || this.getTexts();
-    const selection = this.collectRangeSelection();
-    if (selection.error) {
-      this.showRangeMessage(selection.error, "error");
-      return;
-    }
-
-    this._rangePreset = selection.preset;
-    this._rangeWeek = selection.week;
-    this._rangeMonth = selection.month;
-    this._rangeQuarter = selection.quarter;
-    this._rangeQuarterYear = selection.quarterYear;
-
-    if (!selection.start || !selection.end) {
-      this._rangeStart = null;
-      this._rangeEnd = null;
-      this.showRangeMessage("", "");
-      this.saveUiState();
-      await this.reloadRangeData();
-      return;
-    }
-
-    if (selection.start > selection.end) {
-      this.showRangeMessage(texts.dateRangeInvalid, "error");
-      return;
-    }
-
-    const clamped = this.clampDateRange(selection.start, selection.end);
-    this._rangeStart = clamped.start;
-    this._rangeEnd = clamped.end;
-    if (clamped.changed) {
-      this.showRangeMessage(texts.dateRangeClamped, "info");
-    }
-    this.saveUiState();
-    await this.reloadRangeData();
-  }
-
-  async resetDateRange() {
-    this._rangePreset = "total";
-    this._rangeWeek = null;
-    this._rangeMonth = null;
-    this._rangeQuarter = null;
-    this._rangeQuarterYear = null;
-    this._rangeStart = null;
-    this._rangeEnd = null;
-    this.saveUiState();
-    await this.reloadRangeData();
-  }
-
-  collectRangeSelection() {
-    const texts = this._texts || this.getTexts();
-    const preset = this.querySelector("#rangePreset")?.value || "total";
-    const from = this.querySelector("#rangeFrom")?.value || null;
-    const to = this.querySelector("#rangeTo")?.value || null;
-    const week = this.querySelector("#rangeWeek")?.value || null;
-    const month = this.querySelector("#rangeMonth")?.value || null;
-    const quarter = this.querySelector("#rangeQuarter")?.value || null;
-    const quarterYearRaw = this.querySelector("#rangeQuarterYear")?.value || "";
-    const quarterYear = quarterYearRaw ? Number(quarterYearRaw) : null;
-
-    if (preset === "total") {
-      return { preset, from, to, week, month, quarter, quarterYear, start: null, end: null, error: null };
-    }
-
-    if (preset === "custom") {
-      if (!from || !to) {
-        return { preset, from, to, week, month, quarter, quarterYear, start: null, end: null, error: texts.dateRangeMissing };
-      }
-      return { preset, from, to, week, month, quarter, quarterYear, start: from, end: to, error: null };
-    }
-
-    if (preset === "week") {
-      if (!week) {
-        return { preset, from, to, week, month, quarter, quarterYear, start: null, end: null, error: texts.dateRangeWeekMissing };
-      }
-      const range = this.isoWeekToDateRange(week);
-      if (!range) {
-        return { preset, from, to, week, month, quarter, quarterYear, start: null, end: null, error: texts.dateRangeInvalid };
-      }
-      return { preset, from, to, week, month, quarter, quarterYear, start: range.start, end: range.end, error: null };
-    }
-
-    if (preset === "month") {
-      if (!month) {
-        return { preset, from, to, week, month, quarter, quarterYear, start: null, end: null, error: texts.dateRangeMonthMissing };
-      }
-      const range = this.monthToDateRange(month);
-      return { preset, from, to, week, month, quarter, quarterYear, start: range.start, end: range.end, error: null };
-    }
-
-    if (!quarter || !quarterYear || !Number.isInteger(quarterYear)) {
-      return { preset, from, to, week, month, quarter, quarterYear, start: null, end: null, error: texts.dateRangeQuarterMissing };
-    }
-
-    const range = this.quarterToDateRange(quarterYear, Number(quarter));
-    return { preset, from, to, week, month, quarter, quarterYear, start: range.start, end: range.end, error: null };
-  }
-
-  getCurrentRequestRange() {
-    const hasRangeControls = Boolean(this.querySelector("#rangePreset"));
-    if (!hasRangeControls) {
-      return { start: this._rangeStart, end: this._rangeEnd };
-    }
-
-    const selection = this.collectRangeSelection();
-    if (selection.error) {
-      return { start: this._rangeStart, end: this._rangeEnd };
-    }
-
-    this._rangePreset = selection.preset;
-    this._rangeWeek = selection.week;
-    this._rangeMonth = selection.month;
-    this._rangeQuarter = selection.quarter;
-    this._rangeQuarterYear = selection.quarterYear;
-
-    if (!selection.start || !selection.end) {
-      this._rangeStart = null;
-      this._rangeEnd = null;
-      this.saveUiState();
-      return { start: null, end: null };
-    }
-
-    const clamped = this.clampDateRange(selection.start, selection.end);
-    this._rangeStart = clamped.start;
-    this._rangeEnd = clamped.end;
-    this.saveUiState();
-    return { start: clamped.start, end: clamped.end };
-  }
-
-  async reloadRangeData() {
-    const texts = this._texts || this.getTexts();
-    this.showRangeMessage(texts.dateRangeLoading, "loading");
-
-    try {
-      if (this._activeSource === "sensor") {
-        if (!this._selectedSensor) {
-          this.showRangeMessage(texts.dateRangeSensorRequired, "error");
-          return;
-        }
-        const data = await loadSensorData(
-          this._hass,
-          this._selectedSensor,
-          this._rangeStart,
-          this._rangeEnd,
-          { allowEmpty: false }
-        );
-        this.showRangeMessage("", "");
-        this._lastSensorData = data;
-        this.renderDashboard(data);
-        return;
-      }
-
-      const data = await loadHeatmaps(
-        this._hass,
-        this._rangeStart,
-        this._rangeEnd,
-        { allowEmpty: false }
-      );
-      this.showRangeMessage("", "");
-      this._lastCsvData = data;
-      this.renderDashboard(data);
-    } catch (error) {
-      this.showRangeMessage(error.message || texts.dateRangeError, "error");
-    }
-  }
-
   resetUI() {
     this.querySelector("#uploadBtn").style.display = "none";
     this.querySelector("#cancelBtn").style.display = "none";
@@ -971,26 +853,18 @@ syncSensorPicker() {
 
     const start = response.start ? response.start.split('T')[0] : 'N/A';
     const end = response.end ? response.end.split('T')[0] : 'N/A';
-    const availableStart = response.available_start
-      ? response.available_start.split("T")[0]
-      : start;
-    const availableEnd = response.available_end
-      ? response.available_end.split("T")[0]
-      : end;
     
     // Metadaten für das aktuelle Profil
     const filenameStr = response.filename || texts.profileDefaultFilename;
-    const uploadDateStr = formatUploadDate(response.upload_date, texts.lastImported);
-
-    const countStr = formatNumber(response.count, 0);
     const avgConsumptionStr = formatNumber(response.avg_consumption_kwh, 3);
     const avgPriceStr = formatNumber(response.avg_price_ct_kwh, 2);
 
-    const profileMeta = texts.profileMeta({
-      count: countStr,
-      start,
-      end,
-      uploadDate: uploadDateStr
+    this.updateProfileSummaryFromData({
+      filename: filenameStr,
+      start: response.start,
+      end: response.end,
+      upload_date: response.upload_date,
+      count: response.count
     });
 
     const analysisGroups = this.buildAnalysisGroups({
@@ -1013,112 +887,15 @@ syncSensorPicker() {
       spotCheaperShare: response.spot_cheaper_share
     });
 
-    this._availableStart = availableStart !== "N/A" ? availableStart : null;
-    this._availableEnd = availableEnd !== "N/A" ? availableEnd : null;
-
-    const fallbackDate = end !== "N/A" ? end : (this._availableEnd || this._availableStart || "");
-    const fallbackMonth = fallbackDate ? fallbackDate.slice(0, 7) : "";
-    const fallbackWeek = fallbackDate ? this.dateToIsoWeek(fallbackDate) : "";
-    const fallbackYear = fallbackDate ? Number(fallbackDate.slice(0, 4)) : new Date().getUTCFullYear();
-    const fallbackQuarter = fallbackDate ? String(Math.floor((Number(fallbackDate.slice(5, 7)) - 1) / 3) + 1) : "1";
-
-    if (!this._rangePreset) this._rangePreset = "total";
-    if (!this._rangeMonth) this._rangeMonth = fallbackMonth;
-    if (!this._rangeWeek) this._rangeWeek = fallbackWeek;
-    if (!this._rangeQuarterYear) this._rangeQuarterYear = fallbackYear;
-    if (!this._rangeQuarter) this._rangeQuarter = fallbackQuarter;
-    if (!this._rangeStart) this._rangeStart = this._availableStart || start;
-    if (!this._rangeEnd) this._rangeEnd = this._availableEnd || end;
     if (!this._dashboardTab) this._dashboardTab = "monthly";
 
     container.innerHTML = renderDashboardHtml({
-      filename: filenameStr,
-      profileTitle: texts.profileTitle,
-      profileMeta,
       heatmapsHtml,
       monthlyTariffHtml,
       analysisGroups,
       texts,
-      dashboardTab: this._dashboardTab,
-      rangePreset: this._rangePreset,
-      rangeFrom: this._rangeStart,
-      rangeTo: this._rangeEnd,
-      rangeWeek: this._rangeWeek,
-      rangeMonth: this._rangeMonth,
-      rangeQuarter: this._rangeQuarter,
-      rangeQuarterYear: this._rangeQuarterYear,
-      availableStart: this._availableStart,
-      availableEnd: this._availableEnd
+      dashboardTab: this._dashboardTab
     });
-
-    const rangePreset = this.querySelector("#rangePreset");
-    const rangeFromInput = this.querySelector("#rangeFrom");
-    const rangeToInput = this.querySelector("#rangeTo");
-    const rangeWeekInput = this.querySelector("#rangeWeek");
-    const rangeMonthInput = this.querySelector("#rangeMonth");
-    const rangeQuarterInput = this.querySelector("#rangeQuarter");
-    const rangeQuarterYearInput = this.querySelector("#rangeQuarterYear");
-    const applyRangeBtn = this.querySelector("#applyRangeBtn");
-    const resetRangeBtn = this.querySelector("#resetRangeBtn");
-
-    if (rangePreset) {
-      rangePreset.addEventListener("change", () => {
-        this._rangePreset = rangePreset.value || "total";
-        this.updateRangePickerVisibility();
-        this.saveUiState();
-      });
-      this.updateRangePickerVisibility();
-    }
-
-    if (rangeFromInput) {
-      rangeFromInput.addEventListener("change", () => {
-        this._rangeStart = rangeFromInput.value || null;
-        this.saveUiState();
-      });
-    }
-    if (rangeToInput) {
-      rangeToInput.addEventListener("change", () => {
-        this._rangeEnd = rangeToInput.value || null;
-        this.saveUiState();
-      });
-    }
-    if (rangeWeekInput) {
-      rangeWeekInput.addEventListener("change", () => {
-        this._rangeWeek = rangeWeekInput.value || null;
-        this.saveUiState();
-      });
-    }
-    if (rangeMonthInput) {
-      rangeMonthInput.addEventListener("change", () => {
-        this._rangeMonth = rangeMonthInput.value || null;
-        this.saveUiState();
-      });
-    }
-    if (rangeQuarterInput) {
-      rangeQuarterInput.addEventListener("change", () => {
-        this._rangeQuarter = rangeQuarterInput.value || null;
-        this.saveUiState();
-      });
-    }
-    if (rangeQuarterYearInput) {
-      rangeQuarterYearInput.addEventListener("change", () => {
-        const parsedYear = Number(rangeQuarterYearInput.value);
-        this._rangeQuarterYear = Number.isInteger(parsedYear) ? parsedYear : null;
-        this.saveUiState();
-      });
-    }
-
-    if (applyRangeBtn) {
-      applyRangeBtn.addEventListener("click", () => {
-        this.applyDateRange();
-      });
-    }
-
-    if (resetRangeBtn) {
-      resetRangeBtn.addEventListener("click", () => {
-        this.resetDateRange();
-      });
-    }
 
     this.querySelectorAll("[data-dashboard-tab]").forEach((button) => {
       button.addEventListener("click", () => {
@@ -1558,66 +1335,6 @@ syncSensorPicker() {
     `;
   }
 
-  updateRangePickerVisibility() {
-    const preset = this.querySelector("#rangePreset")?.value || this._rangePreset || "total";
-    const custom = this.querySelector("#rangeCustomPicker");
-    const week = this.querySelector("#rangeWeekPicker");
-    const month = this.querySelector("#rangeMonthPicker");
-    const quarter = this.querySelector("#rangeQuarterPicker");
-    if (custom) custom.style.display = preset === "custom" ? "grid" : "none";
-    if (week) week.style.display = preset === "week" ? "flex" : "none";
-    if (month) month.style.display = preset === "month" ? "flex" : "none";
-    if (quarter) quarter.style.display = preset === "quarter" ? "flex" : "none";
-  }
-
-  dateToIsoWeek(dateString) {
-    if (!dateString) return "";
-    const date = new Date(`${dateString}T00:00:00Z`);
-    const dayNr = (date.getUTCDay() + 6) % 7;
-    date.setUTCDate(date.getUTCDate() - dayNr + 3);
-    const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
-    const firstThursdayDay = (firstThursday.getUTCDay() + 6) % 7;
-    firstThursday.setUTCDate(firstThursday.getUTCDate() - firstThursdayDay + 3);
-    const week = 1 + Math.round((date - firstThursday) / 604800000);
-    return `${date.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
-  }
-
-  isoWeekToDateRange(weekString) {
-    const match = /^([0-9]{4})-W([0-9]{2})$/.exec(String(weekString || ""));
-    if (!match) return null;
-    const year = Number(match[1]);
-    const week = Number(match[2]);
-    const jan4 = new Date(Date.UTC(year, 0, 4));
-    const jan4Day = (jan4.getUTCDay() + 6) % 7;
-    const monday = new Date(jan4);
-    monday.setUTCDate(jan4.getUTCDate() - jan4Day + (week - 1) * 7);
-    const sunday = new Date(monday);
-    sunday.setUTCDate(monday.getUTCDate() + 6);
-    const toDate = (d) => d.toISOString().slice(0, 10);
-    return { start: toDate(monday), end: toDate(sunday) };
-  }
-
-  monthToDateRange(monthString) {
-    const match = /^([0-9]{4})-([0-9]{2})$/.exec(String(monthString || ""));
-    if (!match) return { start: null, end: null };
-    const year = Number(match[1]);
-    const month = Number(match[2]);
-    const start = `${year}-${String(month).padStart(2, "0")}-01`;
-    const endDate = new Date(Date.UTC(year, month, 0));
-    const end = endDate.toISOString().slice(0, 10);
-    return { start, end };
-  }
-
-  quarterToDateRange(year, quarter) {
-    const quarterIndex = Math.max(1, Math.min(4, Number(quarter || 1))) - 1;
-    const startMonth = quarterIndex * 3 + 1;
-    const endMonth = startMonth + 2;
-    const start = `${year}-${String(startMonth).padStart(2, "0")}-01`;
-    const endDate = new Date(Date.UTC(year, endMonth, 0));
-    const end = endDate.toISOString().slice(0, 10);
-    return { start, end };
-  }
-
   buildMonthlyTariffComparisonHtml(response) {
     const texts = this._texts || this.getTexts();
     const months = Array.isArray(response.tariff_monthly)
@@ -1785,27 +1502,6 @@ syncSensorPicker() {
     `;
   }
 
-  clampDateRange(start, end) {
-    if (!this._availableStart || !this._availableEnd) {
-      return { start, end, changed: false };
-    }
-
-    let clampedStart = start;
-    let clampedEnd = end;
-    let changed = false;
-
-    if (start < this._availableStart) {
-      clampedStart = this._availableStart;
-      changed = true;
-    }
-    if (end > this._availableEnd) {
-      clampedEnd = this._availableEnd;
-      changed = true;
-    }
-
-    return { start: clampedStart, end: clampedEnd, changed };
-  }
-
   loadUiState() {
     this._uiStateLoaded = true;
     try {
@@ -1813,13 +1509,6 @@ syncSensorPicker() {
       if (!raw) return;
       const parsed = JSON.parse(raw);
       this._storedSource = parsed.activeSource || null;
-      this._rangePreset = parsed.rangePreset || "total";
-      this._rangeStart = parsed.rangeStart || null;
-      this._rangeEnd = parsed.rangeEnd || null;
-      this._rangeWeek = parsed.rangeWeek || null;
-      this._rangeMonth = parsed.rangeMonth || null;
-      this._rangeQuarter = parsed.rangeQuarter || null;
-      this._rangeQuarterYear = parsed.rangeQuarterYear || null;
       this._heatmapSeason = parsed.heatmapSeason || "whole_year";
       this._consumptionMode = parsed.consumptionMode || "absolute";
       this._spotPriceMode = parsed.spotPriceMode || "break_even";
@@ -1834,13 +1523,6 @@ syncSensorPicker() {
     try {
       const payload = {
         activeSource: this._activeSource,
-        rangePreset: this._rangePreset || "total",
-        rangeStart: this._rangeStart,
-        rangeEnd: this._rangeEnd,
-        rangeWeek: this._rangeWeek,
-        rangeMonth: this._rangeMonth,
-        rangeQuarter: this._rangeQuarter,
-        rangeQuarterYear: this._rangeQuarterYear,
         heatmapSeason: this._heatmapSeason || "whole_year",
         consumptionMode: this._consumptionMode || "absolute",
         spotPriceMode: this._spotPriceMode || "break_even",
@@ -1857,9 +1539,6 @@ syncSensorPicker() {
     const style = document.createElement("style");
     style.textContent = `
       ha-card { box-shadow: var(--ha-card-box-shadow, 0 2px 4px rgba(0, 0, 0, 0.1)); border-radius: var(--ha-card-border-radius, 8px); overflow: hidden; }
-      .dashboard-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 24px; border-bottom: 1px solid var(--divider-color); }
-      .dashboard-title { font-size: 22px; font-weight: 600; color: var(--primary-text-color); }
-      .dashboard-source-state { margin-top: 4px; color: var(--secondary-text-color); font-size: 13px; }
       .integration-settings-chip { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; padding: 0; border: 1px solid var(--divider-color); border-radius: 999px; background: transparent; color: var(--secondary-text-color); cursor: pointer; }
       .integration-settings-chip:hover { color: var(--primary-color); border-color: var(--primary-color); background: rgba(var(--rgb-primary-color), 0.08); }
       .integration-settings-chip ha-icon { --mdc-icon-size: 20px; }
@@ -1868,9 +1547,18 @@ syncSensorPicker() {
       .source-chooser-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 16px; }
       .source-chooser-title { font-size: 14px; font-weight: 600; color: var(--primary-text-color); }
       .source-chooser-desc { font-size: 12px; color: var(--secondary-text-color); }
+      .source-header-actions { display: inline-flex; align-items: center; gap: 10px; }
       .source-selector-buttons { display: inline-flex; border: 1px solid var(--divider-color); border-radius: 999px; overflow: hidden; background: var(--secondary-background-color); }
       .source-switch { padding: 6px 14px; border: none; background: transparent; color: var(--primary-text-color); cursor: pointer; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
       .source-switch.active { background: var(--primary-color); color: white; }
+      .source-profile-summary { margin: 0 16px 16px; border: 1px solid rgba(var(--rgb-divider-color), 0.45); border-radius: 10px; background: linear-gradient(165deg, rgba(var(--rgb-primary-text-color), 0.03), rgba(var(--rgb-primary-color), 0.06)); padding: 12px; display: flex; align-items: flex-start; gap: 12px; }
+      .source-profile-icon { color: var(--primary-color); width: 36px; height: 36px; background: rgba(var(--rgb-primary-color), 0.15); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+      .source-profile-icon svg { width: 20px; height: 20px; }
+      .source-profile-content { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+      .source-profile-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.55px; color: var(--secondary-text-color); font-weight: 700; }
+      .source-profile-name { font-size: 30px; line-height: 1.15; font-weight: 700; color: var(--primary-color); overflow-wrap: anywhere; }
+      .source-profile-meta { font-size: 13px; color: var(--secondary-text-color); }
+      .source-profile-state { margin-top: 4px; display: inline-flex; width: fit-content; font-size: 12px; color: var(--primary-text-color); background: rgba(var(--rgb-primary-text-color), 0.08); border: 1px solid rgba(var(--rgb-divider-color), 0.5); border-radius: 999px; padding: 4px 10px; }
 
       .upload-card { width: 100%; max-width: 1200px; margin: 0 auto; height: fit-content; }
       .source-content { padding: 16px; border-top: 1px solid var(--divider-color); }
@@ -1883,7 +1571,6 @@ syncSensorPicker() {
       .sensor-label { font-size: 13px; color: var(--secondary-text-color); }
       .sensor-select { width: 100%; padding: 8px 12px; border: 1px solid var(--divider-color); border-radius: 6px; background: var(--card-background-color); color: var(--primary-text-color); font-size: 14px; box-sizing: border-box; }
       .sensor-select:disabled { opacity: 0.6; cursor: not-allowed; }
-      .sensor-hint { font-size: 12px; color: var(--secondary-text-color); }
       .sensor-message { margin-top: 10px; font-size: 13px; padding: 8px 12px; border-radius: 6px; background: rgba(var(--rgb-primary-text-color), 0.04); }
       .sensor-message.loading { opacity: 0.8; }
       .sensor-message.info { color: var(--secondary-text-color); background: rgba(var(--rgb-primary-text-color), 0.04); }
@@ -1892,34 +1579,6 @@ syncSensorPicker() {
       
       /* Dashboard Wrapper */
       .dashboard-wrapper { padding: 24px; }
-      
-      /* Profil Metadaten Header */
-      .profile-header { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--divider-color); flex-wrap: wrap; }
-      .profile-icon { color: var(--primary-color); width: 40px; height: 40px; background: rgba(var(--rgb-primary-color), 0.1); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
-      .profile-icon svg { width: 24px; height: 24px; }
-      .profile-info h2 { margin: 0 0 4px 0; font-size: 18px; font-weight: 500; color: var(--primary-text-color); }
-      .profile-info h2 span { color: var(--primary-color); font-weight: 600; }
-      .profile-info p { margin: 0; font-size: 13px; color: var(--secondary-text-color); }
-      .profile-range { margin-left: auto; display: flex; flex-direction: column; gap: 8px; min-width: 220px; }
-      .range-title { font-size: 12px; color: var(--secondary-text-color); text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; }
-      .range-fields { display: flex; gap: 8px; flex-wrap: wrap; }
-      .range-field { display: flex; flex-direction: column; gap: 4px; }
-      .range-field label { font-size: 11px; color: var(--secondary-text-color); }
-      .range-field input[type="date"],
-      .range-field input[type="week"],
-      .range-field input[type="month"],
-      .range-field input[type="number"],
-      .range-field select { padding: 6px 10px; border: 1px solid var(--divider-color); border-radius: 6px; background: var(--card-background-color); color: var(--primary-text-color); font-size: 12px; }
-      .range-picker { width: 100%; }
-      .range-quarter-fields { display: flex; gap: 6px; }
-      .range-quarter-fields input[type="number"] { width: 92px; }
-      .range-actions { display: flex; gap: 8px; }
-      .range-actions button { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--divider-color); background: var(--card-background-color); color: var(--primary-text-color); font-size: 12px; cursor: pointer; }
-      .range-actions button:first-child { background: var(--primary-color); color: white; border-color: var(--primary-color); }
-      .range-message { font-size: 12px; padding: 6px 10px; border-radius: 6px; background: rgba(var(--rgb-primary-text-color), 0.04); }
-      .range-message.info { color: var(--secondary-text-color); background: rgba(var(--rgb-primary-text-color), 0.04); }
-      .range-message.error { color: #f44336; background: rgba(244, 67, 54, 0.08); }
-      .range-message.loading { color: var(--secondary-text-color); }
 
       .top-dashboard-grid { margin-bottom: 24px; }
       .savings-hero-card { border: 1px solid rgba(var(--rgb-divider-color), 0.25); border-left: 4px solid; border-radius: 0 8px 8px 0; padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; gap: 14px; }
@@ -2048,10 +1707,10 @@ syncSensorPicker() {
       .cancel-button { background-color: var(--secondary-background-color); color: var(--primary-text-color); }
       .cancel-button:hover:not(:disabled) { background-color: var(--divider-color); }
       @media(max-width: 600px) {
-        .dashboard-header { padding: 16px; }
-        .dashboard-title { font-size: 20px; }
         .source-card { margin: 12px; }
         .source-chooser-header { align-items: flex-start; flex-direction: column; }
+        .source-header-actions { width: 100%; justify-content: space-between; }
+        .source-profile-name { font-size: 24px; }
         .savings-hero-card { padding: 16px; }
         .savings-hero-head { gap: 12px; }
         .savings-hero-icon { font-size: 36px; }
