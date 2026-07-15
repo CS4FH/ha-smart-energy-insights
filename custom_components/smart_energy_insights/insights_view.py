@@ -400,6 +400,71 @@ def _calculate_summary(statistics: list) -> dict:
     }
 
 
+def _percentile(values: list[float], p: float) -> float | None:
+    finite = sorted(float(v) for v in values if v is not None)
+    if not finite:
+        return None
+    idx = int((len(finite) - 1) * max(0.0, min(1.0, p)))
+    return finite[idx]
+
+
+def _derive_consumption_metrics(statistics: list) -> dict:
+    values = [float(item.get("state", 0.0) or 0.0) for item in (statistics or [])]
+    if not values:
+        return {
+            "max_peak_kwh": None,
+            "base_load_p05_kwh": None,
+        }
+
+    # Base load should represent the lower operating band, not idle/empty hours.
+    positive_values = [value for value in values if value > 0.0]
+    percentile_source = positive_values if positive_values else values
+
+    return {
+        "max_peak_kwh": max(values),
+        "base_load_p05_kwh": _percentile(percentile_source, 0.05),
+    }
+
+
+def _derive_price_metrics(price_series: list) -> dict:
+    if not price_series:
+        return {
+            "avg_daily_price_spread_ct_kwh": None,
+            "spot_price_stddev_ct_kwh": None,
+        }
+
+    prices = [float(point.get("value", 0.0) or 0.0) for point in price_series]
+    if not prices:
+        return {
+            "avg_daily_price_spread_ct_kwh": None,
+            "spot_price_stddev_ct_kwh": None,
+        }
+
+    mean = sum(prices) / len(prices)
+    variance = sum((value - mean) ** 2 for value in prices) / len(prices)
+    stddev = variance ** 0.5
+
+    by_day: dict[date, list[float]] = {}
+    for point in price_series:
+        start = point.get("start")
+        if not start:
+            continue
+        day = dt_util.as_local(start).date()
+        by_day.setdefault(day, []).append(float(point.get("value", 0.0) or 0.0))
+
+    spreads = []
+    for day_values in by_day.values():
+        if day_values:
+            spreads.append(max(day_values) - min(day_values))
+
+    avg_daily_spread = (sum(spreads) / len(spreads)) if spreads else None
+
+    return {
+        "avg_daily_price_spread_ct_kwh": avg_daily_spread,
+        "spot_price_stddev_ct_kwh": stddev,
+    }
+
+
 def _stat_start_to_datetime(start_value):
     if isinstance(start_value, (int, float)):
         return dt_util.utc_from_timestamp(start_value)
@@ -547,6 +612,8 @@ async def _build_analysis_response(
     consumption_heatmap = _build_consumption_heatmap(statistics)
     seasonal_heatmaps = _build_seasonal_heatmaps(statistics, price_series)
     summary = _calculate_summary(statistics)
+    consumption_metrics = _derive_consumption_metrics(statistics)
+    price_metrics = _derive_price_metrics(price_series)
 
     tariff_analysis = analyze_tariffs(
         statistics,
@@ -579,7 +646,11 @@ async def _build_analysis_response(
         "peak_hour": summary["peak_hour"],
         "weekday_avg_kwh_per_hour": summary["weekday_avg_kwh_per_hour"],
         "weekend_avg_kwh_per_hour": summary["weekend_avg_kwh_per_hour"],
+        "max_peak_kwh": consumption_metrics["max_peak_kwh"],
+        "base_load_p05_kwh": consumption_metrics["base_load_p05_kwh"],
         "avg_price_ct_kwh": price_result.get("average_price"),
+        "avg_daily_price_spread_ct_kwh": price_metrics["avg_daily_price_spread_ct_kwh"],
+        "spot_price_stddev_ct_kwh": price_metrics["spot_price_stddev_ct_kwh"],
         "break_even_fixed_ct_kwh": break_even_fixed,
         "spot_cheaper_share": spot_cheaper_share,
         "price_imported_count": price_result.get("imported_count"),

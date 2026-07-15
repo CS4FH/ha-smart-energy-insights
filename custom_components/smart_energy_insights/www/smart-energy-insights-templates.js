@@ -186,8 +186,8 @@ export function renderDashboardHtml({
         </div>
 
         <div id="dashboardTabTechnical" class="dashboard-tab-panel" data-dashboard-tab-panel="technical" role="tabpanel"${dashboardTab === "technical" ? "" : " hidden"}>
-          <div class="info-box">
-            <h3>📊 ${texts.analysisTitle}</h3>
+          <div class="technical-cockpit-wrap">
+            <h3>${texts.analysisTitle}</h3>
             <div class="analysis-groups">
               ${analysisGroups}
             </div>

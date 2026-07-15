@@ -177,6 +177,14 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       analysisAvgSpotLabel: this.localize("card.analysis_avg_spot_label", "Avg spot price"),
       analysisBreakEvenLabel: this.localize("card.analysis_break_even_label", "Break-even fixed"),
       analysisSpotCheaperLabel: this.localize("card.analysis_spot_cheaper_label", "Spot cheaper hours"),
+      analysisSectionRangeTitle: this.localize("card.analysis_section_range_title", "Measurement window"),
+      analysisSectionConsumptionTitle: this.localize("card.analysis_section_consumption_title", "Consumption analysis"),
+      analysisSectionTariffTitle: this.localize("card.analysis_section_tariff_title", "Tariff and market analysis"),
+      analysisMaxPeakLabel: this.localize("card.analysis_max_peak_label", "Max peak"),
+      analysisBaseLoadLabel: this.localize("card.analysis_base_load_label", "Base load (P05)"),
+      analysisDailySpreadLabel: this.localize("card.analysis_daily_spread_label", "Avg daily price spread"),
+      analysisSpotStdDevLabel: this.localize("card.analysis_spot_std_dev_label", "Spot price std. dev."),
+      analysisPlaceholderValue: this.localize("card.analysis_placeholder_value", "-"),
       avgConsumptionLabel: this.localize("card.avg_consumption_label", "Avg consumption"),
       avgPriceLabel: this.localize("card.avg_price_label", "Avg spot price (net)"),
       heatmapLegendLow: this.localize("card.heatmap_legend_low", "Low"),
@@ -997,6 +1005,10 @@ syncSensorPicker() {
       peakHour: response.peak_hour,
       weekdayAvg: response.weekday_avg_kwh_per_hour,
       weekendAvg: response.weekend_avg_kwh_per_hour,
+      maxPeak: response.max_peak_kwh,
+      baseLoadP05: response.base_load_p05_kwh,
+      dailyPriceSpread: response.avg_daily_price_spread_ct_kwh,
+      spotPriceStdDev: response.spot_price_stddev_ct_kwh,
       breakEvenSpot: response.break_even_fixed_ct_kwh,
       spotCheaperShare: response.spot_cheaper_share
     });
@@ -1688,9 +1700,17 @@ syncSensorPicker() {
     const texts = this._texts || this.getTexts();
     const taxRate = this.latestData?.tax_rate ?? 20.0;
     const taxNote = this.getTaxNote(taxRate);
-    const buildItems = (items) => items
-      .map((item) => `<div class="summary-item"><span>${item.label}</span><strong>${item.value}</strong></div>`)
-      .join("");
+    const buildCard = (label, value) => `
+      <div class="technical-metric-card">
+        <div class="technical-metric-label">${label}</div>
+        <div class="technical-metric-value">${value}</div>
+      </div>
+    `;
+    const buildGrid = (cls, items) => `
+      <div class="${cls}">
+        ${items.map((item) => buildCard(item.label, item.value)).join("")}
+      </div>
+    `;
 
     const matchedHours = Number(summary.matchedHours || 0);
     const matchedDays = matchedHours > 0 ? matchedHours / 24 : 0;
@@ -1704,41 +1724,64 @@ syncSensorPicker() {
       ? `${formatNumber(summary.breakEvenSpot, 2)} ct/kWh`
       : "-";
 
-    const periodItems = buildItems([
+    const placeholderValue = texts.analysisPlaceholderValue;
+    const maxPeakValue = summary.maxPeak !== null && summary.maxPeak !== undefined
+      ? `${formatNumber(summary.maxPeak, 3)} kWh`
+      : placeholderValue;
+    const baseLoadValue = summary.baseLoadP05 !== null && summary.baseLoadP05 !== undefined
+      ? `${formatNumber(summary.baseLoadP05, 3)} kWh`
+      : placeholderValue;
+    const dailySpreadValue = summary.dailyPriceSpread !== null && summary.dailyPriceSpread !== undefined
+      ? `${formatNumber(summary.dailyPriceSpread, 2)} ct/kWh`
+      : placeholderValue;
+    const stdDevValue = summary.spotPriceStdDev !== null && summary.spotPriceStdDev !== undefined
+      ? `${formatNumber(summary.spotPriceStdDev, 2)} ct/kWh`
+      : placeholderValue;
+
+    const periodItems = [
       { label: texts.analysisRangeLabel, value: `${summary.start} - ${summary.end}` },
       { label: texts.analysisDaysLabel, value: `${formatNumber(matchedDays, 1)}` },
       { label: texts.analysisHoursLabel, value: `${formatNumber(matchedHours, 0)}` }
-    ]);
+    ];
 
-    const consumptionItems = buildItems([
+    const consumptionItems = [
       { label: texts.analysisTotalLabel, value: `${formatNumber(summary.totalConsumption || 0, 2)} kWh` },
-      { label: texts.analysisAvgHourLabel, value: `${formatNumber(summary.avgPerHour || 0, 3)} kWh` },
       { label: texts.analysisAvgDayLabel, value: `${formatNumber(summary.avgPerDay || 0, 2)} kWh` },
-      { label: texts.analysisPeakHourLabel, value: peakHourLabel },
+      { label: texts.analysisAvgHourLabel, value: `${formatNumber(summary.avgPerHour || 0, 3)} kWh` },
       { label: texts.analysisWeekdayAvgLabel, value: `${formatNumber(summary.weekdayAvg || 0, 3)} kWh` },
-      { label: texts.analysisWeekendAvgLabel, value: `${formatNumber(summary.weekendAvg || 0, 3)} kWh` }
-    ]);
+      { label: texts.analysisWeekendAvgLabel, value: `${formatNumber(summary.weekendAvg || 0, 3)} kWh` },
+      { label: texts.analysisPeakHourLabel, value: peakHourLabel },
+      { label: texts.analysisMaxPeakLabel, value: maxPeakValue },
+      { label: texts.analysisBaseLoadLabel, value: baseLoadValue }
+    ];
 
-    const priceItems = buildItems([
+    const priceItems = [
       { label: texts.analysisAvgSpotLabel, value: `${summary.avgPrice} ct/kWh` },
       { label: texts.analysisBreakEvenLabel, value: breakEvenFixed },
-      { label: texts.analysisSpotCheaperLabel, value: spotCheaperShare }
-    ]);
+      { label: texts.analysisSpotCheaperLabel, value: spotCheaperShare },
+      { label: texts.analysisDailySpreadLabel, value: dailySpreadValue },
+      { label: texts.analysisSpotStdDevLabel, value: stdDevValue }
+    ];
 
     return `
-      <div class="analysis-group">
-        <div class="analysis-group-title">${texts.analysisGroupPeriodTitle}</div>
-        <div class="analysis-summary-grid">${periodItems}</div>
-      </div>
-      <div class="analysis-group">
-        <div class="analysis-group-title">${texts.analysisGroupConsumptionTitle}</div>
-        <div class="analysis-summary-grid">${consumptionItems}</div>
-      </div>
-      <div class="analysis-group">
-        <div class="analysis-group-title">${texts.analysisGroupPriceTitle}</div>
-        <div class="analysis-summary-grid">${priceItems}</div>
-      </div>
-      <div class="card-tax-note">${taxNote}</div>
+      <section class="technical-section">
+        <div class="technical-section-title">${texts.analysisSectionRangeTitle}</div>
+        ${buildGrid("technical-grid-range", periodItems)}
+      </section>
+
+      <section class="technical-section">
+        <div class="technical-section-title">${texts.analysisSectionConsumptionTitle}</div>
+        ${buildGrid("technical-grid-main", consumptionItems)}
+      </section>
+
+      <section class="technical-section">
+        <div class="technical-section-title">${texts.analysisSectionTariffTitle}</div>
+        ${buildGrid("technical-grid-main", priceItems)}
+      </section>
+
+      <section class="technical-section technical-tax-section">
+        <div class="card-tax-note">${taxNote}</div>
+      </section>
     `;
   }
 
@@ -1896,11 +1939,22 @@ syncSensorPicker() {
       .dashboard-tab-button:hover { border-color: var(--primary-color); }
       .dashboard-tab-button.active { background: var(--primary-color); border-color: var(--primary-color); color: white; }
       .dashboard-tab-panel[hidden] { display: none; }
+      .technical-cockpit-wrap { border: 1px solid rgba(var(--rgb-divider-color), 0.6); border-radius: 10px; background: rgba(var(--rgb-primary-text-color), 0.02); padding: 14px; }
+      .technical-cockpit-wrap h3 { margin: 0 0 12px 0; color: var(--primary-text-color); font-size: 15px; font-weight: 600; }
+      .analysis-groups { display: flex; flex-direction: column; gap: 12px; }
+      .technical-section { border: 1px solid rgba(var(--rgb-divider-color), 0.5); border-radius: 10px; background: rgba(var(--rgb-primary-text-color), 0.02); padding: 12px; }
+      .technical-section-title { margin-bottom: 10px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; color: var(--secondary-text-color); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+      .technical-grid-range { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+      .technical-grid-main { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+      .technical-metric-card { border: 1px solid rgba(var(--rgb-divider-color), 0.45); border-radius: 8px; background: rgba(var(--rgb-primary-text-color), 0.03); padding: 9px 10px; min-height: 60px; display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+      .technical-metric-label { font-size: 11px; color: var(--secondary-text-color); letter-spacing: 0.25px; }
+      .technical-metric-value { font-size: 16px; font-weight: 700; color: var(--primary-text-color); line-height: 1.2; }
+      .technical-tax-section { padding-top: 4px; }
       
       .info-box { background-color: rgba(var(--rgb-primary-color), 0.05); border-left: 4px solid var(--primary-color); padding: 16px; margin-bottom: 24px; border-radius: 0 4px 4px 0; }
       .info-box h3 { margin: 0 0 8px 0; font-size: 16px; color: var(--primary-text-color); }
       .info-box p { margin: 0; font-size: 14px; color: var(--primary-text-color); }
-      .analysis-groups { display: flex; flex-direction: column; gap: 16px; }
+      .analysis-groups-legacy { display: flex; flex-direction: column; gap: 16px; }
       .analysis-group-title { font-size: 12px; color: var(--secondary-text-color); text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; margin-bottom: 8px; }
       .analysis-summary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
       @media(max-width: 600px) { .analysis-summary-grid { grid-template-columns: 1fr; } }
@@ -2004,6 +2058,8 @@ syncSensorPicker() {
         .savings-hero-value { font-size: 28px; }
         .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .dashboard-tab-navigation { grid-template-columns: 1fr; }
+        .technical-grid-range { grid-template-columns: 1fr; }
+        .technical-grid-main { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .heatmap-season-navigation { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .heatmap-season-button:last-child { grid-column: span 2; }
         .heatmap-subcard { padding: 12px; }
@@ -2012,6 +2068,7 @@ syncSensorPicker() {
       }
       @media(min-width: 900px) {
         .kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        .technical-grid-main { grid-template-columns: repeat(4, minmax(0, 1fr)); }
       }
     `;
     this.appendChild(style);
