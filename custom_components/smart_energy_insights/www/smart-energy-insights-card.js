@@ -240,6 +240,26 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       heatmapSeasonSummer: this.localize("card.heatmap_season_summer", "Summer"),
       heatmapSeasonAutumn: this.localize("card.heatmap_season_autumn", "Autumn"),
       heatmapSeasonWinter: this.localize("card.heatmap_season_winter", "Winter"),
+      heatmapSeasonRangeWholeYear: this.localize("card.heatmap_season_range_whole_year", "Whole year (Jan-Dec)"),
+      heatmapSeasonRangeSpring: this.localize("card.heatmap_season_range_spring", "Spring (Mar-May)"),
+      heatmapSeasonRangeSummer: this.localize("card.heatmap_season_range_summer", "Summer (Jun-Aug)"),
+      heatmapSeasonRangeAutumn: this.localize("card.heatmap_season_range_autumn", "Autumn (Sep-Nov)"),
+      heatmapSeasonRangeWinter: this.localize("card.heatmap_season_range_winter", "Winter (Dec-Feb)"),
+      heatmapSeasonScope: ({ range }) => this.localize(
+        "card.heatmap_season_scope",
+        "Scope: {range}",
+        { range }
+      ),
+      heatmapDataCoverageSeason: ({ hours, days }) => this.localize(
+        "card.heatmap_data_coverage_season",
+        "Data available in this view: {hours} matched hours ({days} days).",
+        { hours, days }
+      ),
+      heatmapCoverageWarningLow: ({ coverage }) => this.localize(
+        "card.heatmap_coverage_warning_low",
+        "Coverage warning: Less than 50% of this season is available ({coverage}% matched).",
+        { coverage }
+      ),
       heatmapLegendLower: this.localize("card.heatmap_legend_lower", "Lower"),
       heatmapLegendHigher: this.localize("card.heatmap_legend_higher", "Higher"),
       heatmapLegendCheaper: this.localize("card.heatmap_legend_cheaper", "Cheaper"),
@@ -957,6 +977,42 @@ syncSensorPicker() {
 
   buildSeasonalHeatmapsHtml(response) {
     const texts = this._texts || this.getTexts();
+    const monthly = Array.isArray(response.tariff_monthly)
+      ? response.tariff_monthly
+      : Array.isArray(response.monthly_tariff_comparison?.months)
+        ? response.monthly_tariff_comparison.months
+        : [];
+    const monthHours = new Map();
+    monthly.forEach((item) => {
+      const monthNumber = Number(item.month || 0);
+      if (monthNumber >= 1 && monthNumber <= 12) {
+        monthHours.set(monthNumber, Number(item.matched_hours || 0));
+      }
+    });
+
+    const seasonMonths = {
+      whole_year: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+      spring: [3, 4, 5],
+      summer: [6, 7, 8],
+      autumn: [9, 10, 11],
+      winter: [12, 1, 2]
+    };
+    const seasonRanges = {
+      whole_year: texts.heatmapSeasonRangeWholeYear,
+      spring: texts.heatmapSeasonRangeSpring,
+      summer: texts.heatmapSeasonRangeSummer,
+      autumn: texts.heatmapSeasonRangeAutumn,
+      winter: texts.heatmapSeasonRangeWinter
+    };
+
+    const totalMatchedHours = Number(response.matched_hours || 0);
+    const seasonMatchedHours = (seasonKey) => {
+      if (seasonKey === "whole_year") {
+        return totalMatchedHours;
+      }
+      const monthsForSeason = seasonMonths[seasonKey] || [];
+      return monthsForSeason.reduce((sum, monthNumber) => sum + Number(monthHours.get(monthNumber) || 0), 0);
+    };
     const seasons = [
       { key: "whole_year", label: texts.heatmapSeasonWholeYear },
       { key: "spring", label: texts.heatmapSeasonSpring },
@@ -1056,6 +1112,18 @@ syncSensorPicker() {
 
     const panels = seasons
       .map((season) => {
+        const seasonHoursRaw = seasonMatchedHours(season.key);
+        const seasonHours = formatNumber(seasonHoursRaw, 0);
+        const seasonDays = formatNumber(seasonHoursRaw > 0 ? seasonHoursRaw / 24 : 0, 1);
+        const potentialSeasonHours = this.getFullSeasonHours(season.key);
+        const coverageRatio = potentialSeasonHours > 0 ? (seasonHoursRaw / potentialSeasonHours) : null;
+        const showCoverageWarning = Number.isFinite(coverageRatio) && coverageRatio < 0.5;
+        const coveragePct = Number.isFinite(coverageRatio) ? formatNumber(coverageRatio * 100, 1) : "0.0";
+        const seasonScopeText = texts.heatmapSeasonScope({ range: seasonRanges[season.key] || season.label });
+        const seasonCoverageText = texts.heatmapDataCoverageSeason({ hours: seasonHours, days: seasonDays });
+        const seasonCoverageWarningText = showCoverageWarning
+          ? texts.heatmapCoverageWarningLow({ coverage: coveragePct })
+          : "";
         const data = season.key === "whole_year"
           ? wholeYearHeatmaps
           : seasonalHeatmaps[season.key] || wholeYearHeatmaps;
@@ -1109,6 +1177,11 @@ syncSensorPicker() {
 
         return `
           <div class="heatmap-season-panel" data-heatmap-panel="${season.key}"${season.key === selectedSeason ? "" : " hidden"}>
+            <div class="heatmap-context-meta">
+              <div class="heatmap-context-line">${seasonScopeText}</div>
+              <div class="heatmap-context-line">${seasonCoverageText}</div>
+              ${showCoverageWarning ? `<div class="heatmap-coverage-warning">${seasonCoverageWarningText}</div>` : ""}
+            </div>
             <section class="heatmap-subcard heatmap-subcard-consumption">
               <div class="heatmap-subcard-controls consumption-mode-navigation" role="group" aria-label="Consumption mode">
                 <span class="spot-mode-label">${texts.heatmapConsumptionModeLabel}</span>
@@ -1277,6 +1350,18 @@ syncSensorPicker() {
     return this.computeSymmetricHeatmapScale(
       this.flattenHeatmapValues(heatmapDataList)
     );
+  }
+
+  getFullSeasonHours(seasonKey) {
+    const seasonDays = {
+      whole_year: 365,
+      spring: 92,
+      summer: 92,
+      autumn: 91,
+      winter: 90,
+    };
+    const days = seasonDays[seasonKey] || 0;
+    return days * 24;
   }
 
   flattenHeatmapValues(heatmapData, options = {}) {
@@ -1636,6 +1721,9 @@ syncSensorPicker() {
 
       /* Seasonal Heatmaps */
       .seasonal-heatmaps { margin-top: 24px; }
+      .heatmap-context-meta { margin-bottom: 12px; display: grid; gap: 6px; }
+      .heatmap-context-line { font-size: 12px; color: var(--secondary-text-color); line-height: 1.4; }
+      .heatmap-coverage-warning { font-size: 12px; line-height: 1.4; color: #8f4a00; background: rgba(255, 171, 64, 0.16); border: 1px solid rgba(255, 171, 64, 0.32); border-radius: 8px; padding: 6px 8px; }
       .heatmap-season-navigation { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
       .heatmap-season-button { min-height: 36px; padding: 8px 10px; border: 1px solid var(--divider-color); border-radius: 6px; background: var(--card-background-color); color: var(--primary-text-color); font-size: 13px; cursor: pointer; }
       .heatmap-season-button:hover { border-color: var(--primary-color); }
