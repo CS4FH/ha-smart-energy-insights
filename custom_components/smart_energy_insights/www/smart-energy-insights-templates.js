@@ -18,24 +18,6 @@ export function renderBaseCard(texts) {
           </div>
         </div>
 
-        <div class="source-profile-summary" id="sourceProfileSummary">
-          <div class="source-profile-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-              <polyline points="14 2 14 8 20 8"></polyline>
-              <line x1="16" y1="13" x2="8" y2="13"></line>
-              <line x1="16" y1="17" x2="8" y2="17"></line>
-              <polyline points="10 9 9 9 8 9"></polyline>
-            </svg>
-          </div>
-          <div class="source-profile-content">
-            <div class="source-profile-label">${texts.profileTitle}</div>
-            <div class="source-profile-name" id="profileSummaryName">-</div>
-            <div class="source-profile-meta" id="profileSummaryMeta"></div>
-            <div class="source-profile-state" id="sourceState">${texts.sourceStateLoading}</div>
-          </div>
-        </div>
-
         <div class="source-content" id="sourceContent">
         <div class="source-section" id="csvSection" role="tabpanel" aria-labelledby="sourceCsvSwitch">
           <div class="source-section-header">
@@ -89,6 +71,7 @@ export function renderBaseCard(texts) {
 }
 
 export function renderDashboardHtml({
+  filename,
   heatmapsHtml,
   monthlyTariffHtml,
   analysisGroups,
@@ -97,9 +80,17 @@ export function renderDashboardHtml({
 }) {
   return `
     <div class="dashboard-wrapper">
+      <div class="dashboard-minimal-header">
+        <div class="dashboard-current-profile">${texts.currentProfileLabel} <span>${filename}</span></div>
+        <button id="toggleSourcePanelBtn" class="source-toggle-text-btn" type="button">${texts.switchSourceButton}</button>
+      </div>
+
       <div class="top-dashboard-grid">
         <div class="banner-column" id="dynamicSavingsBanner"></div>
       </div>
+
+      <section class="analysis-island" aria-label="${texts.detailedAnalysisTitle}">
+        <div class="analysis-island-title">${texts.detailedAnalysisTitle}</div>
 
       <section class="dashboard-tabs" aria-label="Dashboard sections">
         <div class="dashboard-tab-navigation" role="tablist">
@@ -126,6 +117,7 @@ export function renderDashboardHtml({
             </div>
           </div>
         </div>
+      </section>
       </section>
     </div>
   `;

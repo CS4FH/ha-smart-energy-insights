@@ -10,7 +10,7 @@ import {
 } from "./smart-energy-insights-api.js";
 import { generateHeatmapHTML } from "./smart-energy-insights-heatmap.js?v=20260715a";
 import { renderBaseCard, renderDashboardHtml } from "./smart-energy-insights-templates.js";
-import { formatNumber, formatUploadDate } from "./smart-energy-insights-utils.js";
+import { formatNumber } from "./smart-energy-insights-utils.js";
 
 class SmartEnergyInsightsUploadCard extends HTMLElement {
   setConfig(config) {
@@ -115,6 +115,9 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       profileDefaultFilename: this.localize("card.profile_default_filename", "Profile_loaded.csv"),
       lastImported: this.localize("card.last_imported", "Last imported"),
       profileTitle: this.localize("card.profile_title", "Current load profile:"),
+      currentProfileLabel: this.localize("card.current_profile_label", "Current profile:"),
+      switchSourceButton: this.localize("card.switch_source_button", "Switch source"),
+      detailedAnalysisTitle: this.localize("card.detailed_analysis_title", "Detailed analysis"),
       profileMeta: ({ count, start, end, uploadDate }) =>
         this.localize(
           "card.profile_meta",
@@ -373,8 +376,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     this.attachEventListeners();
     this.syncSensorPicker();
     this.updateSourceUI();
-    this.updateSourceState();
-    this.updateProfileSummaryFromData(null);
+    this.updateLayoutVisibility();
     this.applyStyles();
   }
 
@@ -423,10 +425,6 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
           const value = event.detail && event.detail.value ? event.detail.value : null;
           this._selectedSensor = value;
           this.saveUiState();
-          this.updateSourceState();
-          if (this._activeSource === "sensor" && !this._lastSensorData) {
-            this.updateProfileSummaryFromData(null);
-          }
           const sensorLoadBtn = this.querySelector("#sensorLoadBtn");
           if (sensorLoadBtn) sensorLoadBtn.disabled = !value;
         });
@@ -435,10 +433,6 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
           const value = event.target && event.target.value ? event.target.value : null;
           this._selectedSensor = value;
           this.saveUiState();
-          this.updateSourceState();
-          if (this._activeSource === "sensor" && !this._lastSensorData) {
-            this.updateProfileSummaryFromData(null);
-          }
           const sensorLoadBtn = this.querySelector("#sensorLoadBtn");
           if (sensorLoadBtn) sensorLoadBtn.disabled = !value;
         });
@@ -463,7 +457,6 @@ syncSensorPicker() {
       select.addEventListener("change", (e) => {
         this._selectedSensor = e.target.value || null;
         this.saveUiState();
-        this.updateSourceState();
         const sensorLoadBtn = this.querySelector("#sensorLoadBtn");
         if (sensorLoadBtn) sensorLoadBtn.disabled = !this._selectedSensor;
       });
@@ -562,13 +555,10 @@ syncSensorPicker() {
 
   updateSourceUI() {
     const isSensor = this._activeSource === "sensor";
-    const sourceSelector = this.querySelector("#sourceSelector");
     const sourceCsvSwitch = this.querySelector("#sourceCsvSwitch");
     const sourceSensorSwitch = this.querySelector("#sourceSensorSwitch");
     const csvSection = this.querySelector("#csvSection");
     const sensorSection = this.querySelector("#sensorSection");
-
-    if (sourceSelector) sourceSelector.style.display = "block";
 
     if (sourceCsvSwitch && sourceSensorSwitch) {
       sourceCsvSwitch.classList.toggle("active", !isSensor);
@@ -585,65 +575,75 @@ syncSensorPicker() {
       sensorSection.style.display = isSensor ? "block" : "none";
       sensorSection.hidden = !isSensor;
     }
-    this.updateSourceState();
   }
 
-  updateSourceState() {
-    const sourceState = this.querySelector("#sourceState");
-    if (!sourceState) return;
+  hasLoadedData(data) {
+    if (!data || typeof data !== "object") return false;
+    const count = Number(data.count || data.matched_hours || 0);
+    return Number.isFinite(count) && count > 0;
+  }
 
-    const texts = this._texts || this.getTexts();
-    if (this._activeSource === "sensor") {
-      const entityId = this._selectedSensor || this._loadedSensorEntityId || this.latestData?.sensor_entity_id;
-      const state = this._hass?.states?.[entityId];
-      const name = state?.attributes?.friendly_name || entityId;
-      sourceState.textContent = name ? texts.sourceStateSensor(name) : texts.sourceStateLoading;
+  updateLayoutVisibility() {
+    const sourceSelector = this.querySelector("#sourceSelector");
+    const dashboardContainer = this.querySelector("#dashboardContainer");
+    const hasData = this.hasLoadedData(this.latestData);
+
+    if (!hasData) {
+      if (sourceSelector) sourceSelector.style.display = "block";
+      if (dashboardContainer) dashboardContainer.style.display = "none";
       return;
     }
 
-    const filename = this._lastCsvData?.filename || this.latestData?.filename;
-    sourceState.textContent = filename ? texts.sourceStateCsv(filename) : texts.sourceStateLoading;
+    if (sourceSelector) {
+      sourceSelector.style.display = this._sourcePanelOpen ? "block" : "none";
+    }
+    if (dashboardContainer) {
+      dashboardContainer.style.display = "block";
+    }
+  }
+
+  scrollViewToTop() {
+    const scrollers = [];
+    const seen = new Set();
+
+    const addScroller = (el) => {
+      if (!el || seen.has(el)) return;
+      seen.add(el);
+      scrollers.push(el);
+    };
+
+    let node = this.parentElement;
+    while (node) {
+      const canScroll = node.scrollHeight - node.clientHeight > 8;
+      if (canScroll) addScroller(node);
+      node = node.parentElement;
+    }
+
+    addScroller(document.scrollingElement);
+    addScroller(document.documentElement);
+    addScroller(document.body);
+
+    scrollers.forEach((el) => {
+      if (typeof el.scrollTo === "function") {
+        el.scrollTo({ top: 0, behavior: "smooth" });
+      } else {
+        el.scrollTop = 0;
+      }
+    });
+
+    if (typeof window.scrollTo === "function") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
   }
 
   clearDashboardForSourceSwitch() {
     const container = this.querySelector("#dashboardContainer");
+    this.latestData = null;
+    this._sourcePanelOpen = true;
     if (container) {
       container.innerHTML = "";
     }
-  }
-
-  updateProfileSummaryFromData(data) {
-    const texts = this._texts || this.getTexts();
-    const profileNameEl = this.querySelector("#profileSummaryName");
-    const profileMetaEl = this.querySelector("#profileSummaryMeta");
-    if (!profileNameEl || !profileMetaEl) return;
-
-    if (data && data.filename) {
-      const start = data.start ? data.start.split("T")[0] : "N/A";
-      const end = data.end ? data.end.split("T")[0] : "N/A";
-      const uploadDateStr = formatUploadDate(data.upload_date, texts.lastImported);
-      const countStr = formatNumber(data.count, 0);
-      profileNameEl.textContent = data.filename;
-      profileMetaEl.innerHTML = texts.profileMeta({
-        count: countStr,
-        start,
-        end,
-        uploadDate: uploadDateStr
-      });
-      return;
-    }
-
-    if (this._activeSource === "sensor") {
-      const entityId = this._selectedSensor || this._loadedSensorEntityId;
-      const state = entityId ? this._hass?.states?.[entityId] : null;
-      const sensorName = state?.attributes?.friendly_name || entityId || texts.sourceSensor;
-      profileNameEl.textContent = sensorName;
-      profileMetaEl.textContent = texts.sourceSensorDescription;
-      return;
-    }
-
-    profileNameEl.textContent = this._lastCsvData?.filename || texts.profileDefaultFilename;
-    profileMetaEl.textContent = texts.sourceCsvDescription;
+    this.updateLayoutVisibility();
   }
 
   navigateToIntegrations() {
@@ -654,9 +654,10 @@ syncSensorPicker() {
   async selectSource(source) {
     if (this._activeSource === source) return;
     this._activeSource = source;
+    this._sourcePanelOpen = true;
     this.saveUiState();
     this.updateSourceUI();
-    this.updateProfileSummaryFromData(null);
+    this.updateLayoutVisibility();
 
     try {
       await setActiveSource(this._hass, source);
@@ -666,7 +667,7 @@ syncSensorPicker() {
 
     if (source === "csv" && this._lastCsvData) {
       this.showSensorMessage("", "");
-      this.renderDashboard(this._lastCsvData);
+      this.renderDashboard(this._lastCsvData, { collapseSourcePanel: false });
       return;
     }
 
@@ -678,7 +679,7 @@ syncSensorPicker() {
 
     if (source === "sensor") {
       if (this._lastSensorData) {
-        this.renderDashboard(this._lastSensorData);
+        this.renderDashboard(this._lastSensorData, { collapseSourcePanel: false });
       } else {
         this.clearDashboardForSourceSwitch();
         this.showSensorMessage("", "");
@@ -720,7 +721,7 @@ syncSensorPicker() {
       this.showSensorMessage(texts.sensorLoaded, "success");
       this._lastSensorData = data;
       this._loadedSensorEntityId = data.sensor_entity_id || entityId;
-      this.renderDashboard(data);
+      this.renderDashboard(data, { collapseSourcePanel: true });
     } catch (error) {
       this.showSensorMessage(error.message || texts.sensorNoData, "error");
     }
@@ -758,8 +759,7 @@ syncSensorPicker() {
       this._lastCsvData = responseData;
       this._activeSource = "csv";
       this.saveUiState();
-      this.updateSourceState();
-      this.renderDashboard(responseData);
+      this.renderDashboard(responseData, { collapseSourcePanel: true });
       this.resetUI();
     } catch (error) {
       this.showErrorMessage(error.message);
@@ -786,7 +786,7 @@ syncSensorPicker() {
         this.updateSourceUI();
         this.syncSensorPicker();
         if (this._activeSource === data.source) {
-          this.renderDashboard(data);
+          this.renderDashboard(data, { collapseSourcePanel: true });
         }
       }
     } catch (e) {
@@ -833,12 +833,22 @@ syncSensorPicker() {
     this.querySelector("#cancelBtn").disabled = false;
   }
 
-  renderDashboard(response) {
+  renderDashboard(response, options = {}) {
     const container = this.querySelector("#dashboardContainer");
     if (!container) return;
     const texts = this._texts || this.getTexts();
+    const collapseSourcePanel = options.collapseSourcePanel === true;
+
+    if (!this.hasLoadedData(response)) {
+      this.clearDashboardForSourceSwitch();
+      return;
+    }
 
     this.latestData = response;
+    if (collapseSourcePanel) {
+      this._sourcePanelOpen = false;
+    }
+    this.updateLayoutVisibility();
     if (response.source === "sensor" && response.sensor_entity_id) {
       this._loadedSensorEntityId = response.sensor_entity_id;
     }
@@ -854,18 +864,9 @@ syncSensorPicker() {
     const start = response.start ? response.start.split('T')[0] : 'N/A';
     const end = response.end ? response.end.split('T')[0] : 'N/A';
     
-    // Metadaten für das aktuelle Profil
     const filenameStr = response.filename || texts.profileDefaultFilename;
     const avgConsumptionStr = formatNumber(response.avg_consumption_kwh, 3);
     const avgPriceStr = formatNumber(response.avg_price_ct_kwh, 2);
-
-    this.updateProfileSummaryFromData({
-      filename: filenameStr,
-      start: response.start,
-      end: response.end,
-      upload_date: response.upload_date,
-      count: response.count
-    });
 
     const analysisGroups = this.buildAnalysisGroups({
       start,
@@ -890,6 +891,7 @@ syncSensorPicker() {
     if (!this._dashboardTab) this._dashboardTab = "monthly";
 
     container.innerHTML = renderDashboardHtml({
+      filename: filenameStr,
       heatmapsHtml,
       monthlyTariffHtml,
       analysisGroups,
@@ -917,7 +919,7 @@ syncSensorPicker() {
       button.addEventListener("click", () => {
         this._heatmapSeason = button.dataset.heatmapSeason || "whole_year";
         this.saveUiState();
-        this.renderDashboard(this.latestData);
+        this.renderDashboard(this.latestData, { collapseSourcePanel: false });
       });
     });
 
@@ -925,7 +927,7 @@ syncSensorPicker() {
       button.addEventListener("click", () => {
         this._consumptionMode = button.dataset.consumptionMode || "absolute";
         this.saveUiState();
-        this.renderDashboard(this.latestData);
+        this.renderDashboard(this.latestData, { collapseSourcePanel: false });
       });
     });
 
@@ -933,11 +935,23 @@ syncSensorPicker() {
       button.addEventListener("click", () => {
         this._spotPriceMode = button.dataset.spotPriceMode || "break_even";
         this.saveUiState();
-        this.renderDashboard(this.latestData);
+        this.renderDashboard(this.latestData, { collapseSourcePanel: false });
       });
     });
 
-    this.updateSourceState();
+    const toggleSourcePanelBtn = this.querySelector("#toggleSourcePanelBtn");
+    if (toggleSourcePanelBtn) {
+      toggleSourcePanelBtn.addEventListener("click", () => {
+        this._sourcePanelOpen = !this._sourcePanelOpen;
+        this.updateLayoutVisibility();
+        if (this._sourcePanelOpen) {
+          requestAnimationFrame(() => {
+            this.scrollViewToTop();
+          });
+        }
+      });
+    }
+
     this.updateSavingsBanner(true);
   }
 
@@ -1538,12 +1552,12 @@ syncSensorPicker() {
   applyStyles() {
     const style = document.createElement("style");
     style.textContent = `
-      ha-card { box-shadow: var(--ha-card-box-shadow, 0 2px 4px rgba(0, 0, 0, 0.1)); border-radius: var(--ha-card-border-radius, 8px); overflow: hidden; }
+      ha-card { box-shadow: none; border-radius: 14px; overflow: hidden; background: transparent; }
       .integration-settings-chip { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; padding: 0; border: 1px solid var(--divider-color); border-radius: 999px; background: transparent; color: var(--secondary-text-color); cursor: pointer; }
       .integration-settings-chip:hover { color: var(--primary-color); border-color: var(--primary-color); background: rgba(var(--rgb-primary-color), 0.08); }
       .integration-settings-chip ha-icon { --mdc-icon-size: 20px; }
 
-      .source-card { margin: 16px; border: 1px solid var(--divider-color); border-radius: 10px; overflow: hidden; background: var(--card-background-color); }
+      .source-card { margin: 16px; border-radius: 12px; overflow: hidden; background: color-mix(in srgb, var(--card-background-color) 90%, black 10%); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28); }
       .source-chooser-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 16px; }
       .source-chooser-title { font-size: 14px; font-weight: 600; color: var(--primary-text-color); }
       .source-chooser-desc { font-size: 12px; color: var(--secondary-text-color); }
@@ -1551,17 +1565,9 @@ syncSensorPicker() {
       .source-selector-buttons { display: inline-flex; border: 1px solid var(--divider-color); border-radius: 999px; overflow: hidden; background: var(--secondary-background-color); }
       .source-switch { padding: 6px 14px; border: none; background: transparent; color: var(--primary-text-color); cursor: pointer; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
       .source-switch.active { background: var(--primary-color); color: white; }
-      .source-profile-summary { margin: 0 16px 16px; border: 1px solid rgba(var(--rgb-divider-color), 0.45); border-radius: 10px; background: linear-gradient(165deg, rgba(var(--rgb-primary-text-color), 0.03), rgba(var(--rgb-primary-color), 0.06)); padding: 12px; display: flex; align-items: flex-start; gap: 12px; }
-      .source-profile-icon { color: var(--primary-color); width: 36px; height: 36px; background: rgba(var(--rgb-primary-color), 0.15); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
-      .source-profile-icon svg { width: 20px; height: 20px; }
-      .source-profile-content { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-      .source-profile-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.55px; color: var(--secondary-text-color); font-weight: 700; }
-      .source-profile-name { font-size: 30px; line-height: 1.15; font-weight: 700; color: var(--primary-color); overflow-wrap: anywhere; }
-      .source-profile-meta { font-size: 13px; color: var(--secondary-text-color); }
-      .source-profile-state { margin-top: 4px; display: inline-flex; width: fit-content; font-size: 12px; color: var(--primary-text-color); background: rgba(var(--rgb-primary-text-color), 0.08); border: 1px solid rgba(var(--rgb-divider-color), 0.5); border-radius: 999px; padding: 4px 10px; }
 
       .upload-card { width: 100%; max-width: 1200px; margin: 0 auto; height: fit-content; }
-      .source-content { padding: 16px; border-top: 1px solid var(--divider-color); }
+      .source-content { padding: 16px; }
       .source-section { background: rgba(var(--rgb-primary-text-color), 0.02); }
       .source-section-header { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
       .source-section-title { font-size: 14px; font-weight: 600; color: var(--primary-text-color); }
@@ -1579,6 +1585,11 @@ syncSensorPicker() {
       
       /* Dashboard Wrapper */
       .dashboard-wrapper { padding: 24px; }
+      .dashboard-minimal-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+      .dashboard-current-profile { font-size: 13px; color: var(--secondary-text-color); letter-spacing: 0.2px; }
+      .dashboard-current-profile span { color: var(--primary-text-color); font-weight: 600; }
+      .source-toggle-text-btn { border: none; background: transparent; color: var(--primary-color); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.45px; cursor: pointer; padding: 0; }
+      .source-toggle-text-btn:hover { color: var(--primary-text-color); }
 
       .top-dashboard-grid { margin-bottom: 24px; }
       .savings-hero-card { border: 1px solid rgba(var(--rgb-divider-color), 0.25); border-left: 4px solid; border-radius: 0 8px 8px 0; padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; gap: 14px; }
@@ -1592,7 +1603,9 @@ syncSensorPicker() {
       .kpi-card { background: rgba(var(--rgb-primary-text-color), 0.04); border: 1px solid rgba(var(--rgb-divider-color), 0.45); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; justify-content: center; gap: 10px; min-height: 88px; }
       .kpi-simple-title { font-size: 11px; letter-spacing: 0.45px; text-transform: uppercase; color: var(--secondary-text-color); font-weight: 700; }
       .kpi-simple-value { font-size: 18px; line-height: 1.2; color: var(--primary-text-color); font-weight: 700; }
-      .dashboard-tabs { margin-top: 24px; }
+      .analysis-island { margin-top: 26px; padding: 16px; border-radius: 12px; background: color-mix(in srgb, var(--card-background-color) 90%, black 10%); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.26); }
+      .analysis-island-title { font-size: 11px; color: var(--secondary-text-color); text-transform: uppercase; letter-spacing: 0.8px; font-weight: 700; margin-bottom: 12px; }
+      .dashboard-tabs { margin-top: 0; }
       .dashboard-tab-navigation { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
       .dashboard-tab-button { min-height: 40px; padding: 8px 12px; border: 1px solid var(--divider-color); border-radius: 8px; background: var(--card-background-color); color: var(--primary-text-color); font-size: 13px; font-weight: 600; cursor: pointer; }
       .dashboard-tab-button:hover { border-color: var(--primary-color); }
@@ -1710,7 +1723,7 @@ syncSensorPicker() {
         .source-card { margin: 12px; }
         .source-chooser-header { align-items: flex-start; flex-direction: column; }
         .source-header-actions { width: 100%; justify-content: space-between; }
-        .source-profile-name { font-size: 24px; }
+        .dashboard-minimal-header { align-items: flex-start; flex-direction: column; }
         .savings-hero-card { padding: 16px; }
         .savings-hero-head { gap: 12px; }
         .savings-hero-icon { font-size: 36px; }
