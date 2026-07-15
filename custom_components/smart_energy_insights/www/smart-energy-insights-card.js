@@ -1465,23 +1465,8 @@ syncSensorPicker() {
     const costFixEur = Number(totals.fixed_cost_eur || 0);
     const costSpotEur = Number(totals.spot_cost_eur || 0);
     const savingsEur = costFixEur - costSpotEur;
-
-    const matchedHours = this.latestData.matched_hours || 0;
-    const matchedDays = matchedHours > 0 ? matchedHours / 24 : 0;
-    const matchedDaysRoundedUp = matchedDays > 0 ? Math.ceil(matchedDays) : 0;
-    const dailySavings = matchedDays > 0 ? savingsEur / matchedDays : null;
-    const monthlySavings = dailySavings !== null ? dailySavings * 30 : null;
-    const yearlySavings = dailySavings !== null ? dailySavings * 365 : null;
-    const fixPerDay = matchedDays > 0 ? costFixEur / matchedDays : null;
-    const spotPerDay = matchedDays > 0 ? costSpotEur / matchedDays : null;
-    const taxRate = this.latestData?.tax_rate ?? 20.0;
-    const taxNote = this.getTaxNote(taxRate);
     const breakEvenFixed = this.latestData.break_even_fixed_ct_kwh;
     const spotCheaperShare = this.latestData.spot_cheaper_share;
-    const isFullYear = matchedDaysRoundedUp === 365;
-    const extrapolatedNote = matchedDays > 0 && !isFullYear
-      ? texts.savingsExtrapolatedNote.replace("{days}", formatNumber(matchedDaysRoundedUp, 0))
-      : "";
 
     const bannerContainer = this.querySelector("#dynamicSavingsBanner");
     const isPositive = savingsEur >= 0;
@@ -1490,63 +1475,44 @@ syncSensorPicker() {
     const savIcon = isPositive ? "💰" : "⚠️";
     const savTitle = isPositive ? texts.savingsTitlePositive : texts.savingsTitleNegative;
     const savMessage = isPositive ? texts.savingsMessagePositive : texts.savingsMessageNegative;
-    
-    // Die Box ist nun 100% hoch, damit sie im Grid neben den Settings schön abschließt
+
     bannerContainer.innerHTML = `
-      <div style="background-color: ${savBg}; border: 1px solid rgba(var(--rgb-divider-color), 0.2); border-left: 4px solid ${savColor}; padding: 24px; border-radius: 0 8px 8px 0; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center;">
-        <div style="display: flex; align-items: center; gap: 20px; margin-bottom: 20px;">
-          <div style="font-size: 48px; line-height: 1;">${savIcon}</div>
-          <div>
-            <div style="font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: var(--secondary-text-color); margin-bottom: 4px; font-weight: 600;">
+      <div class="savings-hero-card" style="background-color: ${savBg}; border-left-color: ${savColor};">
+        <div class="savings-hero-head">
+          <div class="savings-hero-icon">${savIcon}</div>
+          <div class="savings-hero-main">
+            <div class="savings-hero-title">
               ${savTitle}
             </div>
-            <div style="font-size: 32px; font-weight: bold; color: var(--primary-text-color);">
+            <div class="savings-hero-value">
               ${formatNumber(Math.abs(savingsEur), 2)} €
             </div>
           </div>
         </div>
-        <div style="font-size: 14px; color: var(--secondary-text-color); margin-bottom: 24px; line-height: 1.5;">
+        <div class="savings-hero-message">
           ${savMessage}
         </div>
-        <div style="margin-top: auto; font-size: 13px; background: rgba(var(--rgb-primary-text-color), 0.04); padding: 16px; border-radius: 6px; display: flex; flex-direction: column; gap: 8px;">
-          <div style="display: flex; justify-content: space-between;">
-            <span><strong>${texts.costFixedLabel}</strong></span>
-            <span>${formatNumber(costFixEur, 2)} € <span class="info-icon" title="${texts.costFixedHelp}">i</span></span>
-          </div>
-          <div style="display: flex; justify-content: space-between;">
-            <span><strong>${texts.costSpotLabel}</strong></span>
-            <span>${formatNumber(costSpotEur, 2)} € <span class="info-icon" title="${texts.costSpotHelp}">i</span></span>
-          </div>
-          <div style="display: flex; justify-content: space-between;">
-            <span><strong>${texts.savingsCostPerDayFixedLabel}</strong></span>
-            <span>${fixPerDay !== null ? formatNumber(fixPerDay, 2) : "-"} € <span class="info-icon" title="${texts.savingsCostPerDayFixedHelp}">i</span></span>
-          </div>
-          <div style="display: flex; justify-content: space-between;">
-            <span><strong>${texts.savingsCostPerDaySpotLabel}</strong></span>
-            <span>${spotPerDay !== null ? formatNumber(spotPerDay, 2) : "-"} € <span class="info-icon" title="${texts.savingsCostPerDaySpotHelp}">i</span></span>
-          </div>
-          <div style="display: flex; justify-content: space-between;">
-            <span><strong>${texts.savingsBreakEvenLabel}</strong></span>
-            <span>${breakEvenFixed !== null && breakEvenFixed !== undefined ? formatNumber(breakEvenFixed, 2) : "-"} ct/kWh <span class="info-icon" title="${texts.savingsBreakEvenHelp}">i</span></span>
-          </div>
-          <div style="display: flex; justify-content: space-between;">
-            <span><strong>${texts.savingsSpotCheaperLabel}</strong></span>
-            <span>${spotCheaperShare !== null && spotCheaperShare !== undefined ? formatNumber(spotCheaperShare * 100, 1) : "-"} % <span class="info-icon" title="${texts.savingsSpotCheaperHelp}">i</span></span>
-          </div>
-          <div style="display: flex; justify-content: space-between;">
-            <span><strong>${texts.savingsDailyLabel}</strong></span>
-            <span>${dailySavings !== null ? formatNumber(dailySavings, 2) : "-"} € <span class="info-icon" title="${texts.savingsDailyHelp}">i</span></span>
-          </div>
-          <div style="display: flex; justify-content: space-between;">
-            <span><strong>${texts.savingsMonthlyLabel}</strong></span>
-            <span>${monthlySavings !== null ? formatNumber(monthlySavings, 2) : "-"} € <span class="info-icon" title="${texts.savingsMonthlyHelp}">i</span></span>
-          </div>
-          <div style="display: flex; justify-content: space-between;">
-            <span><strong>${texts.savingsYearlyLabel}</strong></span>
-            <span>${yearlySavings !== null ? formatNumber(yearlySavings, 2) : "-"} € <span class="info-icon" title="${texts.savingsYearlyHelp}">i</span></span>
-          </div>
-          <div class="card-tax-note">${taxNote}</div>
-          ${extrapolatedNote ? `<div style="font-size: 11px; color: var(--secondary-text-color);">${extrapolatedNote} <span class="info-icon" title="${texts.savingsExtrapolatedHelp}">i</span></div>` : ""}
+      </div>
+
+      <div class="kpi-grid" role="list" aria-label="Tariff KPIs">
+        <div class="kpi-card" role="listitem">
+          <div class="kpi-simple-title">FIXED TARIFF COST</div>
+          <div class="kpi-simple-value">${formatNumber(costFixEur, 2)} €</div>
+        </div>
+
+        <div class="kpi-card" role="listitem">
+          <div class="kpi-simple-title">SPOT TARIFF COST</div>
+          <div class="kpi-simple-value">${formatNumber(costSpotEur, 2)} €</div>
+        </div>
+
+        <div class="kpi-card" role="listitem">
+          <div class="kpi-simple-title">BREAK-EVEN FIXED</div>
+          <div class="kpi-simple-value">${breakEvenFixed !== null && breakEvenFixed !== undefined ? formatNumber(breakEvenFixed, 2) : "-"} ct/kWh</div>
+        </div>
+
+        <div class="kpi-card" role="listitem">
+          <div class="kpi-simple-title">SPOT CHEAPER HOURS</div>
+          <div class="kpi-simple-value">${spotCheaperShare !== null && spotCheaperShare !== undefined ? formatNumber(spotCheaperShare * 100, 1) : "-"} %</div>
         </div>
       </div>
     `;
@@ -1890,6 +1856,17 @@ syncSensorPicker() {
       .range-message.loading { color: var(--secondary-text-color); }
 
       .top-dashboard-grid { margin-bottom: 24px; }
+      .savings-hero-card { border: 1px solid rgba(var(--rgb-divider-color), 0.25); border-left: 4px solid; border-radius: 0 8px 8px 0; padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; gap: 14px; }
+      .savings-hero-head { display: flex; align-items: center; gap: 18px; }
+      .savings-hero-icon { font-size: 42px; line-height: 1; }
+      .savings-hero-main { display: flex; flex-direction: column; gap: 4px; }
+      .savings-hero-title { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--secondary-text-color); font-weight: 700; }
+      .savings-hero-value { font-size: 32px; font-weight: 700; color: var(--primary-text-color); line-height: 1.1; }
+      .savings-hero-message { font-size: 14px; color: var(--secondary-text-color); line-height: 1.5; }
+      .kpi-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 4px; }
+      .kpi-card { background: rgba(var(--rgb-primary-text-color), 0.04); border: 1px solid rgba(var(--rgb-divider-color), 0.45); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; justify-content: center; gap: 10px; min-height: 88px; }
+      .kpi-simple-title { font-size: 11px; letter-spacing: 0.45px; text-transform: uppercase; color: var(--secondary-text-color); font-weight: 700; }
+      .kpi-simple-value { font-size: 18px; line-height: 1.2; color: var(--primary-text-color); font-weight: 700; }
       
       .info-box { background-color: rgba(var(--rgb-primary-color), 0.05); border-left: 4px solid var(--primary-color); padding: 16px; margin-bottom: 24px; border-radius: 0 4px 4px 0; }
       .info-box h3 { margin: 0 0 8px 0; font-size: 16px; color: var(--primary-text-color); }
@@ -1995,11 +1972,19 @@ syncSensorPicker() {
         .dashboard-title { font-size: 20px; }
         .source-card { margin: 12px; }
         .source-chooser-header { align-items: flex-start; flex-direction: column; }
+        .savings-hero-card { padding: 16px; }
+        .savings-hero-head { gap: 12px; }
+        .savings-hero-icon { font-size: 36px; }
+        .savings-hero-value { font-size: 28px; }
+        .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .heatmap-season-navigation { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .heatmap-season-button:last-child { grid-column: span 2; }
         .heatmap-subcard { padding: 12px; }
         .consumption-mode-buttons,
         .spot-mode-buttons { width: 100%; display: grid; grid-template-columns: 1fr; border-radius: 8px; }
+      }
+      @media(min-width: 900px) {
+        .kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
       }
     `;
     this.appendChild(style);
