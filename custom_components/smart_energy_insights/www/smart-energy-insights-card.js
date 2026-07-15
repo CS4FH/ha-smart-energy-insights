@@ -157,9 +157,9 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       dateRangeSensorRequired: this.localize("card.date_range_sensor_required", "Please select a sensor first."),
       dateRangeError: this.localize("card.date_range_error", "No data found for this range."),
       analysisTitle: this.localize("card.analysis_title", "Load profile analysis"),
-      dashboardTabMonthly: this.localize("card.dashboard_tab_monthly", "Monatsvergleich"),
-      dashboardTabUsage: this.localize("card.dashboard_tab_usage", "Nutzungsverhalten"),
-      dashboardTabTechnical: this.localize("card.dashboard_tab_technical", "Technische Details"),
+      dashboardTabMonthly: this.localize("card.dashboard_tab_monthly", "Monthly comparison"),
+      dashboardTabUsage: this.localize("card.dashboard_tab_usage", "Usage behavior"),
+      dashboardTabTechnical: this.localize("card.dashboard_tab_technical", "Technical details"),
       analysisSummaryTitle: this.localize("card.analysis_summary_title", "Summary"),
       analysisGroupPeriodTitle: this.localize("card.analysis_group_period", "Period"),
       analysisGroupConsumptionTitle: this.localize("card.analysis_group_consumption", "Consumption"),
@@ -235,12 +235,18 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       heatmapLegendExpensive: this.localize("card.heatmap_legend_expensive", "More expensive"),
       monthlyTariffTitle: this.localize(
         "card.monthly_tariff_title",
-        "Monthly tariff comparison (dynamic vs fixed)"
+        "Monthly tariff balance"
+      ),
+      monthlyTariffInfo: this.localize(
+        "card.monthly_tariff_info",
+        "Each month shows the cost difference of dynamic tariff versus fixed tariff. Negative means savings with dynamic, positive means extra cost."
       ),
       monthlyTariffSavingsLabel: this.localize("card.monthly_tariff_savings_label", "Savings vs fixed"),
       monthlyTariffExtraLabel: this.localize("card.monthly_tariff_extra_label", "Extra costs vs fixed"),
       monthlyTariffTotalLabel: this.localize("card.monthly_tariff_total_label", "Total"),
       monthlyTariffNoData: this.localize("card.monthly_tariff_no_data", "No matched tariff data in this period."),
+      monthlyTariffTooltipDelta: this.localize("card.monthly_tariff_tooltip_delta", "Delta"),
+      monthlyTariffTooltipHours: this.localize("card.monthly_tariff_tooltip_hours", "Hours"),
       monthJan: this.localize("card.month_jan", "Jan"),
       monthFeb: this.localize("card.month_feb", "Feb"),
       monthMar: this.localize("card.month_mar", "Mar"),
@@ -1613,6 +1619,7 @@ syncSensorPicker() {
       return `
         <div class="monthly-tariff-panel">
           <div class="monthly-tariff-title">${texts.monthlyTariffTitle}</div>
+          <div class="monthly-tariff-info">${texts.monthlyTariffInfo}</div>
           <div class="monthly-tariff-empty">${texts.monthlyTariffNoData}</div>
         </div>
       `;
@@ -1657,10 +1664,10 @@ syncSensorPicker() {
 
         const centerValue = !hasData
           ? "-"
-          : `${delta > 0 ? "+" : ""}${formatNumber(delta, 2)} EUR`;
+          : `${delta > 0 ? "+" : ""}${formatNumber(delta, 2)} €`;
 
         return `
-          <div class="monthly-cell-card ${cellClass}" title="${monthLabels[monthIndex]} | Delta: ${delta > 0 ? "+" : ""}${formatNumber(delta, 2)} EUR | Stunden: ${formatNumber(matchedHours, 0)}" style="--intensity:${intensity.toFixed(3)}">
+          <div class="monthly-cell-card ${cellClass}" title="${monthLabels[monthIndex]} | ${texts.monthlyTariffTooltipDelta}: ${delta > 0 ? "+" : ""}${formatNumber(delta, 2)} € | ${texts.monthlyTariffTooltipHours}: ${formatNumber(matchedHours, 0)}" style="--intensity:${intensity.toFixed(3)}">
             <div class="monthly-cell-head">${monthLabels[monthIndex]}</div>
             <div class="monthly-cell-center">${centerValue}</div>
           </div>
@@ -1668,19 +1675,11 @@ syncSensorPicker() {
       })
       .join("");
 
-    const totalDelta = response.tariff_totals
-      ? Number(response.tariff_totals.delta_eur || 0)
-      : months.reduce((sum, item) => sum + Number(item.delta_eur || 0), 0);
-    const totalText = totalDelta < 0
-      ? `${texts.monthlyTariffTotalLabel}: ${texts.monthlyTariffSavingsLabel} ${formatNumber(Math.abs(totalDelta), 2)} EUR`
-      : `${texts.monthlyTariffTotalLabel}: ${texts.monthlyTariffExtraLabel} ${formatNumber(totalDelta, 2)} EUR`;
-    const totalClass = totalDelta < -thresholdEur ? "savings" : totalDelta > thresholdEur ? "extra" : "neutral";
-
     return `
       <div class="monthly-tariff-panel">
         <div class="monthly-tariff-title">${texts.monthlyTariffTitle}</div>
+        <div class="monthly-tariff-info">${texts.monthlyTariffInfo}</div>
         <div class="monthly-tariff-grid">${cells}</div>
-        <div class="monthly-tariff-total ${totalClass}">${totalText}</div>
       </div>
     `;
   }
@@ -1947,25 +1946,22 @@ syncSensorPicker() {
       .heatmap-cell:hover { transform: scale(1.2); box-shadow: 0 0 4px rgba(0,0,0,0.3); z-index: 2; position: relative; }
       .monthly-tariff-panel { background: linear-gradient(160deg, rgba(var(--rgb-primary-text-color), 0.02), rgba(var(--rgb-primary-text-color), 0.04)); border: 1px solid rgba(var(--rgb-divider-color), 0.6); border-radius: 10px; padding: 14px; }
       .monthly-tariff-title { font-size: 15px; font-weight: 600; color: var(--primary-text-color); margin-bottom: 10px; }
+      .monthly-tariff-info { font-size: 12px; color: var(--secondary-text-color); line-height: 1.45; margin: -2px 0 12px; background: rgba(var(--rgb-primary-text-color), 0.03); border: 1px solid rgba(var(--rgb-divider-color), 0.45); border-radius: 8px; padding: 8px 10px; }
       .monthly-tariff-empty { font-size: 13px; color: var(--secondary-text-color); padding: 8px 4px; }
       .monthly-tariff-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
       @media(min-width: 900px) { .monthly-tariff-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
       @media(min-width: 1300px) { .monthly-tariff-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-      .monthly-cell-card { border: 1px solid rgba(var(--rgb-divider-color), 0.45); border-radius: 8px; padding: 10px; min-height: 72px; display: flex; flex-direction: column; justify-content: space-between; }
+      .monthly-cell-card { border: 1px solid rgba(var(--rgb-divider-color), 0.45); border-radius: 10px; padding: 10px; min-height: 84px; display: grid; grid-template-rows: auto 1fr; align-items: center; justify-items: center; text-align: center; gap: 8px; }
       .monthly-cell-card.savings { background: color-mix(in srgb, #dff4e8 calc(68% + var(--intensity) * 25%), rgba(var(--rgb-card-background-color), 0.95)); }
       .monthly-cell-card.neutral { background: color-mix(in srgb, #f7f0d9 calc(70% + var(--intensity) * 20%), rgba(var(--rgb-card-background-color), 0.95)); }
       .monthly-cell-card.extra { background: color-mix(in srgb, #f8e0df calc(68% + var(--intensity) * 25%), rgba(var(--rgb-card-background-color), 0.95)); }
       .monthly-cell-card.nodata { background: rgba(var(--rgb-primary-text-color), 0.04); opacity: 0.72; }
-      .monthly-cell-head { font-size: 12px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: var(--secondary-text-color); margin-bottom: 8px; }
-      .monthly-cell-center { font-size: 13px; font-weight: 700; text-align: center; color: var(--primary-text-color); letter-spacing: 0.1px; }
+      .monthly-cell-head { font-size: 11px; font-weight: 700; letter-spacing: 0.35px; text-transform: uppercase; color: var(--secondary-text-color); padding: 2px 8px; border-radius: 999px; background: rgba(var(--rgb-primary-text-color), 0.08); }
+      .monthly-cell-center { font-size: 15px; font-weight: 700; text-align: center; color: var(--primary-text-color); letter-spacing: 0.1px; display: flex; align-items: center; justify-content: center; min-height: 28px; }
       .monthly-cell-card.savings .monthly-cell-center { color: #317a4e; }
       .monthly-cell-card.neutral .monthly-cell-center { color: #8f7a26; }
       .monthly-cell-card.extra .monthly-cell-center { color: #9b3b3b; }
       .monthly-cell-card.nodata .monthly-cell-center { color: var(--secondary-text-color); }
-      .monthly-tariff-total { margin-top: 10px; padding: 8px 10px; border-radius: 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.2px; border: 1px solid rgba(var(--rgb-divider-color), 0.5); }
-      .monthly-tariff-total.savings { background: rgba(70, 194, 111, 0.12); color: #4fb978; }
-      .monthly-tariff-total.neutral { background: rgba(216, 191, 66, 0.14); color: #d4b84b; }
-      .monthly-tariff-total.extra { background: rgba(219, 95, 95, 0.14); color: #d86a6a; }
       .card-tax-note { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--divider-color); color: var(--secondary-text-color); text-align: center; font-size: 12px; opacity: 0.9; }
 
       /* Upload Formular wenn Daten geladen sind */
