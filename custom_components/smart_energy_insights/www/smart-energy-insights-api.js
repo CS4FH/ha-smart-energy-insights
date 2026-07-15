@@ -1,12 +1,3 @@
-export async function saveSettings(hass, data) {
-  if (!hass) return;
-  await hass.fetchWithAuth("/api/smart_energy_insights/upload", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data)
-  });
-}
-
 export async function setActiveSource(hass, source) {
   if (!hass) return;
   await hass.fetchWithAuth("/api/smart_energy_insights/upload", {

@@ -3,14 +3,7 @@
     "step": {
       "user": {
         "title": "Smart Energy Insights Setup",
-        "description": "Spot prices are loaded and stored as long-term statistics.",
-        "data": {
-          "fixed_price": "Fixed price (ct/kWh)",
-          "fixed_base_fee": "Fixed base fee (EUR)",
-          "spot_markup": "Spot markup (ct/kWh)",
-          "spot_base_fee": "Spot base fee (EUR)",
-          "tax_rate": "Tax rate (%)"
-        }
+        "description": "Spot prices are loaded and stored as long-term statistics. Configure tariff values in the integration options."
       }
     }
   },
@@ -23,7 +16,8 @@
           "fixed_base_fee": "Fixed base fee (EUR)",
           "spot_markup": "Spot markup (ct/kWh)",
           "spot_base_fee": "Spot base fee (EUR)",
-          "tax_rate": "Tax rate (%)"
+          "tax_rate": "Tax rate (%)",
+          "inputs_are_net": "Tariff values are net"
         }
       }
     }
@@ -34,6 +28,10 @@
   },
   "card": {
     "source_title": "Choose data source",
+    "source_state_loading": "No source loaded",
+    "source_state_sensor": "Sensor: {name}",
+    "source_state_csv": "CSV File: {name}",
+    "integration_settings_label": "Open integration settings",
     "source_description": "Select how you want to load your profile. You can switch at any time.",
     "source_label": "Data source",
     "source_select_label": "Source",
@@ -72,6 +70,7 @@
     "date_range_label": "Date range",
     "date_range_mode_label": "View",
     "date_range_mode_total": "Total",
+    "date_range_mode_custom": "Custom range",
     "date_range_mode_quarter": "Quarter/Season",
     "date_range_mode_month": "Month",
     "date_range_mode_week": "Week",
@@ -95,19 +94,6 @@
     "date_range_loading": "Loading date range...",
     "date_range_sensor_required": "Please select a sensor first.",
     "date_range_error": "No data found for this range.",
-    "tariff_sim_title": "Tariff simulation",
-    "tariff_apply_button": "Apply tariffs",
-    "tariff_reset_button": "Reset tariffs",
-    "tax_net_label": "Values are net",
-    "tax_net_hint": "(Final billing is gross)",
-    "tax_label": "Tax (%)",
-    "fixed_tariff_title": "Fixed tariff comparison",
-    "fixed_price_label": "Energy price (ct/kWh)",
-    "fixed_base_label": "Base fee (EUR/month)",
-    "spot_tariff_title": "Spot tariff (dynamic)",
-    "spot_markup_label": "Markup (ct/kWh)",
-    "spot_base_label": "Base fee (EUR/month)",
-    "disclaimer": "Note: grid fees & charges are identical in both variants.",
     "analysis_title": "Load profile analysis",
     "analysis_summary_title": "Summary",
     "analysis_group_period": "Period",

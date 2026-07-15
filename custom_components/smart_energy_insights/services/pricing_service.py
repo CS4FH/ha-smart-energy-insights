@@ -44,26 +44,13 @@ def get_pricing_config(hass: HomeAssistant) -> PricingConfig:
     )
 
 
-def update_pricing_config(hass: HomeAssistant, payload: dict) -> None:
+def get_inputs_are_net(hass: HomeAssistant) -> bool:
     entries = hass.config_entries.async_entries(DOMAIN)
     if not entries:
-        return
+        return False
 
     entry = entries[0]
-    new_options = dict(entry.options)
-    mapping = {
-        "fixed_price_ct": "fixed_price",
-        "fixed_base_fee_eur": "fixed_base_fee",
-        "spot_markup_ct": "spot_markup",
-        "spot_base_fee_eur": "spot_base_fee",
-        "tax_rate": "tax_rate",
-    }
-
-    for payload_key, option_key in mapping.items():
-        if payload_key in payload:
-            new_options[option_key] = float(payload[payload_key])
-
-    hass.config_entries.async_update_entry(entry, options=new_options)
+    return bool(entry.options.get("inputs_are_net", entry.data.get("inputs_are_net", False)))
 
 
 def build_price_heatmap(price_series: list) -> list:

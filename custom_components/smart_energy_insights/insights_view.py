@@ -22,8 +22,8 @@ from .repositories.statistics_repository import async_add_external_stats
 from .repositories.statistics_repository import async_get_statistics_during_period
 from .services.pricing_service import (
     build_price_heatmap,
+    get_inputs_are_net,
     get_pricing_config,
-    update_pricing_config,
 )
 from .services.spot_price_service import async_import_spot_prices_for_range
 from .services.tariff_analysis_service import analyze_tariffs
@@ -63,65 +63,67 @@ class SmartEnergyInsightsUploadView(HomeAssistantView):
             csv_available = bool(cached.get("csv_data"))
             sensor_available = bool(cached.get("sensor_data"))
 
+            if active_source == "csv" and cached.get("csv_data"):
+                csv_data = cached.get("csv_data") or {}
+                stat_id = csv_data.get("statistic_id")
+                if not stat_id:
+                    return await _error_response(hass, "api.error.no_data_in_range")
+
+                default_start = dt_util.parse_datetime(csv_data.get("start"))
+                default_end = dt_util.parse_datetime(csv_data.get("end"))
+                if default_start:
+                    default_start = dt_util.as_utc(default_start)
+                if default_end:
+                    default_end = dt_util.as_utc(default_end) + timedelta(hours=1)
+
+                start_time, end_time = _resolve_date_range(
+                    range_start,
+                    range_end,
+                    default_start,
+                    default_end,
+                )
+
+                if not start_time or not end_time or start_time >= end_time:
+                    return await _error_response(hass, "api.error.invalid_date_range")
+
+                fetch_start = start_time - timedelta(hours=1)
+                stats = await async_get_statistics_during_period(
+                    hass,
+                    fetch_start,
+                    end_time,
+                    {stat_id},
+                    period="hour",
+                    types={"sum", "state"},
+                    units=None,
+                )
+                rows = stats.get(stat_id, [])
+                statistics = _statistics_from_rows(rows, min_start=start_time, prefer_state=True)
+                if not statistics:
+                    return await _error_response(hass, "api.error.no_data_in_range")
+
+                inputs_are_net = get_inputs_are_net(hass)
+                available_start = csv_data.get("available_start") or csv_data.get("start")
+                available_end = csv_data.get("available_end") or csv_data.get("end")
+                response_data = await _build_analysis_response(
+                    hass,
+                    statistics,
+                    "csv",
+                    stat_id,
+                    csv_data.get("filename") or "",
+                    csv_available,
+                    sensor_available,
+                    inputs_are_net,
+                    csv_data.get("upload_date") or dt_util.now().isoformat(),
+                    available_start=available_start,
+                    available_end=available_end,
+                )
+                return Response(
+                    status=200,
+                    text=json.dumps(response_data),
+                    content_type="application/json",
+                )
+
             if range_start or range_end:
-                if active_source == "csv" and cached.get("csv_data"):
-                    csv_data = cached.get("csv_data") or {}
-                    stat_id = csv_data.get("statistic_id")
-                    if stat_id:
-                        default_start = dt_util.parse_datetime(csv_data.get("start"))
-                        default_end = dt_util.parse_datetime(csv_data.get("end"))
-                        if default_start:
-                            default_start = dt_util.as_utc(default_start)
-                        if default_end:
-                            default_end = dt_util.as_utc(default_end) + timedelta(hours=1)
-
-                        start_time, end_time = _resolve_date_range(
-                            range_start,
-                            range_end,
-                            default_start,
-                            default_end,
-                        )
-
-                        if not start_time or not end_time or start_time >= end_time:
-                            return await _error_response(hass, "api.error.invalid_date_range")
-
-                        fetch_start = start_time - timedelta(hours=1)
-                        stats = await async_get_statistics_during_period(
-                            hass,
-                            fetch_start,
-                            end_time,
-                            {stat_id},
-                            period="hour",
-                            types={"sum", "state"},
-                            units=None,
-                        )
-                        rows = stats.get(stat_id, [])
-                        statistics = _statistics_from_rows(rows, min_start=start_time, prefer_state=True)
-                        if not statistics:
-                            return await _error_response(hass, "api.error.no_data_in_range")
-
-                        inputs_are_net = cached.get("inputs_are_net", False)
-                        available_start = csv_data.get("available_start") or csv_data.get("start")
-                        available_end = csv_data.get("available_end") or csv_data.get("end")
-                        response_data = await _build_analysis_response(
-                            hass,
-                            statistics,
-                            "csv",
-                            stat_id,
-                            csv_data.get("filename") or "",
-                            csv_available,
-                            sensor_available,
-                            inputs_are_net,
-                            csv_data.get("upload_date") or dt_util.now().isoformat(),
-                            available_start=available_start,
-                            available_end=available_end,
-                        )
-                        return Response(
-                            status=200,
-                            text=json.dumps(response_data),
-                            content_type="application/json",
-                        )
-
                 return await _error_response(hass, "api.error.no_data_in_range")
 
             if active_source == "sensor" and cached.get("sensor_data"):
@@ -160,14 +162,12 @@ class SmartEnergyInsightsUploadView(HomeAssistantView):
         if not hass.config_entries.async_entries(DOMAIN):
             return Response(status=404, text="{}", content_type="application/json")
 
-        # --- ROUTE 1: LEISE EINSTELLUNGS-UPDATES VOM FRONTEND ---
+        # --- ROUTE 1: Persist the selected dashboard source ---
         if request.content_type and request.content_type.startswith("application/json"):
             try:
                 data = await request.json()
-                update_pricing_config(hass, data)
                 if "active_source" in data:
                     await async_update_cache(hass, {"active_source": data["active_source"]})
-                await async_update_cache(hass, data)
                 return Response(status=200, text='{"success": true}', content_type="application/json")
             except Exception as err:
                 _LOGGER.error("Error saving settings: %s", err, exc_info=True)
@@ -238,7 +238,7 @@ class SmartEnergyInsightsUploadView(HomeAssistantView):
             )
             await async_add_external_stats(hass, metadata, statistics)
 
-            inputs_are_net = (await async_load_cache(hass)).get("inputs_are_net", False)
+            inputs_are_net = get_inputs_are_net(hass)
 
             # NEU: Zeitstempel des Uploads sichern
             upload_date_iso = dt_util.now().isoformat()
@@ -650,7 +650,7 @@ class SmartEnergyInsightsSensorView(HomeAssistantView):
         if not statistics:
             return await _error_response(hass, "api.error.no_sensor_data")
 
-        inputs_are_net = (await async_load_cache(hass)).get("inputs_are_net", False)
+        inputs_are_net = get_inputs_are_net(hass)
         upload_date_iso = dt_util.now().isoformat()
         sensor_name = attrs.get("friendly_name") or entity_id
 

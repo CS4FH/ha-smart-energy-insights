@@ -3,14 +3,7 @@
     "step": {
       "user": {
         "title": "Smart Energy Insights Einrichtung",
-        "description": "Spotpreise werden geladen und als Langzeitstatistik gespeichert.",
-        "data": {
-          "fixed_price": "Festpreis (ct/kWh)",
-          "fixed_base_fee": "Grundgebuehr Fix (EUR)",
-          "spot_markup": "Spot-Aufschlag (ct/kWh)",
-          "spot_base_fee": "Grundgebuehr Spot (EUR)",
-          "tax_rate": "Steuersatz (%)"
-        }
+        "description": "Spotpreise werden geladen und als Langzeitstatistik gespeichert. Tarifwerte werden in den Integrationsoptionen konfiguriert."
       }
     }
   },
@@ -23,7 +16,8 @@
           "fixed_base_fee": "Grundgebuehr Fix (EUR)",
           "spot_markup": "Spot-Aufschlag (ct/kWh)",
           "spot_base_fee": "Grundgebuehr Spot (EUR)",
-          "tax_rate": "Steuersatz (%)"
+          "tax_rate": "Steuersatz (%)",
+          "inputs_are_net": "Tarifwerte sind netto"
         }
       }
     }
@@ -34,6 +28,10 @@
   },
   "card": {
     "source_title": "Datenquelle waehlen",
+    "source_state_loading": "Keine Quelle geladen",
+    "source_state_sensor": "Sensor: {name}",
+    "source_state_csv": "CSV-Datei: {name}",
+    "integration_settings_label": "Integrationsoptionen oeffnen",
     "source_description": "Waehle, wie du dein Profil laden moechtest. Ein Wechsel ist jederzeit moeglich.",
     "source_label": "Datenquelle",
     "source_select_label": "Quelle",
@@ -96,19 +94,6 @@
     "date_range_loading": "Zeitraum wird geladen...",
     "date_range_sensor_required": "Bitte zuerst einen Sensor auswaehlen.",
     "date_range_error": "Keine Daten fuer diesen Zeitraum gefunden.",
-    "tariff_sim_title": "Tarif-Simulation",
-    "tariff_apply_button": "Tarife anwenden",
-    "tariff_reset_button": "Tarife zuruecksetzen",
-    "tax_net_label": "Werte sind Netto",
-    "tax_net_hint": "(Endabrechnung erfolgt Brutto)",
-    "tax_label": "Steuer (%)",
-    "fixed_tariff_title": "Vergleichs-Fixtarif",
-    "fixed_price_label": "Arbeitspreis (ct/kWh)",
-    "fixed_base_label": "Grundgebuehr (EUR/Monat)",
-    "spot_tariff_title": "Spot-Tarif (Dynamisch)",
-    "spot_markup_label": "Aufschlag / Markup (ct/kWh)",
-    "spot_base_label": "Grundgebuehr (EUR/Monat)",
-    "disclaimer": "Hinweis: Netzgebuehren & Abgaben fallen in beiden Varianten identisch an.",
     "analysis_title": "Analyse des Lastprofils",
     "analysis_summary_title": "Uebersicht",
     "analysis_group_period": "Zeitraum",

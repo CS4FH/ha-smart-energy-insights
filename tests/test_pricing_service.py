@@ -8,8 +8,8 @@ from custom_components.smart_energy_insights.services.pricing_service import (
     PricingConfig,
     build_price_heatmap,
     compute_spot_price_matches,
+    get_inputs_are_net,
     get_pricing_config,
-    update_pricing_config,
 )
 
 
@@ -90,28 +90,13 @@ def test_get_pricing_config_prefers_options_over_data() -> None:
     )
 
 
-def test_update_pricing_config_maps_payload_to_options() -> None:
-    """Verify that external API/service payloads are correctly mapped to internal configuration keys."""
+def test_get_inputs_are_net_prefers_options_over_data() -> None:
+    """Verify that the tariff tax mode is read from integration options."""
     fake_entry = _fake_entry()
-    configured_hass = FakeHass([fake_entry])
-    payload = {
-        "fixed_price_ct": 17.5,
-        "fixed_base_fee_eur": 4.2,
-        "spot_markup_ct": 1.8,
-        "spot_base_fee_eur": 6.1,
-        "tax_rate": 22.0,
-    }
+    fake_entry.data["inputs_are_net"] = False
+    fake_entry.options = {"inputs_are_net": True}
 
-    update_pricing_config(configured_hass, payload)
-
-    assert configured_hass.config_entries.updated_entry is fake_entry
-    assert configured_hass.config_entries.updated_options == {
-        "fixed_price": 17.5,
-        "fixed_base_fee": 4.2,
-        "spot_markup": 1.8,
-        "spot_base_fee": 6.1,
-        "tax_rate": 22.0,
-    }
+    assert get_inputs_are_net(FakeHass([fake_entry])) is True
 
 
 def test_build_price_heatmap_averages_values_by_weekday_hour() -> None:

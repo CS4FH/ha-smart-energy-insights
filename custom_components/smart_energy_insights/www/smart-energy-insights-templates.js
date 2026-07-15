@@ -1,23 +1,30 @@
-export function renderBaseCard(title, texts) {
+export function renderBaseCard(texts) {
   return `
     <ha-card id="mainCard" class="upload-card">
-      <div class="card-header" id="defaultHeader">
-        <div class="title">${title}</div>
+      <div class="dashboard-header">
+        <div>
+          <div class="dashboard-title">${texts.dashboardTitle}</div>
+          <div class="dashboard-source-state" id="sourceState">${texts.sourceStateLoading}</div>
+        </div>
+        <button id="integrationSettingsBtn" class="integration-settings-chip" title="${texts.integrationSettingsLabel}" aria-label="${texts.integrationSettingsLabel}">
+          <ha-icon icon="mdi:cog"></ha-icon>
+        </button>
       </div>
 
-      <div class="source-chooser" id="sourceSelector">
+      <div class="source-card" id="sourceSelector">
         <div class="source-chooser-header">
-          <div class="source-chooser-title">${texts.sourceTitle}</div>
-          <div class="source-selector-buttons">
-            <button id="sourceCsvSwitch" class="source-switch" data-source="csv">${texts.sourceCsv}</button>
-            <button id="sourceSensorSwitch" class="source-switch" data-source="sensor">${texts.sourceSensor}</button>
+          <div>
+            <div class="source-chooser-title">${texts.sourceTitle}</div>
+            <div class="source-chooser-desc">${texts.sourceDescription}</div>
+          </div>
+          <div class="source-selector-buttons" role="tablist">
+            <button id="sourceSensorSwitch" class="source-switch" data-source="sensor" role="tab" aria-controls="sensorSection" aria-selected="false">${texts.sourceSensor}</button>
+            <button id="sourceCsvSwitch" class="source-switch" data-source="csv" role="tab" aria-controls="csvSection" aria-selected="true">${texts.sourceCsv}</button>
           </div>
         </div>
-        <div class="source-chooser-desc">${texts.sourceDescription}</div>
-      </div>
 
-      <div class="card-content" id="sourceContent">
-        <div class="source-section" id="csvSection">
+        <div class="source-content" id="sourceContent">
+        <div class="source-section" id="csvSection" role="tabpanel" aria-labelledby="sourceCsvSwitch">
           <div class="source-section-header">
             <div class="source-section-title">${texts.sourceCsvTitle}</div>
             <div class="source-section-desc">${texts.sourceCsvDescription}</div>
@@ -46,7 +53,7 @@ export function renderBaseCard(title, texts) {
           </div>
         </div>
 
-        <div class="source-section" id="sensorSection">
+        <div class="source-section" id="sensorSection" role="tabpanel" aria-labelledby="sourceSensorSwitch">
           <div class="source-section-header">
             <div class="source-section-title">${texts.sourceSensorTitle}</div>
             <div class="source-section-desc">${texts.sourceSensorDescription}</div>
@@ -61,6 +68,7 @@ export function renderBaseCard(title, texts) {
           </div>
           <div class="sensor-message" id="sensorMessage" style="display: none;"></div>
         </div>
+        </div>
       </div>
 
       <div id="dashboardContainer"></div>
@@ -74,12 +82,6 @@ export function renderDashboardHtml({
   profileMeta,
   heatmapsHtml,
   analysisGroups,
-  initialFix,
-  initialFixBase,
-  initialMarkup,
-  initialSpotBase,
-  initialTax,
-  initialTaxChecked,
   texts,
   rangePreset,
   rangeFrom,
@@ -162,55 +164,6 @@ export function renderDashboardHtml({
 
       <div class="top-dashboard-grid">
         <div class="banner-column" id="dynamicSavingsBanner"></div>
-
-        <div class="interactive-settings">
-          <h4>⚙️ ${texts.tariffSimTitle}</h4>
-
-          <div class="tax-toggle">
-            <label class="checkbox-container">
-              <input type="checkbox" id="chkTax" ${initialTaxChecked ? "checked" : ""}>
-              <span class="checkmark"></span>
-              <span><strong>${texts.taxNetLabel}</strong> ${texts.taxNetHint}</span>
-            </label>
-            <div class="tax-input-group">
-              <label>${texts.taxLabel}</label>
-              <input type="number" id="inputTaxRate" min="0" max="100" step="0.1" value="${initialTax}">
-            </div>
-          </div>
-
-          <div class="inputs-container">
-            <div class="input-box">
-              <div class="input-box-title">${texts.fixedTariffTitle}</div>
-              <div class="input-group">
-                <label>${texts.fixedPriceLabel}</label>
-                <input type="number" id="inputFix" min="0" step="0.1" value="${initialFix}">
-              </div>
-              <div class="input-group">
-                <label>${texts.fixedBaseLabel}</label>
-                <input type="number" id="inputFixBase" min="0" step="0.01" value="${initialFixBase}">
-              </div>
-            </div>
-
-            <div class="input-box">
-              <div class="input-box-title">${texts.spotTariffTitle}</div>
-              <div class="input-group">
-                <label>${texts.spotMarkupLabel}</label>
-                <input type="number" id="inputMarkup" min="0" step="0.1" value="${initialMarkup}">
-              </div>
-              <div class="input-group">
-                <label>${texts.spotBaseLabel}</label>
-                <input type="number" id="inputSpotBase" min="0" step="0.01" value="${initialSpotBase}">
-              </div>
-            </div>
-          </div>
-          <div class="disclaimer">
-            <em>${texts.disclaimer}</em>
-          </div>
-          <div class="tariff-actions">
-            <button id="applyTariffBtn" class="primary-button">${texts.tariffApplyButton}</button>
-            <button id="resetTariffBtn" class="secondary-button">${texts.tariffResetButton}</button>
-          </div>
-        </div>
       </div>
 
       <div class="info-box">

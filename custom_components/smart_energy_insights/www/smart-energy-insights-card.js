@@ -5,13 +5,12 @@
 import {
   loadHeatmaps,
   loadSensorData,
-  saveSettings,
   setActiveSource,
   uploadCsv
 } from "./smart-energy-insights-api.js";
 import { generateHeatmapHTML } from "./smart-energy-insights-heatmap.js";
 import { renderBaseCard, renderDashboardHtml } from "./smart-energy-insights-templates.js";
-import { debounce, formatNumber, formatUploadDate } from "./smart-energy-insights-utils.js";
+import { formatNumber, formatUploadDate } from "./smart-energy-insights-utils.js";
 
 class SmartEnergyInsightsUploadCard extends HTMLElement {
   setConfig(config) {
@@ -58,6 +57,11 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
   getTexts() {
     return {
       sourceTitle: this.localize("card.source_title", "Choose data source"),
+      dashboardTitle: this.localize("panel.title", "Smart Energy Insights"),
+      sourceStateLoading: this.localize("card.source_state_loading", "No source loaded"),
+      sourceStateSensor: (name) => this.localize("card.source_state_sensor", "Sensor: {name}", { name }),
+      sourceStateCsv: (name) => this.localize("card.source_state_csv", "CSV File: {name}", { name }),
+      integrationSettingsLabel: this.localize("card.integration_settings_label", "Open integration settings"),
       sourceDescription: this.localize(
         "card.source_description",
         "Select how you want to load your profile. You can switch at any time."
@@ -152,22 +156,6 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       dateRangeLoading: this.localize("card.date_range_loading", "Loading date range..."),
       dateRangeSensorRequired: this.localize("card.date_range_sensor_required", "Please select a sensor first."),
       dateRangeError: this.localize("card.date_range_error", "No data found for this range."),
-      tariffSimTitle: this.localize("card.tariff_sim_title", "Tariff simulation"),
-      tariffApplyButton: this.localize("card.tariff_apply_button", "Apply tariffs"),
-      tariffResetButton: this.localize("card.tariff_reset_button", "Reset tariffs"),
-      taxNetLabel: this.localize("card.tax_net_label", "Values are net"),
-      taxNetHint: this.localize("card.tax_net_hint", "(Final billing is gross)"),
-      taxLabel: this.localize("card.tax_label", "Tax (%)"),
-      fixedTariffTitle: this.localize("card.fixed_tariff_title", "Fixed tariff comparison"),
-      fixedPriceLabel: this.localize("card.fixed_price_label", "Energy price (ct/kWh)"),
-      fixedBaseLabel: this.localize("card.fixed_base_label", "Base fee (EUR/month)"),
-      spotTariffTitle: this.localize("card.spot_tariff_title", "Spot tariff (dynamic)"),
-      spotMarkupLabel: this.localize("card.spot_markup_label", "Markup (ct/kWh)"),
-      spotBaseLabel: this.localize("card.spot_base_label", "Base fee (EUR/month)"),
-      disclaimer: this.localize(
-        "card.disclaimer",
-        "Note: grid fees & charges are identical in both variants."
-      ),
       analysisTitle: this.localize("card.analysis_title", "Load profile analysis"),
       analysisSummaryTitle: this.localize("card.analysis_summary_title", "Summary"),
       analysisGroupPeriodTitle: this.localize("card.analysis_group_period", "Period"),
@@ -310,8 +298,6 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
   }
 
   render() {
-    const title =
-      this.config?.title || this.localize("panel.card_title", "Load Profile Upload");
     const texts = this.getTexts();
     this._texts = texts;
     if (!this._uiStateLoaded) {
@@ -321,20 +307,12 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       this._activeSource = this._storedSource || "csv";
     }
 
-    if (!this._debouncedSave) {
-      this._debouncedSave = debounce((data) => {
-        saveSettings(this._hass, data).catch((e) => {
-          console.error("Failed to sync settings to HA backend", e);
-        });
-      }, 600);
-    }
-
-    // Grund-HTML: Standardmäßig wird der Header angezeigt, bis Daten da sind.
-    this.innerHTML = renderBaseCard(title, texts);
+    this.innerHTML = renderBaseCard(texts);
 
     this.attachEventListeners();
     this.syncSensorPicker();
     this.updateSourceUI();
+    this.updateSourceState();
     this.applyStyles();
   }
 
@@ -348,6 +326,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     const sourceSensorSwitch = this.querySelector("#sourceSensorSwitch");
     const sensorPicker = this.querySelector("#sensorPicker");
     const sensorLoadBtn = this.querySelector("#sensorLoadBtn");
+    const integrationSettingsBtn = this.querySelector("#integrationSettingsBtn");
 
     filePickerBtn.addEventListener("click", () => fileInput.click());
     fileInput.addEventListener("change", (e) => {
@@ -366,6 +345,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
 
     sourceCsvSwitch.addEventListener("click", () => { this.selectSource("csv"); });
     sourceSensorSwitch.addEventListener("click", () => { this.selectSource("sensor"); });
+    integrationSettingsBtn.addEventListener("click", () => this.navigateToIntegrations());
 
     if (sensorLoadBtn) {
       sensorLoadBtn.addEventListener("click", () => {
@@ -381,6 +361,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
           const value = event.detail && event.detail.value ? event.detail.value : null;
           this._selectedSensor = value;
           this.saveUiState();
+          this.updateSourceState();
           const sensorLoadBtn = this.querySelector("#sensorLoadBtn");
           if (sensorLoadBtn) sensorLoadBtn.disabled = !value;
         });
@@ -389,6 +370,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
           const value = event.target && event.target.value ? event.target.value : null;
           this._selectedSensor = value;
           this.saveUiState();
+          this.updateSourceState();
           const sensorLoadBtn = this.querySelector("#sensorLoadBtn");
           if (sensorLoadBtn) sensorLoadBtn.disabled = !value;
         });
@@ -413,6 +395,7 @@ syncSensorPicker() {
       select.addEventListener("change", (e) => {
         this._selectedSensor = e.target.value || null;
         this.saveUiState();
+        this.updateSourceState();
         const sensorLoadBtn = this.querySelector("#sensorLoadBtn");
         if (sensorLoadBtn) sensorLoadBtn.disabled = !this._selectedSensor;
       });
@@ -517,15 +500,46 @@ syncSensorPicker() {
     const csvSection = this.querySelector("#csvSection");
     const sensorSection = this.querySelector("#sensorSection");
 
-    if (sourceSelector) sourceSelector.style.display = "flex";
+    if (sourceSelector) sourceSelector.style.display = "block";
 
     if (sourceCsvSwitch && sourceSensorSwitch) {
       sourceCsvSwitch.classList.toggle("active", !isSensor);
       sourceSensorSwitch.classList.toggle("active", isSensor);
+      sourceCsvSwitch.setAttribute("aria-selected", String(!isSensor));
+      sourceSensorSwitch.setAttribute("aria-selected", String(isSensor));
     }
 
-    if (csvSection) csvSection.style.display = isSensor ? "none" : "block";
-    if (sensorSection) sensorSection.style.display = isSensor ? "block" : "none";
+    if (csvSection) {
+      csvSection.style.display = isSensor ? "none" : "block";
+      csvSection.hidden = isSensor;
+    }
+    if (sensorSection) {
+      sensorSection.style.display = isSensor ? "block" : "none";
+      sensorSection.hidden = !isSensor;
+    }
+    this.updateSourceState();
+  }
+
+  updateSourceState() {
+    const sourceState = this.querySelector("#sourceState");
+    if (!sourceState) return;
+
+    const texts = this._texts || this.getTexts();
+    if (this._activeSource === "sensor") {
+      const entityId = this._loadedSensorEntityId || this.latestData?.sensor_entity_id;
+      const state = this._hass?.states?.[entityId];
+      const name = state?.attributes?.friendly_name || entityId;
+      sourceState.textContent = name ? texts.sourceStateSensor(name) : texts.sourceStateLoading;
+      return;
+    }
+
+    const filename = this._lastCsvData?.filename || this.latestData?.filename;
+    sourceState.textContent = filename ? texts.sourceStateCsv(filename) : texts.sourceStateLoading;
+  }
+
+  navigateToIntegrations() {
+    window.history.pushState(null, "", "/config/integrations");
+    window.dispatchEvent(new Event("location-changed"));
   }
 
   async selectSource(source) {
@@ -581,6 +595,7 @@ syncSensorPicker() {
       this.updateSourceUI();
       this.showSensorMessage(texts.sensorLoaded, "success");
       this._lastSensorData = data;
+      this._loadedSensorEntityId = data.sensor_entity_id || entityId;
       this.renderDashboard(data);
     } catch (error) {
       this.showSensorMessage(error.message || texts.sensorNoData, "error");
@@ -619,6 +634,7 @@ syncSensorPicker() {
       this._lastCsvData = responseData;
       this._activeSource = "csv";
       this.saveUiState();
+      this.updateSourceState();
       this.renderDashboard(responseData);
       this.resetUI();
     } catch (error) {
@@ -629,10 +645,14 @@ syncSensorPicker() {
 
   async loadHeatmapsFromBackend() {
     try {
-      const data = await loadHeatmaps(this._hass);
+      let data = await loadHeatmaps(this._hass);
       if (data) {
         if (data.source && !this._storedSource) this._activeSource = data.source;
         if (data.sensor_entity_id) this._selectedSensor = data.sensor_entity_id;
+        if (data.source === "sensor" && data.sensor_entity_id) {
+          data = await loadSensorData(this._hass, data.sensor_entity_id);
+          this._loadedSensorEntityId = data.sensor_entity_id;
+        }
         if (data.csv_available !== undefined) {
           this._csvAvailable = data.csv_available;
           this._sensorAvailable = data.sensor_available;
@@ -876,9 +896,10 @@ syncSensorPicker() {
     const texts = this._texts || this.getTexts();
 
     this.latestData = response;
+    if (response.source === "sensor" && response.sensor_entity_id) {
+      this._loadedSensorEntityId = response.sensor_entity_id;
+    }
 
-    // 1. Wenn Daten da sind, Standard-Header entfernen und Upload-Feld unauffaelliger machen
-    this.querySelector("#defaultHeader").style.display = "none";
     if (this._activeSource !== "sensor") {
       this.querySelector("#uploadContent").classList.add("data-loaded");
       this.querySelector("#uploadTitle").textContent = texts.uploadAnotherTitle;
@@ -916,26 +937,6 @@ syncSensorPicker() {
       ? response.available_end.split("T")[0]
       : end;
     
-    this._tariffDefaults = {
-      fixPrice: response.fixed_price_ct || 15.0,
-      fixBase: response.fixed_base_fee_eur || 4.90,
-      markup: response.spot_markup_ct || 1.5,
-      spotBase: response.spot_base_fee_eur || 5.99,
-      taxRate: response.tax_rate || 20.0,
-      inputsAreNet: response.inputs_are_net === true
-    };
-
-    if (!this._tariffState) {
-      this._tariffState = { ...this._tariffDefaults };
-    }
-
-    const initialFix = this._tariffState.fixPrice;
-    const initialFixBase = this._tariffState.fixBase;
-    const initialMarkup = this._tariffState.markup;
-    const initialSpotBase = this._tariffState.spotBase;
-    const initialTax = this._tariffState.taxRate;
-    const initialTaxChecked = this._tariffState.inputsAreNet === true;
-
     // Metadaten für das aktuelle Profil
     const filenameStr = response.filename || texts.profileDefaultFilename;
     const uploadDateStr = formatUploadDate(response.upload_date, texts.lastImported);
@@ -990,12 +991,6 @@ syncSensorPicker() {
       profileMeta,
       heatmapsHtml,
       analysisGroups,
-      initialFix,
-      initialFixBase,
-      initialMarkup,
-      initialSpotBase,
-      initialTax,
-      initialTaxChecked,
       texts,
       rangePreset: this._rangePreset,
       rangeFrom: this._rangeStart,
@@ -1077,113 +1072,8 @@ syncSensorPicker() {
       });
     }
 
-    const inputFix = this.querySelector("#inputFix");
-    const inputFixBase = this.querySelector("#inputFixBase");
-    const inputMarkup = this.querySelector("#inputMarkup");
-    const inputSpotBase = this.querySelector("#inputSpotBase");
-    const inputTaxRate = this.querySelector("#inputTaxRate");
-    const chkTax = this.querySelector("#chkTax");
-    const applyTariffBtn = this.querySelector("#applyTariffBtn");
-    const resetTariffBtn = this.querySelector("#resetTariffBtn");
-
-    if (chkTax) {
-      chkTax.addEventListener("change", () => this.syncTaxInputState());
-    }
-
-    if (applyTariffBtn) {
-      applyTariffBtn.addEventListener("click", () => {
-        this.applyTariffs();
-      });
-    }
-
-    if (resetTariffBtn) {
-      resetTariffBtn.addEventListener("click", () => {
-        if (!this._tariffDefaults) return;
-        inputFix.value = this._tariffDefaults.fixPrice;
-        inputFixBase.value = this._tariffDefaults.fixBase;
-        inputMarkup.value = this._tariffDefaults.markup;
-        inputSpotBase.value = this._tariffDefaults.spotBase;
-        inputTaxRate.value = this._tariffDefaults.taxRate;
-        chkTax.checked = this._tariffDefaults.inputsAreNet === true;
-        this._tariffState = { ...this._tariffDefaults };
-      });
-    }
-
-    this.syncTaxInputState();
+    this.updateSourceState();
     this.updateSavingsBanner(true);
-  }
-
-  syncTaxInputState() {
-    const chkTax = this.querySelector("#chkTax");
-    const taxGroup = this.querySelector(".tax-input-group");
-    if (!chkTax || !taxGroup) return;
-    taxGroup.style.opacity = chkTax.checked ? "1" : "0.4";
-    taxGroup.style.pointerEvents = chkTax.checked ? "auto" : "none";
-  }
-
-  async applyTariffs() {
-    const texts = this._texts || this.getTexts();
-    const applyBtn = this.querySelector("#applyTariffBtn");
-    if (applyBtn) applyBtn.disabled = true;
-
-    const valFix = parseFloat(this.querySelector("#inputFix").value) || 0;
-    const valFixBase = parseFloat(this.querySelector("#inputFixBase").value) || 0;
-    const valMarkup = parseFloat(this.querySelector("#inputMarkup").value) || 0;
-    const valSpotBase = parseFloat(this.querySelector("#inputSpotBase").value) || 0;
-    const valTaxRate = parseFloat(this.querySelector("#inputTaxRate").value) || 0;
-    const inputsAreNet = this.querySelector("#chkTax").checked;
-
-    this._tariffState = {
-      fixPrice: valFix,
-      fixBase: valFixBase,
-      markup: valMarkup,
-      spotBase: valSpotBase,
-      taxRate: valTaxRate,
-      inputsAreNet
-    };
-
-    try {
-      const requestRange = this.getCurrentRequestRange();
-      await saveSettings(this._hass, {
-        fixed_price_ct: valFix,
-        fixed_base_fee_eur: valFixBase,
-        spot_markup_ct: valMarkup,
-        spot_base_fee_eur: valSpotBase,
-        tax_rate: valTaxRate,
-        inputs_are_net: inputsAreNet
-      });
-
-      let data;
-      if (this._activeSource === "sensor") {
-        if (!this._selectedSensor) {
-          this.showRangeMessage(texts.dateRangeSensorRequired, "error");
-          return;
-        }
-        data = await loadSensorData(
-          this._hass,
-          this._selectedSensor,
-          requestRange.start,
-          requestRange.end,
-          { allowEmpty: false }
-        );
-        this._lastSensorData = data;
-      } else {
-        data = await loadHeatmaps(
-          this._hass,
-          requestRange.start,
-          requestRange.end,
-          { allowEmpty: false }
-        );
-        this._lastCsvData = data;
-      }
-
-      this.renderDashboard(data);
-    } catch (error) {
-      console.error("Failed to apply tariffs", error);
-      this.showRangeMessage(error.message || texts.dateRangeError, "error");
-    } finally {
-      if (applyBtn) applyBtn.disabled = false;
-    }
   }
 
   updateSavingsBanner() {
@@ -1204,7 +1094,7 @@ syncSensorPicker() {
     const yearlySavings = dailySavings !== null ? dailySavings * 365 : null;
     const fixPerDay = matchedDays > 0 ? costFixEur / matchedDays : null;
     const spotPerDay = matchedDays > 0 ? costSpotEur / matchedDays : null;
-    const taxRate = this.latestData?.tax_rate ?? this._tariffState?.taxRate ?? 20.0;
+    const taxRate = this.latestData?.tax_rate ?? 20.0;
     const taxNote = this.getTaxNote(taxRate);
     const breakEvenFixed = this.latestData.break_even_fixed_ct_kwh;
     const spotCheaperShare = this.latestData.spot_cheaper_share;
@@ -1429,7 +1319,7 @@ syncSensorPicker() {
 
   buildAnalysisGroups(summary) {
     const texts = this._texts || this.getTexts();
-    const taxRate = this.latestData?.tax_rate ?? this._tariffState?.taxRate ?? 20.0;
+    const taxRate = this.latestData?.tax_rate ?? 20.0;
     const taxNote = this.getTaxNote(taxRate);
     const buildItems = (items) => items
       .map((item) => `<div class="summary-item"><span>${item.label}</span><strong>${item.value}</strong></div>`)
@@ -1549,12 +1439,15 @@ syncSensorPicker() {
     const style = document.createElement("style");
     style.textContent = `
       ha-card { box-shadow: var(--ha-card-box-shadow, 0 2px 4px rgba(0, 0, 0, 0.1)); border-radius: var(--ha-card-border-radius, 8px); overflow: hidden; }
-      .card-header { padding: 16px; border-bottom: 1px solid var(--divider-color); }
-      .title { font-size: 18px; font-weight: 500; color: var(--primary-text-color); }
-      .card-content { padding: 16px; }
+      .dashboard-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 24px; border-bottom: 1px solid var(--divider-color); }
+      .dashboard-title { font-size: 22px; font-weight: 600; color: var(--primary-text-color); }
+      .dashboard-source-state { margin-top: 4px; color: var(--secondary-text-color); font-size: 13px; }
+      .integration-settings-chip { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; padding: 0; border: 1px solid var(--divider-color); border-radius: 999px; background: transparent; color: var(--secondary-text-color); cursor: pointer; }
+      .integration-settings-chip:hover { color: var(--primary-color); border-color: var(--primary-color); background: rgba(var(--rgb-primary-color), 0.08); }
+      .integration-settings-chip ha-icon { --mdc-icon-size: 20px; }
 
-      .source-chooser { display: flex; flex-direction: column; gap: 8px; padding: 16px; border-bottom: 1px solid var(--divider-color); background: var(--card-background-color); }
-      .source-chooser-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+      .source-card { margin: 16px; border: 1px solid var(--divider-color); border-radius: 10px; overflow: hidden; background: var(--card-background-color); }
+      .source-chooser-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 16px; }
       .source-chooser-title { font-size: 14px; font-weight: 600; color: var(--primary-text-color); }
       .source-chooser-desc { font-size: 12px; color: var(--secondary-text-color); }
       .source-selector-buttons { display: inline-flex; border: 1px solid var(--divider-color); border-radius: 999px; overflow: hidden; background: var(--secondary-background-color); }
@@ -1562,7 +1455,8 @@ syncSensorPicker() {
       .source-switch.active { background: var(--primary-color); color: white; }
 
       .upload-card { width: 100%; max-width: 1200px; margin: 0 auto; height: fit-content; }
-      .source-section { padding: 16px; background: rgba(var(--rgb-primary-text-color), 0.02); border-bottom: 1px solid var(--divider-color); }
+      .source-content { padding: 16px; border-top: 1px solid var(--divider-color); }
+      .source-section { background: rgba(var(--rgb-primary-text-color), 0.02); }
       .source-section-header { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
       .source-section-title { font-size: 14px; font-weight: 600; color: var(--primary-text-color); }
       .source-section-desc { font-size: 12px; color: var(--secondary-text-color); }
@@ -1609,38 +1503,7 @@ syncSensorPicker() {
       .range-message.error { color: #f44336; background: rgba(244, 67, 54, 0.08); }
       .range-message.loading { color: var(--secondary-text-color); }
 
-      /* Top Grid: Banner & Settings */
-      .top-dashboard-grid { display: grid; grid-template-columns: 1fr; gap: 24px; margin-bottom: 24px; }
-      @media(min-width: 1100px) { .top-dashboard-grid { grid-template-columns: 1fr 1fr; } }
-      
-      .interactive-settings { background-color: var(--secondary-background-color); padding: 24px; border-radius: 8px; border: 1px solid rgba(var(--rgb-divider-color), 0.5); }
-      .interactive-settings h4 { margin: 0 0 20px 0; color: var(--primary-text-color); font-size: 16px; display: flex; align-items: center; gap: 8px; }
-      
-      .tax-toggle { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px dashed var(--divider-color); }
-      .checkbox-container { display: flex; align-items: center; cursor: pointer; font-size: 13px; color: var(--primary-text-color); }
-      .checkbox-container input { margin-right: 12px; width: 16px; height: 16px; accent-color: var(--primary-color); cursor: pointer; }
-      .tax-input-group { display: flex; align-items: center; gap: 12px; transition: opacity 0.2s; background: var(--card-background-color); padding: 4px 12px; border-radius: 4px; border: 1px solid rgba(var(--rgb-divider-color), 0.5); }
-      .tax-input-group label { font-size: 13px; color: var(--primary-text-color); white-space: nowrap; font-weight: 500; }
-      .tax-input-group input[type="number"] { width: 60px; padding: 4px 8px; border: none; background: transparent; color: var(--primary-text-color); font-size: 14px; outline: none; }
-      
-      .inputs-container { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-      @media(max-width: 600px) { .inputs-container { grid-template-columns: 1fr; } }
-      .input-box { padding: 16px; background: rgba(var(--rgb-primary-text-color), 0.03); border-radius: 6px; }
-      .input-box-title { font-weight: 600; margin-bottom: 16px; font-size: 14px; color: var(--primary-color); }
-      .input-group { margin-bottom: 12px; }
-      .input-group:last-child { margin-bottom: 0; }
-      .input-group label { display: block; margin-bottom: 6px; color: var(--secondary-text-color); font-size: 12px; }
-      .input-group input[type="number"] { width: 100%; padding: 8px 12px; border: 1px solid var(--divider-color); border-radius: 4px; background: var(--card-background-color); color: var(--primary-text-color); font-size: 14px; box-sizing: border-box; transition: all 0.2s; }
-      .input-group input[type="number"]:focus { outline: none; border-color: var(--primary-color); box-shadow: 0 0 0 1px var(--primary-color); }
-      
-      .disclaimer { margin-top: 20px; font-size: 11px; color: var(--secondary-text-color); opacity: 0.8; line-height: 1.4; text-align: center; }
-      .tariff-actions { display: flex; justify-content: flex-end; margin-top: 12px; }
-      .tariff-actions { gap: 8px; }
-      .primary-button { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--primary-color); background: var(--primary-color); color: white; font-size: 12px; cursor: pointer; }
-      .primary-button:hover:not(:disabled) { opacity: 0.9; }
-      .primary-button:disabled { opacity: 0.6; cursor: not-allowed; }
-      .secondary-button { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--divider-color); background: var(--card-background-color); color: var(--primary-text-color); font-size: 12px; cursor: pointer; }
-      .secondary-button:hover { background: var(--secondary-background-color); }
+      .top-dashboard-grid { margin-bottom: 24px; }
       
       .info-box { background-color: rgba(var(--rgb-primary-color), 0.05); border-left: 4px solid var(--primary-color); padding: 16px; margin-bottom: 24px; border-radius: 0 4px 4px 0; }
       .info-box h3 { margin: 0 0 8px 0; font-size: 16px; color: var(--primary-text-color); }
@@ -1718,6 +1581,12 @@ syncSensorPicker() {
       .upload-button:disabled { opacity: 0.5; cursor: not-allowed; }
       .cancel-button { background-color: var(--secondary-background-color); color: var(--primary-text-color); }
       .cancel-button:hover:not(:disabled) { background-color: var(--divider-color); }
+      @media(max-width: 600px) {
+        .dashboard-header { padding: 16px; }
+        .dashboard-title { font-size: 20px; }
+        .source-card { margin: 12px; }
+        .source-chooser-header { align-items: flex-start; flex-direction: column; }
+      }
     `;
     this.appendChild(style);
   }
@@ -1734,5 +1603,5 @@ window.customCards = window.customCards || [];
 window.customCards.push({
   type: "smart-energy-insights-upload-card",
   name: "Smart Energy Insights - Dashboard",
-  description: "Upload load profile CSV files & simulate tariffs",
+  description: "Load and analyze energy profiles from sensors or CSV files",
 });
