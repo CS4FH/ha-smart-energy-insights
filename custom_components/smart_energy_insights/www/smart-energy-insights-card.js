@@ -1678,12 +1678,16 @@ syncSensorPicker() {
       @media(min-width: 900px) { .monthly-tariff-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
       @media(min-width: 1300px) { .monthly-tariff-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
       .monthly-cell-card { border: 1px solid rgba(var(--rgb-divider-color), 0.45); border-radius: 10px; padding: 10px; min-height: 84px; display: grid; grid-template-rows: auto 1fr; align-items: center; justify-items: center; text-align: center; gap: 8px; }
-      .monthly-cell-card.savings { background: color-mix(in srgb, #dff4e8 calc(68% + var(--intensity) * 25%), rgba(var(--rgb-card-background-color), 0.95)); }
-      .monthly-cell-card.neutral { background: color-mix(in srgb, #f7f0d9 calc(70% + var(--intensity) * 20%), rgba(var(--rgb-card-background-color), 0.95)); }
-      .monthly-cell-card.extra { background: color-mix(in srgb, #f8e0df calc(68% + var(--intensity) * 25%), rgba(var(--rgb-card-background-color), 0.95)); }
+      .monthly-cell-card.savings { background: color-mix(in srgb, #c9ebd9 calc(78% + var(--intensity) * 20%), rgba(var(--rgb-card-background-color), 0.9)); border-color: rgba(49, 122, 78, 0.35); }
+      .monthly-cell-card.neutral { background: color-mix(in srgb, #ece0b8 calc(78% + var(--intensity) * 20%), rgba(var(--rgb-card-background-color), 0.9)); border-color: rgba(143, 122, 38, 0.35); }
+      .monthly-cell-card.extra { background: color-mix(in srgb, #efcbc8 calc(78% + var(--intensity) * 20%), rgba(var(--rgb-card-background-color), 0.9)); border-color: rgba(155, 59, 59, 0.35); }
       .monthly-cell-card.nodata { background: rgba(var(--rgb-primary-text-color), 0.04); opacity: 0.72; }
-      .monthly-cell-head { font-size: 11px; font-weight: 700; letter-spacing: 0.35px; text-transform: uppercase; color: var(--secondary-text-color); padding: 2px 8px; border-radius: 999px; background: rgba(var(--rgb-primary-text-color), 0.08); }
+      .monthly-cell-head { font-size: 12px; font-weight: 800; letter-spacing: 0.45px; text-transform: uppercase; color: #2d3640; padding: 2px 8px; border-radius: 999px; background: rgba(45, 54, 64, 0.12); }
       .monthly-cell-center { font-size: 15px; font-weight: 700; text-align: center; color: var(--primary-text-color); letter-spacing: 0.1px; display: flex; align-items: center; justify-content: center; min-height: 28px; }
+      .monthly-cell-card.savings .monthly-cell-head { color: #225a3d; background: rgba(34, 90, 61, 0.12); }
+      .monthly-cell-card.neutral .monthly-cell-head { color: #7f6721; background: rgba(127, 103, 33, 0.14); }
+      .monthly-cell-card.extra .monthly-cell-head { color: #893737; background: rgba(137, 55, 55, 0.12); }
+      .monthly-cell-card.nodata .monthly-cell-head { color: var(--secondary-text-color); background: rgba(var(--rgb-primary-text-color), 0.12); }
       .monthly-cell-card.savings .monthly-cell-center { color: #317a4e; }
       .monthly-cell-card.neutral .monthly-cell-center { color: #8f7a26; }
       .monthly-cell-card.extra .monthly-cell-center { color: #9b3b3b; }
