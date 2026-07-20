@@ -2,6 +2,12 @@ export function generateHeatmapHTML(data, title, unit, reverseColors, formatNumb
   if (!data || data.length === 0) return "";
   const flatData = data.flat().filter((value) => Number.isFinite(value));
   const heatmapOptions = options || {};
+  const escapeHtml = (value) => String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
   const days = Array.isArray(heatmapOptions.dayLabels) && heatmapOptions.dayLabels.length === 7
     ? heatmapOptions.dayLabels
     : ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
@@ -34,16 +40,20 @@ export function generateHeatmapHTML(data, title, unit, reverseColors, formatNumb
 
   let html = `
     <div class="heatmap-section">
-      <div class="heatmap-title">${title}</div>
-      <div class="heatmap-legend">
-        ${hideValueExtremes ? "" : `<span class="heatmap-legend-value">${formatNumber(min, 2)} ${unit}</span>`}
-        <span>${legendLow}</span>
-        <div class="heatmap-legend-bar"${legendBarStyle}></div>
-        ${legendCenter ? `<span>${legendCenter}</span>` : ""}
-        <span>${legendHigh}</span>
-        ${hideValueExtremes ? "" : `<span class="heatmap-legend-value">${formatNumber(max, 2)} ${unit}</span>`}
+      <div class="heatmap-header">
+        <div class="heatmap-title-row">
+          <div class="heatmap-title">${escapeHtml(title)}</div>
+          ${infoText.trim() ? `<span class="metric-info-marker" role="img" tabindex="0" aria-label="${escapeHtml(infoText)}" title="${escapeHtml(infoText)}"><ha-icon icon="mdi:information-outline"></ha-icon></span>` : ""}
+        </div>
+        <div class="heatmap-legend">
+          ${hideValueExtremes ? "" : `<span class="heatmap-legend-value">${formatNumber(min, 2)} ${unit}</span>`}
+          <span>${legendLow}</span>
+          <div class="heatmap-legend-bar"${legendBarStyle}></div>
+          ${legendCenter ? `<span>${legendCenter}</span>` : ""}
+          <span>${legendHigh}</span>
+          ${hideValueExtremes ? "" : `<span class="heatmap-legend-value">${formatNumber(max, 2)} ${unit}</span>`}
+        </div>
       </div>
-      <div class="heatmap-info-note${infoText.trim() ? "" : " is-empty"}"><span class="heatmap-info-badge">i</span><span>${infoText}</span></div>
       <div class="heatmap-grid">
         <div></div>
   `;
@@ -108,10 +118,10 @@ export function generateHeatmapHTML(data, title, unit, reverseColors, formatNumb
         tooltip = `${days[d]} ${h}:00 Uhr\n${formatNumber(val, 2)} ${unit}`;
       }
 
-      html += `<div class="heatmap-cell" style="background-color: ${bgColor}" title="${tooltip}"></div>`;
+      html += `<div class="heatmap-cell" style="background-color: ${bgColor}" title="${escapeHtml(tooltip)}"></div>`;
     }
   }
 
-  html += "</div></div>";
+  html += `</div></div>`;
   return html;
 }

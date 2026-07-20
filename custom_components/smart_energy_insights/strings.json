@@ -248,6 +248,7 @@
     "heatmap_price_absolute_info": "Ref: absolute spot price",
     "heatmap_price_ref_fixed": "Ref: {reference} ct/kWh (Fixed)",
     "heatmap_price_ref_break_even": "Ref: {reference} ct/kWh (Break-even)",
+    "heatmap_optimization_info": "Shift score compares each hour with the selected period average. Hours where consumption and price are both above average get negative values because they are expensive and hard to shift. Hours where both are below average get positive values because they are good shift opportunities. Values around 0 are neutral.",
     "heatmap_season_whole_year": "Whole year",
     "heatmap_season_spring": "Spring",
     "heatmap_season_summer": "Summer",

@@ -305,7 +305,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       heatmapOptimizationCostGradientTitle: this.localize("card.heatmap_optimization_cost_gradient_title", "Cost gradient heatmap (ct/h)"),
       heatmapOptimizationInfo: this.localize(
         "card.heatmap_optimization_info",
-        "Highlights inefficient habits (red) and unused cheap hours (green) to optimize your consumption."
+        "Shift score compares each hour with the selected period average. Hours where consumption and price are both above average get negative values because they are expensive and hard to shift. Hours where both are below average get positive values because they are good shift opportunities. Values around 0 are neutral."
       ),
       heatmapOptimizationCostGradientInfo: this.localize(
         "card.heatmap_optimization_cost_gradient_info",
@@ -1042,6 +1042,7 @@ syncSensorPicker() {
       spotTariffCostEur: response.tariff_totals?.spot_cost_eur,
       peakExposurePercent: response.peak_exposure_percent,
       offPeakSharePercent: response.off_peak_share_percent,
+      spotCheaperShare: response.spot_cheaper_share,
       negativePriceHours: response.negative_price_hours,
       negativePriceShare: response.negative_price_share,
       maxSpotPrice: response.max_spot_price_ct_kwh,
@@ -1393,7 +1394,6 @@ syncSensorPicker() {
               formatNumber,
               {
                 low: texts.heatmapLegendShiftAway,
-                center: texts.heatmapLegendOptimized,
                 high: texts.heatmapLegendShiftHere,
               },
               optimizationScale,
@@ -1408,20 +1408,22 @@ syncSensorPicker() {
 
         return `
           <div class="heatmap-season-panel" data-heatmap-panel="${season.key}"${season.key === selectedSeason ? "" : " hidden"}>
-            <div class="heatmap-context-meta">
-              <div class="heatmap-context-line">${seasonScopeText}</div>
-              <div class="heatmap-context-line">${seasonCoverageText}</div>
-              ${showCoverageWarning ? `<div class="heatmap-coverage-warning">${seasonCoverageWarningText}</div>` : ""}
+            <div class="heatmap-context-card">
+              <div class="heatmap-context-meta">
+                <div class="heatmap-context-line">${seasonScopeText}</div>
+                <div class="heatmap-context-line">${seasonCoverageText}</div>
+                ${showCoverageWarning ? `<div class="heatmap-coverage-warning">${seasonCoverageWarningText}</div>` : ""}
+              </div>
             </div>
             <section class="heatmap-subcard heatmap-subcard-consumption">
-              <div class="heatmap-subcard-controls consumption-mode-navigation" role="group" aria-label="Consumption mode">
+              <div class="heatmap-subcard-controls consumption-mode-navigation" role="group" aria-label="Consumption view">
                 <span class="spot-mode-label">${texts.heatmapConsumptionModeLabel}</span>
                 <div class="consumption-mode-buttons">${consumptionModeButtons}</div>
               </div>
               ${consumptionHtml}
             </section>
             <section class="heatmap-subcard heatmap-subcard-spot">
-              <div class="heatmap-subcard-controls spot-mode-navigation" role="group" aria-label="Spot mode">
+              <div class="heatmap-subcard-controls spot-mode-navigation" role="group" aria-label="Spot view">
                 <span class="spot-mode-label">${texts.heatmapSpotModeLabel}</span>
                 <div class="spot-mode-buttons">${spotModeButtons}</div>
               </div>
@@ -1441,10 +1443,12 @@ syncSensorPicker() {
 
     return `
       <section class="seasonal-heatmaps">
-        <div class="heatmap-season-navigation" role="group" aria-label="Heatmap season">
-          ${buttons}
+        <div class="seasonal-heatmaps-card">
+          <div class="heatmap-season-navigation" role="group" aria-label="Heatmap season">
+            ${buttons}
+          </div>
+          ${panels}
         </div>
-        ${panels}
       </section>
     `;
   }
@@ -1887,6 +1891,7 @@ syncSensorPicker() {
     `;
 
     const matchedHours = Number(summary.matchedHours || 0);
+    const hasMatchedTariffData = matchedHours > 0;
     const matchedDays = matchedHours > 0 ? matchedHours / 24 : 0;
     const roundedMatchedDays = Math.round(matchedDays);
     const completenessRatio = Number(summary.dataCompletenessRatio);
@@ -1910,8 +1915,14 @@ syncSensorPicker() {
       ? `${formatNumber(summary.breakEvenFixedCtKwh, 2)} ct/kWh`
       : placeholderValue;
     const spotCheaperShare = Number(summary.spotCheaperShare);
-    const spotCheaperValue = Number.isFinite(spotCheaperShare)
-      ? `${formatNumber(spotCheaperShare, 1)} %`
+    const spotCheaperValue = hasMatchedTariffData && Number.isFinite(spotCheaperShare)
+      ? `${formatNumber(spotCheaperShare * 100, 1)} %`
+      : placeholderValue;
+    const negativePriceHours = Number(summary.negativePriceHours);
+    const negativePriceShare = Number(summary.negativePriceShare);
+    const negativePriceValue = hasMatchedTariffData
+      ? `${formatNumber(Number.isFinite(negativePriceHours) ? negativePriceHours : 0, 0)} h`
+        + (Number.isFinite(negativePriceShare) ? ` (${formatNumber(negativePriceShare * 100, 1)} %)` : "")
       : placeholderValue;
     const completenessValue = Number.isFinite(completenessRatio)
       ? `${formatNumber(completenessRatio * 100, completenessRatio >= 0.9995 ? 0 : 1)} %`
@@ -2034,7 +2045,7 @@ syncSensorPicker() {
     const priceItems = [
       { label: texts.analysisAvgSpotLabel, value: `${summary.avgPrice} ct/kWh`, help: texts.analysisAvgSpotHelp },
       { label: texts.analysisEffectiveSpotLabel, value: effectiveSpotValue, help: texts.analysisEffectiveSpotHelp },
-      { label: texts.analysisNegativePriceHoursLabel, value: placeholderValue, help: texts.analysisNegativePriceHoursHelp },
+      { label: texts.analysisNegativePriceHoursLabel, value: negativePriceValue, help: texts.analysisNegativePriceHoursHelp },
       { label: texts.analysisSpotCheaperLabel, value: spotCheaperValue, help: texts.analysisSpotCheaperHelp },
       { label: texts.analysisMaxSpotPriceLabel, value: maxSpotValue, help: maxSpotHelp },
       { label: texts.analysisMinSpotPriceLabel, value: minSpotValue, help: minSpotHelp },
@@ -2379,10 +2390,12 @@ syncSensorPicker() {
 
       /* Seasonal Heatmaps */
       .seasonal-heatmaps { margin-top: 24px; }
-      .heatmap-context-meta { margin-bottom: 12px; display: grid; gap: 6px; }
+      .seasonal-heatmaps-card { background: rgba(var(--rgb-primary-text-color), 0.025); border: 1px solid rgba(var(--rgb-divider-color), 0.5); border-radius: 12px; padding: 12px; display: grid; gap: 18px; }
+      .heatmap-context-card { background: rgba(var(--rgb-primary-text-color), 0.025); border: 1px solid rgba(var(--rgb-divider-color), 0.5); border-radius: 12px; padding: 12px; margin-bottom: 18px; }
+      .heatmap-context-meta { display: grid; gap: 6px; }
       .heatmap-context-line { font-size: 12px; color: var(--secondary-text-color); line-height: 1.4; }
       .heatmap-coverage-warning { font-size: 12px; line-height: 1.4; color: #8f4a00; background: rgba(255, 171, 64, 0.16); border: 1px solid rgba(255, 171, 64, 0.32); border-radius: 8px; padding: 6px 8px; }
-      .heatmap-season-navigation { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
+      .heatmap-season-navigation { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
       .heatmap-season-button { min-height: 36px; padding: 8px 10px; border: 1px solid var(--divider-color); border-radius: 6px; background: var(--card-background-color); color: var(--primary-text-color); font-size: 13px; cursor: pointer; }
       .heatmap-season-button:hover { border-color: var(--primary-color); }
       .heatmap-season-button.active { background: var(--primary-color); border-color: var(--primary-color); color: white; }
@@ -2405,15 +2418,14 @@ syncSensorPicker() {
       .heatmaps-grid { display: grid; grid-template-columns: 1fr; gap: 32px; }
       @media(min-width: 1300px) { .heatmaps-grid { grid-template-columns: 1fr 1fr; } }
       
-      .heatmap-title { font-size: 15px; font-weight: 600; margin-bottom: 12px; text-align: left; color: var(--primary-text-color); }
-      .heatmap-legend { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--secondary-text-color); margin-bottom: 10px; flex-wrap: wrap; }
-      .heatmap-info-note { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--secondary-text-color); margin: -2px 0 10px; min-height: 18px; }
-      .heatmap-info-note.is-empty { opacity: 0; }
-      .heatmap-info-badge { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 999px; background: rgba(var(--rgb-primary-text-color), 0.12); color: var(--secondary-text-color); font-size: 10px; }
+      .heatmap-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+      .heatmap-title-row { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+      .heatmap-title { font-size: 15px; font-weight: 600; text-align: left; color: var(--primary-text-color); }
+      .heatmap-info-marker { flex: 0 0 auto; margin-top: 1px; }
+      .heatmap-season-card { background: rgba(var(--rgb-primary-text-color), 0.025); border: 1px solid rgba(var(--rgb-divider-color), 0.5); border-radius: 12px; padding: 12px; display: grid; gap: 18px; }
+      .heatmap-legend { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 11px; color: var(--secondary-text-color); margin: 10px 0 0; flex-wrap: wrap; text-align: center; }
       .heatmap-legend-bar { width: 120px; height: 8px; border-radius: 999px; background: linear-gradient(90deg, hsl(120, 85%, 55%), hsl(0, 85%, 55%)); }
       .heatmap-legend-value { font-size: 11px; color: var(--secondary-text-color); }
-      .heatmap-info-note { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 10px; font-size: 11px; color: var(--secondary-text-color); line-height: 1.4; }
-      .heatmap-info-badge { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 999px; background: rgba(var(--rgb-primary-text-color), 0.08); color: var(--secondary-text-color); font-size: 11px; flex: 0 0 auto; }
       .heatmap-grid { display: grid; grid-template-columns: auto repeat(24, 1fr); gap: 2px; font-size: 10px; }
       .heatmap-header-y { display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; color: var(--secondary-text-color); font-weight: 500; }
       .heatmap-header-x { text-align: center; color: var(--secondary-text-color); padding-bottom: 4px; }

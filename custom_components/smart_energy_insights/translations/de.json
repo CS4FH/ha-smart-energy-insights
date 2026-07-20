@@ -258,6 +258,7 @@
     "heatmap_price_ref_fixed": "Ref: {reference} ct/kWh (Fixpreis)",
     "heatmap_price_ref_break_even": "Ref: {reference} ct/kWh (Break-even)",
     "heatmap_season_whole_year": "Ganzes Jahr",
+    "heatmap_optimization_info": "Der Shift Score vergleicht jede Stunde mit dem Durchschnitt des gewählten Zeitraums. Stunden, in denen Verbrauch und Preis beide ueber dem Durchschnitt liegen, werden negativ bewertet, weil sie teuer und schwer zu verschieben sind. Stunden, in denen beide darunter liegen, werden positiv bewertet, weil sie gute Verschiebungsfenster sind. Werte um 0 sind neutral.",
     "heatmap_season_spring": "Fruehling",
     "heatmap_season_summer": "Sommer",
     "heatmap_season_autumn": "Herbst",
