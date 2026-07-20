@@ -9,7 +9,7 @@ import {
   uploadCsv
 } from "./smart-energy-insights-api.js";
 import { generateHeatmapHTML } from "./smart-energy-insights-heatmap.js?v=20260715a";
-import { renderBaseCard, renderDashboardHtml } from "./smart-energy-insights-templates.js";
+import { renderBaseCard, renderDashboardHtml } from "./smart-energy-insights-templates.js?v=20260720a";
 import { formatNumber } from "./smart-energy-insights-utils.js";
 
 class SmartEnergyInsightsUploadCard extends HTMLElement {
@@ -177,6 +177,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       analysisTitle: this.localize("card.analysis_title", "Load profile analysis"),
       dashboardTabMonthly: this.localize("card.dashboard_tab_monthly", "Monthly comparison"),
       dashboardTabUsage: this.localize("card.dashboard_tab_usage", "Usage behavior"),
+      dashboardTabRisk: this.localize("card.dashboard_tab_risk", "Risk & optimization"),
       dashboardTabTechnical: this.localize("card.dashboard_tab_technical", "Technical details"),
       analysisSummaryTitle: this.localize("card.analysis_summary_title", "Summary"),
       analysisGroupPeriodTitle: this.localize("card.analysis_group_period", "Period"),
@@ -224,6 +225,60 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       analysisMaxExtraSavingsHelp: this.localize("card.analysis_max_extra_savings_help", "The maximum additional amount you could save by shifting all your flexible consumption into the cheapest 6 hours of each day."),
       analysisMaxPenaltyRiskLabel: this.localize("card.analysis_max_penalty_risk_label", "Max. penalty risk"),
       analysisMaxPenaltyRiskHelp: this.localize("card.analysis_max_penalty_risk_help", "The maximum additional cost if all your flexible consumption occurred during the most expensive 6 hours of each day."),
+      analysisCostProjectionTitle: this.localize("card.analysis_cost_projection_title", "Cost projection range"),
+      analysisCostProjectionHelp: this.localize("card.analysis_cost_projection_help", "Projected spot-cost corridor from best to worst case compared against your fixed-tariff baseline."),
+      analysisCostProjectionFixedLabel: this.localize("card.analysis_cost_projection_fixed_label", "Fixed baseline"),
+      analysisCostProjectionSpotLabel: this.localize("card.analysis_cost_projection_spot_label", "Current spot"),
+      analysisCostProjectionBestLabel: this.localize("card.analysis_cost_projection_best_label", "Best case spot"),
+      analysisCostProjectionWorstLabel: this.localize("card.analysis_cost_projection_worst_label", "Worst case spot"),
+      analysisCostProjectionCurrentLabel: this.localize("card.analysis_cost_projection_current_label", "Current Projection"),
+      analysisCostProjectionMaxPotentialLabel: this.localize("card.analysis_cost_projection_max_potential_label", "Max potential"),
+      analysisCostProjectionBaselineLabel: this.localize("card.analysis_cost_projection_baseline_label", "0 EUR (Fixed tariff)"),
+      analysisCostProjectionSavingsZone: this.localize("card.analysis_cost_projection_savings_zone", "Savings zone"),
+      analysisCostProjectionRiskZone: this.localize("card.analysis_cost_projection_risk_zone", "Risk zone"),
+      analysisTimingProfileTitle: this.localize("card.analysis_timing_profile_title", "Consumption timing profile"),
+      analysisTimingProfileHelp: this.localize("card.analysis_timing_profile_help", "Distribution of your consumption between expensive, average and cheap market hours."),
+      analysisTimingExpensiveLabel: this.localize("card.analysis_timing_expensive_label", "Expensive hours"),
+      analysisTimingAverageLabel: this.localize("card.analysis_timing_average_label", "Average hours"),
+      analysisTimingCheapLabel: this.localize("card.analysis_timing_cheap_label", "Cheap hours"),
+      analysisTariffFitTitle: this.localize("card.analysis_tariff_fit_title", "Evidence-based assessment scorecard"),
+      analysisTariffFitHelp: this.localize("card.analysis_tariff_fit_help", "Recommendation based on flexibility potential, timing profile and market stress tolerance."),
+      analysisTariffFitHeadlinePrefix: this.localize("card.analysis_tariff_fit_headline_prefix", "Dynamic Tariff Fit:"),
+      analysisTariffFitFactorsTitle: this.localize("card.analysis_tariff_fit_factors_title", "Contributing factors"),
+      analysisTariffFitFactorCheapLabel: this.localize("card.analysis_tariff_fit_factor_cheap_label", "Cheap hours share"),
+      analysisTariffFitFactorExpensiveLabel: this.localize("card.analysis_tariff_fit_factor_expensive_label", "Expensive hours share"),
+      analysisTariffFitFactorAverageLabel: this.localize("card.analysis_tariff_fit_factor_average_label", "Average hours share"),
+      analysisTariffFitLevelHigh: this.localize("card.analysis_tariff_fit_level_high", "High"),
+      analysisTariffFitLevelMedium: this.localize("card.analysis_tariff_fit_level_medium", "Moderate"),
+      analysisTariffFitLevelLow: this.localize("card.analysis_tariff_fit_level_low", "Low"),
+      analysisTariffFitHeadline: ({ level }) => this.localize(
+        "card.analysis_tariff_fit_headline",
+        "Dynamic tariff fit: {level}",
+        { level }
+      ),
+      analysisTariffFitStrongSummary: this.localize(
+        "card.analysis_tariff_fit_strong_summary",
+        "Your consumption behavior strongly aligns with cheap market hours, outweighing your peak usage."
+      ),
+      analysisTariffFitHighSummary: ({ sensitivity }) => this.localize(
+        "card.analysis_tariff_fit_high_summary",
+        "Your consumption behavior aligns well with cheaper market hours. Spot pricing is likely advantageous even under stress ({sensitivity}).",
+        { sensitivity }
+      ),
+      analysisTariffFitMediumSummary: ({ sensitivity }) => this.localize(
+        "card.analysis_tariff_fit_medium_summary",
+        "Your profile is mixed. A spot tariff can work, but timing discipline matters. Current stress tolerance is {sensitivity}.",
+        { sensitivity }
+      ),
+      analysisTariffFitLowSummary: ({ sensitivity }) => this.localize(
+        "card.analysis_tariff_fit_low_summary",
+        "Your current pattern leans toward expensive hours. A fixed tariff may offer better stability at this stress tolerance ({sensitivity}).",
+        { sensitivity }
+      ),
+      analysisPeakExposureLabel: this.localize("card.analysis_peak_exposure_label", "Peak exposure"),
+      analysisPeakExposureHelp: this.localize("card.analysis_peak_exposure_help", "Share of your matched consumption that occurred during each day's 6 most expensive market hours."),
+      analysisOffPeakShareLabel: this.localize("card.analysis_offpeak_share_label", "Off-peak share"),
+      analysisOffPeakShareHelp: this.localize("card.analysis_offpeak_share_help", "Share of your matched consumption that occurred during each day's 6 cheapest market hours."),
       analysisSectionRangeTitle: this.localize("card.analysis_section_range_title", "Measurement window"),
       analysisSectionConsumptionTitle: this.localize("card.analysis_section_consumption_title", "Consumption analysis"),
       analysisSectionTariffTitle: this.localize("card.analysis_section_tariff_title", "Tariff and market analysis"),
@@ -962,7 +1017,7 @@ syncSensorPicker() {
     const avgConsumptionStr = formatNumber(response.avg_consumption_kwh, 3);
     const avgPriceStr = formatNumber(response.avg_price_ct_kwh, 2);
 
-    const analysisGroups = this.buildAnalysisGroups({
+    const analysisViews = this.buildAnalysisGroups({
       start,
       end,
       matchedHours: response.matched_hours,
@@ -984,6 +1039,10 @@ syncSensorPicker() {
       priceSensitivityPercent: response.price_sensitivity_percent,
       maxExtraSavingsEur: response.max_extra_savings_eur,
       maxPenaltyRiskEur: response.max_penalty_risk_eur,
+      fixedTariffCostEur: response.tariff_totals?.fixed_cost_eur,
+      spotTariffCostEur: response.tariff_totals?.spot_cost_eur,
+      peakExposurePercent: response.peak_exposure_percent,
+      offPeakSharePercent: response.off_peak_share_percent,
       negativePriceHours: response.negative_price_hours,
       negativePriceShare: response.negative_price_share,
       maxSpotPrice: response.max_spot_price_ct_kwh
@@ -995,7 +1054,8 @@ syncSensorPicker() {
       filename: filenameStr,
       heatmapsHtml,
       monthlyTariffHtml,
-      analysisGroups,
+      technicalAnalysisGroups: analysisViews.technical,
+      riskOptimizationGroups: analysisViews.risk,
       texts,
       dashboardTab: this._dashboardTab
     });
@@ -1685,6 +1745,8 @@ syncSensorPicker() {
     const priceSensitivity = Number(summary.priceSensitivityPercent);
     const maxExtraSavings = Number(summary.maxExtraSavingsEur);
     const maxPenaltyRisk = Number(summary.maxPenaltyRiskEur);
+    const peakExposure = Number(summary.peakExposurePercent);
+    const offPeakShare = Number(summary.offPeakSharePercent);
     const negativePriceValue = Number.isFinite(negativeHours) && Number.isFinite(negativeShare)
       ? `${formatNumber(negativeHours, 0)} h / ${formatNumber(negativeShare * 100, 1)} %`
       : placeholderValue;
@@ -1700,6 +1762,107 @@ syncSensorPicker() {
     const maxPenaltyRiskValue = Number.isFinite(maxPenaltyRisk)
       ? `${formatNumber(maxPenaltyRisk, 2)} €`
       : placeholderValue;
+    const peakExposureValue = Number.isFinite(peakExposure)
+      ? `${formatNumber(peakExposure, 1)} %`
+      : placeholderValue;
+    const offPeakShareValue = Number.isFinite(offPeakShare)
+      ? `${formatNumber(offPeakShare, 1)} %`
+      : placeholderValue;
+    const fixedTariffCost = Number(summary.fixedTariffCostEur);
+    const spotTariffCost = Number(summary.spotTariffCostEur);
+    const hasCostProjection = Number.isFinite(fixedTariffCost)
+      && Number.isFinite(spotTariffCost)
+      && Number.isFinite(maxExtraSavings)
+      && Number.isFinite(maxPenaltyRisk);
+    const maxSavingsDelta = hasCostProjection ? -Math.max(0, maxExtraSavings) : null;
+    const maxRiskDelta = hasCostProjection ? Math.max(0, maxPenaltyRisk) : null;
+    const currentDelta = hasCostProjection ? (spotTariffCost - fixedTariffCost) : null;
+    const currentDeltaLabel = Number.isFinite(currentDelta)
+      ? `${currentDelta >= 0 ? "+" : ""}${formatNumber(currentDelta, 2)} €`
+      : placeholderValue;
+
+    let deltaExtent = 1;
+    let maxSavingsPct = 0;
+    let maxRiskPct = 100;
+    let currentPct = 50;
+    let currentLeftPct = 50;
+    let currentWidthPct = 0;
+    let currentLabelClass = "savings";
+
+    if (hasCostProjection) {
+      deltaExtent = Math.max(
+        Math.abs(maxSavingsDelta),
+        Math.abs(maxRiskDelta),
+        Math.abs(currentDelta),
+        0.01
+      );
+      const deltaToPct = (value) => 50 + (value / deltaExtent) * 50;
+      maxSavingsPct = Math.max(0, Math.min(100, deltaToPct(maxSavingsDelta)));
+      maxRiskPct = Math.max(0, Math.min(100, deltaToPct(maxRiskDelta)));
+      currentPct = Math.max(0, Math.min(100, deltaToPct(currentDelta)));
+      currentLeftPct = Math.min(50, currentPct);
+      currentWidthPct = Math.abs(currentPct - 50);
+      currentLabelClass = currentDelta <= 0 ? "savings" : "risk";
+    }
+
+    let expensiveShare = 0;
+    let averageShare = 0;
+    let cheapShare = 0;
+    const hasTimingProfile = Number.isFinite(peakExposure) && Number.isFinite(offPeakShare);
+    if (hasTimingProfile) {
+      expensiveShare = Math.max(0, peakExposure);
+      cheapShare = Math.max(0, offPeakShare);
+      const edgeSum = expensiveShare + cheapShare;
+      if (edgeSum > 100) {
+        const scale = 100 / edgeSum;
+        expensiveShare *= scale;
+        cheapShare *= scale;
+        averageShare = 0;
+      } else {
+        averageShare = 100 - edgeSum;
+      }
+    }
+
+    let fitScore = 0;
+    if (Number.isFinite(priceSensitivity)) {
+      if (priceSensitivity >= 15) fitScore += 2;
+      else if (priceSensitivity >= 5) fitScore += 1;
+      else if (priceSensitivity < 0) fitScore -= 2;
+    }
+    if (Number.isFinite(offPeakShare)) {
+      if (offPeakShare >= 35) fitScore += 2;
+      else if (offPeakShare >= 25) fitScore += 1;
+    }
+    if (Number.isFinite(peakExposure)) {
+      if (peakExposure >= 30) fitScore -= 2;
+      else if (peakExposure >= 20) fitScore -= 1;
+      else fitScore += 1;
+    }
+    if (Number.isFinite(flexibilityPotential) && flexibilityPotential >= 25) {
+      fitScore += 1;
+    }
+
+    let fitLevel = "medium";
+    if (fitScore >= 3) fitLevel = "high";
+    else if (fitScore <= 0) fitLevel = "low";
+    const fitLevelLabel = fitLevel === "high"
+      ? texts.analysisTariffFitLevelHigh
+      : fitLevel === "low"
+        ? texts.analysisTariffFitLevelLow
+        : texts.analysisTariffFitLevelMedium;
+    const sensitivityLabel = Number.isFinite(priceSensitivity)
+      ? `${priceSensitivity >= 0 ? "+" : ""}${formatNumber(priceSensitivity, 1)} %`
+      : placeholderValue;
+    const fitSummary = fitLevel === "high"
+      ? texts.analysisTariffFitStrongSummary
+      : fitLevel === "low"
+        ? texts.analysisTariffFitLowSummary({ sensitivity: sensitivityLabel })
+        : texts.analysisTariffFitMediumSummary({ sensitivity: sensitivityLabel });
+    const fitIcon = fitLevel === "high"
+      ? "mdi:check-circle"
+      : fitLevel === "low"
+        ? "mdi:alert-circle"
+        : "mdi:star-circle";
 
     const periodItems = [
       { label: texts.analysisRangeLabel, value: `${startEu} - ${endEu}`, help: texts.analysisRangeHelp },
@@ -1735,7 +1898,8 @@ syncSensorPicker() {
       { label: texts.analysisMaxPenaltyRiskLabel, value: maxPenaltyRiskValue, help: texts.analysisMaxPenaltyRiskHelp }
     ];
 
-    return `
+    return {
+      technical: `
       <section class="technical-section">
         <div class="technical-section-title">${texts.analysisSectionRangeTitle}</div>
         ${buildGrid("technical-grid-range", periodItems)}
@@ -1751,15 +1915,96 @@ syncSensorPicker() {
         ${buildGrid("technical-grid-main", priceItems)}
       </section>
 
+      <section class="technical-section technical-tax-section">
+        <div class="card-tax-note">${taxNote}</div>
+      </section>
+    `,
+      risk: `
       <section class="technical-section">
         <div class="technical-section-title">${texts.analysisSectionRiskTitle}</div>
         ${buildGrid("technical-grid-risk", riskItems)}
       </section>
 
-      <section class="technical-section technical-tax-section">
-        <div class="card-tax-note">${taxNote}</div>
+      <section class="technical-section risk-visual-section">
+        <div class="technical-section-title">
+          ${texts.analysisCostProjectionTitle}
+          <span class="metric-info-marker" role="img" tabindex="0" aria-label="${this.escapeAttribute(texts.kpiInfoLabel)}" title="${this.escapeAttribute(texts.analysisCostProjectionHelp)}"><ha-icon icon="mdi:information-outline"></ha-icon></span>
+        </div>
+        <div class="risk-chart-card projection-chart-card" role="img" aria-label="${this.escapeAttribute(texts.analysisCostProjectionTitle)}">
+          ${hasCostProjection ? `
+            <div class="delta-axis">
+              <div class="delta-bg savings" style="left:${maxSavingsPct.toFixed(2)}%; width:${(50 - maxSavingsPct).toFixed(2)}%"></div>
+              <div class="delta-bg risk" style="left:50%; width:${(maxRiskPct - 50).toFixed(2)}%"></div>
+              <div class="delta-baseline" title="${texts.analysisCostProjectionBaselineLabel}"></div>
+              <div class="delta-current ${currentLabelClass}" style="left:${currentLeftPct.toFixed(2)}%; width:${currentWidthPct.toFixed(2)}%"></div>
+              <div class="delta-marker ${currentLabelClass}" style="left:${currentPct.toFixed(2)}%">
+                <div class="delta-marker-callout">
+                  <span>${texts.analysisCostProjectionCurrentLabel}</span>
+                  <strong>${currentDeltaLabel}</strong>
+                </div>
+                <div class="delta-marker-line" aria-hidden="true"></div>
+                <div class="delta-marker-dot" aria-hidden="true"></div>
+              </div>
+            </div>
+            <div class="delta-label-row">
+              <div class="delta-end left">
+                <span>${texts.analysisCostProjectionBestLabel}</span>
+                <strong>${formatNumber(maxSavingsDelta, 2)} €</strong>
+              </div>
+              <div class="delta-center">${texts.analysisCostProjectionBaselineLabel}</div>
+              <div class="delta-end right">
+                <span>${texts.analysisCostProjectionWorstLabel}</span>
+                <strong>+${formatNumber(maxRiskDelta, 2)} €</strong>
+              </div>
+            </div>
+          ` : `
+            <div class="risk-empty">${placeholderValue}</div>
+          `}
+        </div>
       </section>
-    `;
+
+      <section class="technical-section">
+        <div class="technical-section-title">
+          ${texts.analysisTariffFitTitle}
+          <span class="metric-info-marker" role="img" tabindex="0" aria-label="${this.escapeAttribute(texts.kpiInfoLabel)}" title="${this.escapeAttribute(texts.analysisTariffFitHelp)}"><ha-icon icon="mdi:information-outline"></ha-icon></span>
+        </div>
+        <div class="tariff-fit-card ${fitLevel}">
+          <div class="tariff-fit-verdict">
+            <div class="tariff-fit-icon"><ha-icon icon="${fitIcon}"></ha-icon></div>
+            <div class="tariff-fit-content">
+              <div class="tariff-fit-headline">${texts.analysisTariffFitHeadlinePrefix} <span class="tariff-fit-level ${fitLevel}">${fitLevelLabel}</span></div>
+              <div class="tariff-fit-summary">${fitSummary}</div>
+            </div>
+          </div>
+          <div class="tariff-fit-divider" role="separator" aria-hidden="true"></div>
+          ${hasTimingProfile ? `
+            <div class="tariff-fit-factors">
+              <div class="tariff-fit-factors-title">${texts.analysisTariffFitFactorsTitle}</div>
+              <div class="tariff-fit-factors-grid">
+                <div class="tariff-fit-factor positive">
+                  <div class="tariff-fit-factor-indicator" aria-hidden="true"><ha-icon icon="mdi:arrow-up-bold"></ha-icon></div>
+                  <div class="tariff-fit-factor-value">${formatNumber(cheapShare, 1)} %</div>
+                  <div class="tariff-fit-factor-label">${texts.analysisTariffFitFactorCheapLabel}</div>
+                </div>
+                <div class="tariff-fit-factor negative">
+                  <div class="tariff-fit-factor-indicator" aria-hidden="true"><ha-icon icon="mdi:arrow-down-bold"></ha-icon></div>
+                  <div class="tariff-fit-factor-value">${formatNumber(expensiveShare, 1)} %</div>
+                  <div class="tariff-fit-factor-label">${texts.analysisTariffFitFactorExpensiveLabel}</div>
+                </div>
+                <div class="tariff-fit-factor neutral">
+                  <div class="tariff-fit-factor-indicator" aria-hidden="true"><ha-icon icon="mdi:minus"></ha-icon></div>
+                  <div class="tariff-fit-factor-value">${formatNumber(averageShare, 1)} %</div>
+                  <div class="tariff-fit-factor-label">${texts.analysisTariffFitFactorAverageLabel}</div>
+                </div>
+              </div>
+            </div>
+          ` : `
+            <div class="risk-empty">${placeholderValue}</div>
+          `}
+        </div>
+      </section>
+    `,
+    };
   }
 
   loadUiState() {
@@ -1857,7 +2102,7 @@ syncSensorPicker() {
       .analysis-island { margin-top: 26px; padding: 16px; border-radius: 12px; background: color-mix(in srgb, var(--card-background-color) 90%, black 10%); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.26); }
       .analysis-island-title { font-size: 11px; color: var(--secondary-text-color); text-transform: uppercase; letter-spacing: 0.8px; font-weight: 700; margin-bottom: 12px; }
       .dashboard-tabs { margin-top: 0; }
-      .dashboard-tab-navigation { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
+      .dashboard-tab-navigation { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
       .dashboard-tab-button { min-height: 40px; padding: 8px 12px; border: 1px solid var(--divider-color); border-radius: 8px; background: var(--card-background-color); color: var(--primary-text-color); font-size: 13px; font-weight: 600; cursor: pointer; }
       .dashboard-tab-button:hover { border-color: var(--primary-color); }
       .dashboard-tab-button.active { background: var(--primary-color); border-color: var(--primary-color); color: white; }
@@ -1877,6 +2122,59 @@ syncSensorPicker() {
       .metric-info-marker ha-icon { --mdc-icon-size: 14px; }
       .metric-info-marker:hover, .metric-info-marker:focus-visible { color: var(--primary-color); opacity: 1; outline: none; }
       .technical-tax-section { padding-top: 4px; }
+      .risk-chart-card { border: 1px solid rgba(var(--rgb-divider-color), 0.45); border-radius: 8px; background: rgba(var(--rgb-primary-text-color), 0.03); padding: 10px; }
+      .projection-chart-card { position: relative; padding-top: 56px; padding-bottom: 14px; overflow: visible; }
+      .projection-chart-card .delta-axis { margin-top: 0; }
+      .projection-chart-card .delta-label-row { margin-top: 8px; }
+      .risk-empty { font-size: 16px; color: var(--secondary-text-color); min-height: 42px; display: flex; align-items: center; }
+
+      .delta-axis { position: relative; height: 30px; border-radius: 999px; background: rgba(var(--rgb-primary-text-color), 0.08); overflow: visible; margin-top: 2px; }
+      .delta-bg { position: absolute; top: 6px; bottom: 6px; border-radius: 999px; opacity: 0.5; }
+      .delta-bg.savings { background: linear-gradient(90deg, rgba(78, 168, 112, 0.8), rgba(101, 195, 136, 0.9)); }
+      .delta-bg.risk { background: linear-gradient(90deg, rgba(197, 112, 80, 0.9), rgba(160, 74, 52, 0.9)); }
+      .delta-baseline { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; transform: translateX(-1px); background: rgba(255, 255, 255, 0.9); z-index: 3; }
+      .delta-current { position: absolute; top: 8px; bottom: 8px; border-radius: 999px; z-index: 4; }
+      .delta-current.savings { background: linear-gradient(90deg, rgba(43, 139, 83, 0.95), rgba(84, 188, 126, 0.98)); }
+      .delta-current.risk { background: linear-gradient(90deg, rgba(207, 102, 71, 0.95), rgba(170, 70, 50, 0.98)); }
+      .delta-marker { position: absolute; top: 0; bottom: 0; width: 0; transform: translateX(-50%); z-index: 8; pointer-events: none; }
+      .delta-marker-line { position: absolute; left: 50%; top: 4px; bottom: 4px; width: 2px; background: #f8fbff; transform: translateX(-1px); box-shadow: 0 0 0 1px rgba(18, 26, 34, 0.26); }
+      .delta-marker-dot { position: absolute; left: 50%; top: -4px; width: 10px; height: 10px; background: #f8fbff; border: 2px solid #2a3640; transform: translateX(-50%) rotate(45deg); border-radius: 2px; }
+      .delta-marker-callout { position: absolute; left: 50%; top: -8px; transform: translate(-50%, -100%); display: grid; gap: 1px; padding: 4px 8px; border-radius: 7px; background: rgba(18, 24, 32, 0.92); border: 1px solid rgba(var(--rgb-divider-color), 0.5); box-shadow: 0 6px 14px rgba(0, 0, 0, 0.28); z-index: 9; }
+      .delta-marker-callout span { font-size: 10px; letter-spacing: 0.2px; color: var(--secondary-text-color); white-space: nowrap; }
+      .delta-marker-callout strong { font-size: 12px; font-weight: 700; white-space: nowrap; }
+      .delta-marker.savings .delta-marker-callout strong { color: #74d19a; }
+      .delta-marker.risk .delta-marker-callout strong { color: #ea9b7f; }
+      .delta-label-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; margin-top: 6px; align-items: end; }
+      .delta-end { font-size: 11px; color: var(--secondary-text-color); }
+      .delta-end strong { display: block; margin-top: 1px; color: var(--primary-text-color); font-size: 12px; }
+      .delta-end.left { text-align: left; }
+      .delta-end.right { text-align: right; }
+      .delta-center { font-size: 11px; color: var(--secondary-text-color); text-align: center; white-space: nowrap; align-self: end; padding-bottom: 1px; }
+
+      .tariff-fit-card { border: 1px solid rgba(var(--rgb-divider-color), 0.45); border-radius: 10px; padding: 14px; background: rgba(var(--rgb-primary-text-color), 0.03); display: grid; gap: 12px; }
+      .tariff-fit-verdict { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; }
+      .tariff-fit-icon { width: 40px; height: 40px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; }
+      .tariff-fit-icon ha-icon { --mdc-icon-size: 24px; }
+      .tariff-fit-card.high .tariff-fit-icon { color: #66c68f; background: rgba(72, 167, 113, 0.18); }
+      .tariff-fit-card.medium .tariff-fit-icon { color: #d4a356; background: rgba(212, 163, 86, 0.18); }
+      .tariff-fit-card.low .tariff-fit-icon { color: #d07a5e; background: rgba(208, 122, 94, 0.18); }
+      .tariff-fit-headline { font-size: 17px; font-weight: 700; color: var(--primary-text-color); line-height: 1.2; }
+      .tariff-fit-level { font-size: 19px; margin-left: 6px; }
+      .tariff-fit-level.high { color: #72d39a; }
+      .tariff-fit-level.medium { color: #dfb46b; }
+      .tariff-fit-level.low { color: #e19074; }
+      .tariff-fit-summary { margin-top: 6px; font-size: 13px; color: var(--secondary-text-color); line-height: 1.45; }
+      .tariff-fit-divider { border-top: 1px solid rgba(var(--rgb-divider-color), 0.5); margin-top: 2px; }
+      .tariff-fit-factors-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--secondary-text-color); margin-bottom: 8px; }
+      .tariff-fit-factors-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+      .tariff-fit-factor { border: 1px solid rgba(var(--rgb-divider-color), 0.4); border-radius: 8px; padding: 10px; background: rgba(var(--rgb-primary-text-color), 0.025); }
+      .tariff-fit-factor-indicator { width: 22px; height: 22px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 8px; }
+      .tariff-fit-factor-indicator ha-icon { --mdc-icon-size: 14px; }
+      .tariff-fit-factor.positive .tariff-fit-factor-indicator { color: #66c68f; background: rgba(73, 165, 112, 0.2); }
+      .tariff-fit-factor.negative .tariff-fit-factor-indicator { color: #de8a6f; background: rgba(192, 98, 70, 0.2); }
+      .tariff-fit-factor.neutral .tariff-fit-factor-indicator { color: var(--secondary-text-color); background: rgba(var(--rgb-primary-text-color), 0.12); }
+      .tariff-fit-factor-value { font-size: 20px; font-weight: 700; color: var(--primary-text-color); line-height: 1.1; }
+      .tariff-fit-factor-label { font-size: 12px; color: var(--secondary-text-color); margin-top: 4px; line-height: 1.35; }
       
       .info-box { background-color: rgba(var(--rgb-primary-color), 0.05); border-left: 4px solid var(--primary-color); padding: 16px; margin-bottom: 24px; border-radius: 0 4px 4px 0; }
       .info-box h3 { margin: 0 0 8px 0; font-size: 16px; color: var(--primary-text-color); }
@@ -1993,7 +2291,16 @@ syncSensorPicker() {
         .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .dashboard-tab-navigation { grid-template-columns: 1fr; }
         .technical-grid-range { grid-template-columns: 1fr; }
+        .technical-grid-risk { grid-template-columns: 1fr; }
         .technical-grid-main { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .delta-label-row { grid-template-columns: 1fr; }
+        .delta-end.right,
+        .delta-center { text-align: left; }
+        .delta-marker-callout { transform: translate(-50%, -112%); }
+        .projection-chart-card { padding-top: 60px; padding-bottom: 12px; }
+        .projection-chart-card .delta-label-row { margin-top: 8px; }
+        .tariff-fit-verdict { grid-template-columns: 1fr; }
+        .tariff-fit-factors-grid { grid-template-columns: 1fr; }
         .heatmap-season-navigation { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .heatmap-season-button:last-child { grid-column: span 2; }
         .heatmap-subcard { padding: 12px; }

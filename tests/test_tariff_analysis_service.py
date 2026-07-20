@@ -173,3 +173,62 @@ def test_analyze_tariffs_risk_and_optimization_metrics_daily_6h() -> None:
     # Flexible volume is zero in this synthetic profile, so both EUR effects must be zero.
     assert abs(result["max_extra_savings_eur"] - 0.0) < 0.0001
     assert abs(result["max_penalty_risk_eur"] - 0.0) < 0.0001
+
+
+def test_analyze_tariffs_peak_and_off_peak_exposure_daily_6h_weighted() -> None:
+    starts = [datetime(2026, 1, 2, hour, tzinfo=timezone.utc) for hour in range(12)]
+    consumptions = [
+        5.0,
+        5.0,
+        5.0,
+        5.0,
+        5.0,
+        5.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+    ]
+    prices = [
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+        5.0,
+        6.0,
+        50.0,
+        51.0,
+        52.0,
+        53.0,
+        54.0,
+        55.0,
+    ]
+    statistics = [
+        {"start": start, "state": consumption}
+        for start, consumption in zip(starts, consumptions, strict=True)
+    ]
+    price_series = [
+        {"start": start, "value": price}
+        for start, price in zip(starts, prices, strict=True)
+    ]
+    pricing = PricingConfig(
+        fixed_price=20.0,
+        fixed_base_fee=0.0,
+        spot_markup=0.0,
+        spot_base_fee=0.0,
+        tax_rate=0.0,
+    )
+
+    with patch(
+        "custom_components.smart_energy_insights.services.tariff_analysis_service.dt_util.as_local",
+        side_effect=lambda dt: dt,
+    ):
+        result = analyze_tariffs(statistics, price_series, pricing, inputs_are_net=False)
+
+    # Daily cheapest 6h are the first six points -> 30 kWh of total 36 kWh.
+    assert abs(result["off_peak_share_percent"] - ((30.0 / 36.0) * 100.0)) < 0.0001
+
+    # Daily most expensive 6h are the last six points -> 6 kWh of total 36 kWh.
+    assert abs(result["peak_exposure_percent"] - ((6.0 / 36.0) * 100.0)) < 0.0001

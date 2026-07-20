@@ -74,7 +74,8 @@ export function renderDashboardHtml({
   filename,
   heatmapsHtml,
   monthlyTariffHtml,
-  analysisGroups,
+  technicalAnalysisGroups,
+  riskOptimizationGroups,
   texts,
   dashboardTab
 }) {
@@ -96,6 +97,7 @@ export function renderDashboardHtml({
         <div class="dashboard-tab-navigation" role="tablist">
           <button class="dashboard-tab-button${dashboardTab === "monthly" ? " active" : ""}" data-dashboard-tab="monthly" role="tab" aria-selected="${String(dashboardTab === "monthly")}" aria-controls="dashboardTabMonthly">${texts.dashboardTabMonthly}</button>
           <button class="dashboard-tab-button${dashboardTab === "usage" ? " active" : ""}" data-dashboard-tab="usage" role="tab" aria-selected="${String(dashboardTab === "usage")}" aria-controls="dashboardTabUsage">${texts.dashboardTabUsage}</button>
+          <button class="dashboard-tab-button${dashboardTab === "risk" ? " active" : ""}" data-dashboard-tab="risk" role="tab" aria-selected="${String(dashboardTab === "risk")}" aria-controls="dashboardTabRisk">${texts.dashboardTabRisk}</button>
           <button class="dashboard-tab-button${dashboardTab === "technical" ? " active" : ""}" data-dashboard-tab="technical" role="tab" aria-selected="${String(dashboardTab === "technical")}" aria-controls="dashboardTabTechnical">${texts.dashboardTabTechnical}</button>
         </div>
 
@@ -109,11 +111,19 @@ export function renderDashboardHtml({
           </div>
         </div>
 
+        <div id="dashboardTabRisk" class="dashboard-tab-panel" data-dashboard-tab-panel="risk" role="tabpanel"${dashboardTab === "risk" ? "" : " hidden"}>
+          <div class="technical-cockpit-wrap">
+            <div class="analysis-groups">
+              ${riskOptimizationGroups}
+            </div>
+          </div>
+        </div>
+
         <div id="dashboardTabTechnical" class="dashboard-tab-panel" data-dashboard-tab-panel="technical" role="tabpanel"${dashboardTab === "technical" ? "" : " hidden"}>
           <div class="technical-cockpit-wrap">
             <h3>${texts.analysisTitle}</h3>
             <div class="analysis-groups">
-              ${analysisGroups}
+              ${technicalAnalysisGroups}
             </div>
           </div>
         </div>

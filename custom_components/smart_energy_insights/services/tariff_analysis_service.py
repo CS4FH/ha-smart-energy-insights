@@ -205,6 +205,8 @@ def analyze_tariffs(statistics: list, price_series: list, pricing_config, inputs
 
     max_extra_savings_eur = None
     max_penalty_risk_eur = None
+    peak_exposure_percent = None
+    off_peak_share_percent = None
     if flexible_volume_kwh is not None and effective_spot_price_ct_kwh is not None:
         savings_per_kwh_ct = 0.0
         if avg_cheapest_daily_price_ct_kwh is not None:
@@ -214,6 +216,27 @@ def analyze_tariffs(statistics: list, price_series: list, pricing_config, inputs
             penalty_per_kwh_ct = max(0.0, avg_most_expensive_daily_price_ct_kwh - effective_spot_price_ct_kwh)
         max_extra_savings_eur = (flexible_volume_kwh * savings_per_kwh_ct) / 100.0
         max_penalty_risk_eur = (flexible_volume_kwh * penalty_per_kwh_ct) / 100.0
+
+    # Exposure metrics: share of matched consumption that occurs in each day's
+    # cheapest / most expensive 6-hour windows.
+    if matched_consumption > 0:
+        matched_points_by_day: dict = defaultdict(list)
+        for start, consumption, spot_price in matched_points:
+            day_key = dt_util.as_local(start).date()
+            matched_points_by_day[day_key].append((consumption, spot_price))
+
+        peak_exposure_kwh = 0.0
+        off_peak_kwh = 0.0
+        for day_points in matched_points_by_day.values():
+            if not day_points:
+                continue
+            sorted_day_points = sorted(day_points, key=lambda entry: entry[1])
+            take = min(6, len(sorted_day_points))
+            off_peak_kwh += sum(consumption for consumption, _ in sorted_day_points[:take])
+            peak_exposure_kwh += sum(consumption for consumption, _ in sorted_day_points[-take:])
+
+        peak_exposure_percent = (peak_exposure_kwh / matched_consumption) * 100.0
+        off_peak_share_percent = (off_peak_kwh / matched_consumption) * 100.0
 
     return {
         "matched_hours": matched_hours,
@@ -238,6 +261,8 @@ def analyze_tariffs(statistics: list, price_series: list, pricing_config, inputs
         "avg_most_expensive_daily_price_ct_kwh": avg_most_expensive_daily_price_ct_kwh,
         "max_extra_savings_eur": max_extra_savings_eur,
         "max_penalty_risk_eur": max_penalty_risk_eur,
+        "peak_exposure_percent": peak_exposure_percent,
+        "off_peak_share_percent": off_peak_share_percent,
         "break_even_fixed_ct_kwh": break_even_fixed,
         "fixed_total_eur": round(fixed_total_eur, 4),
         "spot_total_eur": round(spot_total_eur, 4),

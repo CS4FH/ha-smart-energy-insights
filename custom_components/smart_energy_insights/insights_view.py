@@ -662,6 +662,8 @@ async def _build_analysis_response(
         "flexibility_potential_percent": tariff_analysis.get("flexibility_potential_percent"),
         "max_extra_savings_eur": tariff_analysis.get("max_extra_savings_eur"),
         "max_penalty_risk_eur": tariff_analysis.get("max_penalty_risk_eur"),
+        "peak_exposure_percent": tariff_analysis.get("peak_exposure_percent"),
+        "off_peak_share_percent": tariff_analysis.get("off_peak_share_percent"),
         "price_imported_count": price_result.get("imported_count"),
         "price_series_count": price_result.get("series_count"),
         "consumption_heatmap": consumption_heatmap,
