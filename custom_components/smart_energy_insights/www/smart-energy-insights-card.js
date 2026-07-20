@@ -203,7 +203,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       heatmapConsumptionModeLabel: this.localize("card.heatmap_consumption_mode_label", "Consumption view"),
       heatmapConsumptionModeAbsolute: this.localize("card.heatmap_consumption_mode_absolute", "Absolute"),
       heatmapConsumptionModeRelativeMean: this.localize("card.heatmap_consumption_mode_relative_mean", "Relative to average"),
-      heatmapConsumptionModeRelativeWeekday: this.localize("card.heatmap_consumption_mode_relative_weekday", "Relative to weekday profile"),
+      heatmapConsumptionModeCostImpact: this.localize("card.heatmap_consumption_mode_cost_impact", "Cost impact"),
       heatmapConsumptionAbsoluteInfo: this.localize(
         "card.heatmap_consumption_absolute_info",
         "Ref: absolute consumption"
@@ -213,9 +213,13 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
         "Ref: {reference} kWh (Average)",
         { reference }
       ),
-      heatmapConsumptionRefWeekday: this.localize(
-        "card.heatmap_consumption_ref_weekday",
-        "Ref: 0 kWh (Weekday profile)"
+      heatmapConsumptionRefCostImpact: this.localize(
+        "card.heatmap_consumption_ref_cost_impact",
+        "Ref: consumption x spot price per slot"
+      ),
+      heatmapConsumptionCostImpactTitle: this.localize(
+        "card.heatmap_consumption_cost_impact_title",
+        "Cost impact heatmap (ct/h)"
       ),
       heatmapSpotModeLabel: this.localize("card.heatmap_spot_mode_label", "Spot view"),
       heatmapSpotModeAbsolute: this.localize("card.heatmap_spot_mode_absolute", "Absolute"),
@@ -1053,12 +1057,15 @@ syncSensorPicker() {
     const consumptionDisplayHeatmaps = seasonHeatmaps.map((heatmaps) =>
       this.computeConsumptionDisplayHeatmap(
         heatmaps.consumption_heatmap,
+        heatmaps.price_heatmap,
         selectedConsumptionMode
       )
     );
     const consumptionScale = selectedConsumptionMode === "absolute"
       ? this.computeAbsoluteConsumptionScaleFromMany(consumptionDisplayHeatmaps)
-      : this.computeSymmetricHeatmapScaleFromMany(consumptionDisplayHeatmaps);
+      : selectedConsumptionMode === "cost_impact"
+          ? this.computeRobustHeatmapScaleFromMany(consumptionDisplayHeatmaps)
+          : this.computeSymmetricHeatmapScaleFromMany(consumptionDisplayHeatmaps);
 
     const priceDisplayHeatmaps = seasonHeatmaps.map((heatmaps) =>
       Number.isFinite(priceReference)
@@ -1078,7 +1085,7 @@ syncSensorPicker() {
     const consumptionModeButtons = [
       { key: "absolute", label: texts.heatmapConsumptionModeAbsolute },
       { key: "relative_mean", label: texts.heatmapConsumptionModeRelativeMean },
-      { key: "relative_weekday", label: texts.heatmapConsumptionModeRelativeWeekday },
+      { key: "cost_impact", label: texts.heatmapConsumptionModeCostImpact },
     ]
       .map((mode) => {
         const isActive = selectedConsumptionMode === mode.key;
@@ -1132,25 +1139,30 @@ syncSensorPicker() {
           : data.price_heatmap;
         const seasonConsumptionHeatmap = this.computeConsumptionDisplayHeatmap(
           data.consumption_heatmap,
+          data.price_heatmap,
           selectedConsumptionMode
         );
         let consumptionInfoText = texts.heatmapConsumptionAbsoluteInfo;
+        let consumptionTitle = texts.heatmapConsumptionTitle;
+        let consumptionUnit = "kWh";
+        let consumptionLegend = { low: texts.heatmapLegendLow, high: texts.heatmapLegendHigh };
         if (selectedConsumptionMode === "relative_mean") {
           const meanRef = this.computeHeatmapMean(data.consumption_heatmap);
           consumptionInfoText = texts.heatmapConsumptionRefMean(formatNumber(meanRef, 3));
-        } else if (selectedConsumptionMode === "relative_weekday") {
-          consumptionInfoText = texts.heatmapConsumptionRefWeekday;
+          consumptionLegend = { low: texts.heatmapLegendLower, high: texts.heatmapLegendHigher };
+        } else if (selectedConsumptionMode === "cost_impact") {
+          consumptionTitle = texts.heatmapConsumptionCostImpactTitle;
+          consumptionUnit = "ct/h";
+          consumptionInfoText = texts.heatmapConsumptionRefCostImpact;
         }
 
         const consumptionHtml = generateHeatmapHTML(
           seasonConsumptionHeatmap,
-          texts.heatmapConsumptionTitle,
-          "kWh",
+          consumptionTitle,
+          consumptionUnit,
           false,
           formatNumber,
-          selectedConsumptionMode === "absolute"
-            ? { low: texts.heatmapLegendLow, high: texts.heatmapLegendHigh }
-            : { low: texts.heatmapLegendLower, high: texts.heatmapLegendHigher },
+          consumptionLegend,
           consumptionScale,
           consumptionInfoText ? { infoText: consumptionInfoText } : null
         );
@@ -1221,16 +1233,30 @@ syncSensorPicker() {
     return "absolute";
   }
 
-  computeConsumptionDisplayHeatmap(consumptionHeatmap, mode) {
+  computeConsumptionDisplayHeatmap(consumptionHeatmap, priceHeatmap, mode) {
     const base = (consumptionHeatmap || []).map((row) => (row || []).map((value) => Number(value) || 0));
     if (mode === "relative_mean") {
       const mean = this.computeHeatmapMean(base);
       return base.map((row) => row.map((value) => Number((value - mean).toFixed(4))));
     }
-    if (mode === "relative_weekday") {
-      return this.computeHourProfileDeltaHeatmap(base);
+    if (mode === "cost_impact") {
+      return this.computeCostImpactHeatmap(base, priceHeatmap);
     }
     return base;
+  }
+
+  computeCostImpactHeatmap(consumptionHeatmap, priceHeatmap) {
+    const prices = (priceHeatmap || []).map((row) => (row || []).map((value) => Number(value) || 0));
+    return (consumptionHeatmap || []).map((row, day) =>
+      (row || []).map((value, hour) => {
+        const numericValue = Number(value);
+        const numericPrice = Number(prices[day]?.[hour]);
+        if (!Number.isFinite(numericValue) || !Number.isFinite(numericPrice)) {
+          return 0;
+        }
+        return Number((numericValue * numericPrice).toFixed(4));
+      })
+    );
   }
 
   computeHourProfileDeltaHeatmap(heatmapData) {
@@ -1609,7 +1635,9 @@ syncSensorPicker() {
       const parsed = JSON.parse(raw);
       this._storedSource = parsed.activeSource || null;
       this._heatmapSeason = parsed.heatmapSeason || "whole_year";
-      this._consumptionMode = parsed.consumptionMode || "absolute";
+      this._consumptionMode = (parsed.consumptionMode === "relative_weekday" || parsed.consumptionMode === "percentile_rank")
+        ? "cost_impact"
+        : (parsed.consumptionMode || "absolute");
       this._spotPriceMode = parsed.spotPriceMode || "break_even";
       this._dashboardTab = parsed.dashboardTab || "monthly";
       this._selectedSensor = parsed.selectedSensor || this._selectedSensor;
