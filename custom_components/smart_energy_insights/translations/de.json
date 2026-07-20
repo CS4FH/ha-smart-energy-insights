@@ -135,6 +135,8 @@
     "analysis_negative_price_hours_help": "Stunden mit Spot-Marktpreis unter 0 ct/kWh, angezeigt als Stunden und Anteil.",
     "analysis_max_spot_price_label": "Max Spotpreis",
     "analysis_max_spot_price_help": "Hoechster beobachteter Spot-Marktpreis (ct/kWh) im gewaehlten Zeitraum.",
+    "analysis_spot_cheaper_label": "Spot guenstiger Stunden",
+    "analysis_spot_cheaper_help": "Anteil der Stunden, in denen Spot (inkl. Aufschlag) guenstiger war als der aktuell konfigurierte Fixpreis.",
     "analysis_min_spot_price_label": "Min Spotpreis",
     "analysis_min_spot_price_help": "Niedrigster beobachteter Spot-Marktpreis (ct/kWh) im gewaehlten Zeitraum.",
     "analysis_occurred_on_label": "Aufgetreten am",

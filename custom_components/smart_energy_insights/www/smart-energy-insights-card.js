@@ -310,6 +310,11 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       analysisBaseLoadLabel: this.localize("card.analysis_base_load_label", "Base load (P05)"),
       analysisDailySpreadLabel: this.localize("card.analysis_daily_spread_label", "Avg daily price spread"),
       analysisSpotStdDevLabel: this.localize("card.analysis_spot_std_dev_label", "Spot price std. dev."),
+      analysisSpotCheaperLabel: this.localize("card.analysis_spot_cheaper_label", "Spot cheaper hours"),
+      analysisSpotCheaperHelp: this.localize(
+        "card.analysis_spot_cheaper_help",
+        "Share of hours in which spot (incl. markup) was cheaper than the currently configured fixed price."
+      ),
       analysisMaxPeakHelp: this.localize("card.analysis_max_peak_help", "Highest single-hour consumption value in the selected period."),
       analysisBaseLoadHelp: this.localize("card.analysis_base_load_help", "Estimated base load as the 5th percentile (P05) of positive hourly consumption values."),
       analysisDailySpreadHelp: this.localize("card.analysis_daily_spread_help", "Average daily difference between highest and lowest spot price."),
@@ -479,10 +484,6 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       savingsCostPerDaySpotHelp: this.localize(
         "card.savings_cost_per_day_spot_help",
         "Daily cost for the spot tariff based on the selected period."
-      ),
-      savingsSpotCheaperHelp: this.localize(
-        "card.savings_spot_cheaper_help",
-        "Share of hours where spot energy (incl. markup) is cheaper than fixed."
       ),
       savingsExtrapolatedHelp: this.localize(
         "card.savings_extrapolated_help",
@@ -1701,7 +1702,6 @@ syncSensorPicker() {
     const breakEvenFixed = this.latestData.break_even_fixed_ct_kwh;
     const breakEvenFixedCt = Number(breakEvenFixed);
     const fixedPriceCt = Number(this.latestData.fixed_price_ct);
-    const spotCheaperShare = this.latestData.spot_cheaper_share;
     const fixedPriceLabel = Number.isFinite(fixedPriceCt)
       ? `${formatNumber(fixedPriceCt, 2)} ct/kWh`
       : "-";
@@ -1757,11 +1757,6 @@ syncSensorPicker() {
         <div class="kpi-card" role="listitem">
           <div class="kpi-simple-title">BREAK-EVEN FIXED<span class="kpi-info-marker" role="img" tabindex="0" aria-label="${this.escapeAttribute(texts.kpiInfoLabel)}" title="${this.escapeAttribute(breakEvenHelpText)}"><ha-icon icon="mdi:information-outline"></ha-icon></span></div>
           <div class="kpi-simple-value">${breakEvenFixed !== null && breakEvenFixed !== undefined ? formatNumber(breakEvenFixed, 2) : "-"} ct/kWh</div>
-        </div>
-
-        <div class="kpi-card" role="listitem">
-          <div class="kpi-simple-title">SPOT CHEAPER HOURS<span class="kpi-info-marker" role="img" tabindex="0" aria-label="${this.escapeAttribute(texts.kpiInfoLabel)}" title="${this.escapeAttribute(texts.kpiSpotCheaperHelp)}"><ha-icon icon="mdi:information-outline"></ha-icon></span></div>
-          <div class="kpi-simple-value">${spotCheaperShare !== null && spotCheaperShare !== undefined ? formatNumber(spotCheaperShare * 100, 1) : "-"} %</div>
         </div>
       </div>
     `;
@@ -1883,6 +1878,10 @@ syncSensorPicker() {
       : placeholderValue;
     const stdDevValue = summary.spotPriceStdDev !== null && summary.spotPriceStdDev !== undefined
       ? `${formatNumber(summary.spotPriceStdDev, 2)} ct/kWh`
+      : placeholderValue;
+    const spotCheaperShare = Number(summary.spotCheaperShare);
+    const spotCheaperValue = Number.isFinite(spotCheaperShare)
+      ? `${formatNumber(spotCheaperShare, 1)} %`
       : placeholderValue;
     const completenessValue = Number.isFinite(completenessRatio)
       ? `${formatNumber(completenessRatio * 100, completenessRatio >= 0.9995 ? 0 : 1)} %`
@@ -2049,6 +2048,7 @@ syncSensorPicker() {
       { label: texts.analysisAvgSpotLabel, value: `${summary.avgPrice} ct/kWh`, help: texts.analysisAvgSpotHelp },
       { label: texts.analysisEffectiveSpotLabel, value: effectiveSpotValue, help: texts.analysisEffectiveSpotHelp },
       { label: texts.analysisNegativePriceHoursLabel, value: negativePriceValue, help: texts.analysisNegativePriceHoursHelp },
+      { label: texts.analysisSpotCheaperLabel, value: spotCheaperValue, help: texts.analysisSpotCheaperHelp },
       { label: texts.analysisMaxSpotPriceLabel, value: maxSpotValue, help: maxSpotHelp },
       { label: texts.analysisMinSpotPriceLabel, value: minSpotValue, help: minSpotHelp },
       { label: texts.analysisDailySpreadLabel, value: dailySpreadValue, help: texts.analysisDailySpreadHelp },
