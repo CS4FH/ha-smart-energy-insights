@@ -8,7 +8,7 @@ import {
   setActiveSource,
   uploadCsv
 } from "./smart-energy-insights-api.js";
-import { generateHeatmapHTML } from "./smart-energy-insights-heatmap.js?v=20260715a";
+import { generateHeatmapHTML } from "./smart-energy-insights-heatmap.js?v=20260720b";
 import { renderBaseCard, renderDashboardHtml } from "./smart-energy-insights-templates.js?v=20260720a";
 import { formatNumber } from "./smart-energy-insights-utils.js";
 
@@ -327,6 +327,15 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
         "card.heatmap_price_title",
         "Spot price heatmap (ct/kWh)"
       ),
+      heatmapOptimizationSectionLabel: this.localize("card.heatmap_optimization_section_label", "OPTIMIZATION VIEW"),
+      heatmapOptimizationTitle: this.localize("card.heatmap_optimization_title", "Load shift potential"),
+      heatmapOptimizationInfo: this.localize(
+        "card.heatmap_optimization_info",
+        "Highlights inefficient habits (red) and unused cheap hours (green) to optimize your consumption."
+      ),
+      heatmapLegendShiftAway: this.localize("card.heatmap_legend_shift_away", "Shift load away"),
+      heatmapLegendOptimized: this.localize("card.heatmap_legend_optimized", "Already optimized"),
+      heatmapLegendShiftHere: this.localize("card.heatmap_legend_shift_here", "Shift load here"),
       heatmapConsumptionModeLabel: this.localize("card.heatmap_consumption_mode_label", "Consumption view"),
       heatmapConsumptionModeAbsolute: this.localize("card.heatmap_consumption_mode_absolute", "Absolute"),
       heatmapConsumptionModeRelativeMean: this.localize("card.heatmap_consumption_mode_relative_mean", "Relative to average"),
@@ -1239,6 +1248,10 @@ syncSensorPicker() {
     const priceScale = Number.isFinite(priceReference)
       ? this.computeSymmetricHeatmapScaleFromMany(priceDisplayHeatmaps)
       : this.computeRobustHeatmapScaleFromMany(priceDisplayHeatmaps);
+    const optimizationDisplayHeatmaps = seasonHeatmaps.map((heatmaps) =>
+      this.computeLoadShiftPotentialHeatmap(heatmaps.consumption_heatmap, heatmaps.price_heatmap)
+    );
+    const optimizationScale = this.computeSymmetricHeatmapScaleFromMany(optimizationDisplayHeatmaps);
 
     const buttons = seasons
       .map((season) => `
@@ -1306,6 +1319,10 @@ syncSensorPicker() {
           data.price_heatmap,
           selectedConsumptionMode
         );
+        const seasonOptimizationHeatmap = this.computeLoadShiftPotentialHeatmap(
+          data.consumption_heatmap,
+          data.price_heatmap
+        );
         let consumptionInfoText = texts.heatmapConsumptionAbsoluteInfo;
         let consumptionTitle = texts.heatmapConsumptionTitle;
         let consumptionUnit = "kWh";
@@ -1350,6 +1367,25 @@ syncSensorPicker() {
           priceScale,
           priceInfoText ? { infoText: priceInfoText } : null
         );
+        const optimizationHtml = generateHeatmapHTML(
+          seasonOptimizationHeatmap,
+          texts.heatmapOptimizationTitle,
+          "score",
+          false,
+          formatNumber,
+          {
+            low: texts.heatmapLegendShiftAway,
+            center: texts.heatmapLegendOptimized,
+            high: texts.heatmapLegendShiftHere,
+          },
+          optimizationScale,
+          {
+            infoText: texts.heatmapOptimizationInfo,
+            colorMode: "optimization",
+            hideValueExtremes: true,
+            legendBarStyle: "background: linear-gradient(90deg, hsla(6, 74%, 46%, 0.95) 0%, hsla(215, 10%, 24%, 0.95) 50%, hsla(135, 62%, 38%, 0.95) 100%);",
+          }
+        );
 
         return `
           <div class="heatmap-season-panel" data-heatmap-panel="${season.key}"${season.key === selectedSeason ? "" : " hidden"}>
@@ -1371,6 +1407,12 @@ syncSensorPicker() {
                 <div class="spot-mode-buttons">${spotModeButtons}</div>
               </div>
               ${priceHtml}
+            </section>
+            <section class="heatmap-subcard heatmap-subcard-optimization">
+              <div class="heatmap-subcard-controls" role="group" aria-label="Optimization view">
+                <span class="spot-mode-label">${texts.heatmapOptimizationSectionLabel}</span>
+              </div>
+              ${optimizationHtml}
             </section>
           </div>
         `;
@@ -1423,6 +1465,43 @@ syncSensorPicker() {
     );
   }
 
+  computeLoadShiftPotentialHeatmap(consumptionHeatmap, priceHeatmap) {
+    const consumption = (consumptionHeatmap || []).map((row) => (row || []).map((value) => Number(value)));
+    const prices = (priceHeatmap || []).map((row) => (row || []).map((value) => Number(value)));
+
+    const avgConsumption = this.computeHeatmapMean(consumption);
+    const avgPrice = this.computeHeatmapMean(prices);
+    const stdConsumption = this.computeHeatmapStdDev(consumption, avgConsumption);
+    const stdPrice = this.computeHeatmapStdDev(prices, avgPrice);
+    const consumptionScale = stdConsumption > 0 ? stdConsumption : Math.max(Math.abs(avgConsumption) * 0.15, 0.05);
+    const priceScale = stdPrice > 0 ? stdPrice : Math.max(Math.abs(avgPrice) * 0.15, 0.05);
+
+    return consumption.map((row, day) =>
+      row.map((consumptionValue, hour) => {
+        const priceValue = prices[day]?.[hour];
+        if (!Number.isFinite(consumptionValue) || !Number.isFinite(priceValue)) {
+          return 0;
+        }
+
+        if (consumptionValue > avgConsumption && priceValue > avgPrice) {
+          const consumptionAbove = (consumptionValue - avgConsumption) / consumptionScale;
+          const priceAbove = (priceValue - avgPrice) / priceScale;
+          const severity = Math.min(4, (consumptionAbove + priceAbove) / 2);
+          return Number((-severity).toFixed(4));
+        }
+
+        if (consumptionValue < avgConsumption && priceValue < avgPrice) {
+          const consumptionBelow = (avgConsumption - consumptionValue) / consumptionScale;
+          const priceBelow = (avgPrice - priceValue) / priceScale;
+          const opportunity = Math.min(4, (consumptionBelow + priceBelow) / 2);
+          return Number(opportunity.toFixed(4));
+        }
+
+        return 0;
+      })
+    );
+  }
+
   computeHourProfileDeltaHeatmap(heatmapData) {
     const columnMeans = Array.from({ length: 24 }, (_, hour) => {
       let sum = 0;
@@ -1448,6 +1527,21 @@ syncSensorPicker() {
       .filter((value) => Number.isFinite(value));
     if (values.length === 0) return 0;
     return values.reduce((sum, value) => sum + value, 0) / values.length;
+  }
+
+  computeHeatmapStdDev(heatmapData, mean) {
+    const values = (heatmapData || [])
+      .flat()
+      .filter((value) => Number.isFinite(value));
+    if (values.length === 0) return 0;
+    const resolvedMean = Number.isFinite(mean)
+      ? mean
+      : values.reduce((sum, value) => sum + value, 0) / values.length;
+    const variance = values.reduce((sum, value) => {
+      const delta = value - resolvedMean;
+      return sum + delta * delta;
+    }, 0) / values.length;
+    return Math.sqrt(variance);
   }
 
   computeRobustHeatmapScale(heatmapData) {

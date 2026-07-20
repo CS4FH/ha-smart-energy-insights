@@ -26,17 +26,20 @@ export function generateHeatmapHTML(data, title, unit, reverseColors, formatNumb
   const legendCenter = legendLabels && legendLabels.center ? legendLabels.center : null;
   const legendHigh = legendLabels && legendLabels.high ? legendLabels.high : "High";
   const infoText = heatmapOptions.infoText || " ";
+  const hideValueExtremes = heatmapOptions.hideValueExtremes === true;
+  const colorMode = heatmapOptions.colorMode || "default";
+  const legendBarStyle = heatmapOptions.legendBarStyle ? ` style="${heatmapOptions.legendBarStyle}"` : "";
 
   let html = `
     <div class="heatmap-section">
       <div class="heatmap-title">${title}</div>
       <div class="heatmap-legend">
-        <span class="heatmap-legend-value">${formatNumber(min, 2)} ${unit}</span>
+        ${hideValueExtremes ? "" : `<span class="heatmap-legend-value">${formatNumber(min, 2)} ${unit}</span>`}
         <span>${legendLow}</span>
-        <div class="heatmap-legend-bar"></div>
+        <div class="heatmap-legend-bar"${legendBarStyle}></div>
         ${legendCenter ? `<span>${legendCenter}</span>` : ""}
         <span>${legendHigh}</span>
-        <span class="heatmap-legend-value">${formatNumber(max, 2)} ${unit}</span>
+        ${hideValueExtremes ? "" : `<span class="heatmap-legend-value">${formatNumber(max, 2)} ${unit}</span>`}
       </div>
       <div class="heatmap-info-note${infoText.trim() ? "" : " is-empty"}"><span class="heatmap-info-badge">i</span><span>${infoText}</span></div>
       <div class="heatmap-grid">
@@ -55,25 +58,54 @@ export function generateHeatmapHTML(data, title, unit, reverseColors, formatNumb
       let intensity = (clampedVal - min) / range;
       intensity = Math.pow(intensity, 0.85);
 
-      let hue;
-      if (Number.isFinite(center)) {
-        if (clampedVal <= center) {
-          const lowerRange = center - min || 1;
-          const t = Math.max(0, Math.min(1, (clampedVal - min) / lowerRange));
-          hue = 120 - (120 - 35) * t;
+      let bgColor;
+      if (colorMode === "optimization") {
+        const neutralThreshold = (Math.max(Math.abs(min), Math.abs(max)) || 1) * 0.02;
+        if (Math.abs(clampedVal) <= neutralThreshold) {
+          bgColor = "hsla(215, 10%, 18%, 0.45)";
+        } else if (clampedVal < 0) {
+          const redRange = Math.abs(min) || 1;
+          const redIntensity = Math.pow(Math.max(0, Math.min(1, Math.abs(clampedVal) / redRange)), 0.9);
+          const saturation = 58 + redIntensity * 30;
+          const lightness = 22 + redIntensity * 22;
+          const alpha = 0.55 + redIntensity * 0.4;
+          bgColor = `hsla(6, ${saturation}%, ${lightness}%, ${alpha})`;
         } else {
-          const upperRange = max - center || 1;
-          const t = Math.max(0, Math.min(1, (clampedVal - center) / upperRange));
-          hue = 35 * (1 - t);
+          const greenRange = max || 1;
+          const greenIntensity = Math.pow(Math.max(0, Math.min(1, clampedVal / greenRange)), 0.9);
+          const saturation = 44 + greenIntensity * 30;
+          const lightness = 22 + greenIntensity * 20;
+          const alpha = 0.55 + greenIntensity * 0.4;
+          bgColor = `hsla(135, ${saturation}%, ${lightness}%, ${alpha})`;
         }
       } else {
-        hue = reverseColors ? intensity * 120 : (1 - intensity) * 120;
+        let hue;
+        if (Number.isFinite(center)) {
+          if (clampedVal <= center) {
+            const lowerRange = center - min || 1;
+            const t = Math.max(0, Math.min(1, (clampedVal - min) / lowerRange));
+            hue = 120 - (120 - 35) * t;
+          } else {
+            const upperRange = max - center || 1;
+            const t = Math.max(0, Math.min(1, (clampedVal - center) / upperRange));
+            hue = 35 * (1 - t);
+          }
+        } else {
+          hue = reverseColors ? intensity * 120 : (1 - intensity) * 120;
+        }
+
+        const lightness = 45 + 15 * (1 - Math.abs(intensity - 0.5) * 2);
+        const alpha = val === 0 ? 0.1 : 1;
+        bgColor = `hsla(${hue}, 85%, ${lightness}%, ${alpha})`;
       }
 
-      const lightness = 45 + 15 * (1 - Math.abs(intensity - 0.5) * 2);
-      const alpha = val === 0 ? 0.1 : 1;
-      const bgColor = `hsla(${hue}, 85%, ${lightness}%, ${alpha})`;
-      const tooltip = `${days[d]} ${h}:00 Uhr\n${formatNumber(val, 2)} ${unit}`;
+      let tooltip;
+      if (typeof heatmapOptions.tooltipFormatter === "function") {
+        tooltip = heatmapOptions.tooltipFormatter(val, days[d], h);
+      } else {
+        tooltip = `${days[d]} ${h}:00 Uhr\n${formatNumber(val, 2)} ${unit}`;
+      }
+
       html += `<div class="heatmap-cell" style="background-color: ${bgColor}" title="${tooltip}"></div>`;
     }
   }
