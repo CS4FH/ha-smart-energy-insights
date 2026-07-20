@@ -45,6 +45,9 @@ def test_analyze_tariffs_is_consistent_for_monthly_and_total() -> None:
     assert result["negative_price_hours"] == 0
     assert result["negative_price_share"] == 0.0
     assert result["max_spot_price_ct_kwh"] == 45.0
+    assert result["min_spot_price_ct_kwh"] == 8.0
+    assert result["max_spot_price_at"] == "2026-02-01T00:00:00+00:00"
+    assert result["min_spot_price_at"] == "2026-01-31T23:00:00+00:00"
     assert result["max_extra_savings_eur"] is not None
     assert result["max_penalty_risk_eur"] is not None
 
@@ -89,6 +92,9 @@ def test_analyze_tariffs_handles_no_matches() -> None:
     assert result["negative_price_hours"] == 0
     assert result["negative_price_share"] is None
     assert result["max_spot_price_ct_kwh"] is None
+    assert result["min_spot_price_ct_kwh"] is None
+    assert result["max_spot_price_at"] is None
+    assert result["min_spot_price_at"] is None
     assert result["max_extra_savings_eur"] is None
     assert result["max_penalty_risk_eur"] is None
     assert result["monthly_tariff_comparison"]["matched_hours"] == 0
@@ -124,6 +130,9 @@ def test_analyze_tariffs_reports_negative_price_stats_and_completeness_gap() -> 
     assert result["negative_price_hours"] == 1
     assert abs(result["negative_price_share"] - 0.5) < 0.0001
     assert result["max_spot_price_ct_kwh"] == 10.0
+    assert result["min_spot_price_ct_kwh"] == -5.0
+    assert result["max_spot_price_at"] == "2026-01-01T02:00:00+00:00"
+    assert result["min_spot_price_at"] == "2026-01-01T00:00:00+00:00"
     # Weighted mean: (1 * -5 + 2 * 10) / 3 = 5 ct/kWh
     assert abs(result["effective_spot_price_ct_kwh"] - 5.0) < 0.0001
 

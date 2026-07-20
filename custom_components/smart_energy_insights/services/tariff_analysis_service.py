@@ -81,6 +81,9 @@ def analyze_tariffs(statistics: list, price_series: list, pricing_config, inputs
     cheaper_hours = 0
     negative_price_hours = 0
     max_spot_price_ct_kwh = None
+    min_spot_price_ct_kwh = None
+    max_spot_price_at = None
+    min_spot_price_at = None
 
     for start, consumption, spot_price in matched_points:
         # Align monthly bucketing with heatmap semantics (interval end).
@@ -98,6 +101,10 @@ def analyze_tariffs(statistics: list, price_series: list, pricing_config, inputs
             negative_price_hours += 1
         if max_spot_price_ct_kwh is None or spot_price > max_spot_price_ct_kwh:
             max_spot_price_ct_kwh = spot_price
+            max_spot_price_at = start.isoformat()
+        if min_spot_price_ct_kwh is None or spot_price < min_spot_price_ct_kwh:
+            min_spot_price_ct_kwh = spot_price
+            min_spot_price_at = start.isoformat()
 
         fixed_total_eur += fixed_cost_hour
         spot_total_eur += spot_cost_hour
@@ -257,6 +264,9 @@ def analyze_tariffs(statistics: list, price_series: list, pricing_config, inputs
         "negative_price_hours": negative_price_hours,
         "negative_price_share": negative_price_share,
         "max_spot_price_ct_kwh": max_spot_price_ct_kwh,
+        "min_spot_price_ct_kwh": min_spot_price_ct_kwh,
+        "max_spot_price_at": max_spot_price_at,
+        "min_spot_price_at": min_spot_price_at,
         "avg_cheapest_daily_price_ct_kwh": avg_cheapest_daily_price_ct_kwh,
         "avg_most_expensive_daily_price_ct_kwh": avg_most_expensive_daily_price_ct_kwh,
         "max_extra_savings_eur": max_extra_savings_eur,

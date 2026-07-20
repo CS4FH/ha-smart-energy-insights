@@ -69,6 +69,18 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     return `${match[3]}.${match[2]}.${match[1]}`;
   }
 
+  formatDateTimeEuropean(value) {
+    if (!value) return "-";
+    const parsed = new Date(value);
+    if (!Number.isFinite(parsed.getTime())) return String(value);
+    const day = String(parsed.getDate()).padStart(2, "0");
+    const month = String(parsed.getMonth() + 1).padStart(2, "0");
+    const year = parsed.getFullYear();
+    const hour = String(parsed.getHours()).padStart(2, "0");
+    const minute = String(parsed.getMinutes()).padStart(2, "0");
+    return `${day}.${month}.${year}, ${hour}:${minute}`;
+  }
+
   getTexts() {
     return {
       sourceTitle: this.localize("card.source_title", "Choose data source"),
@@ -212,6 +224,9 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       analysisNegativePriceHoursHelp: this.localize("card.analysis_negative_price_hours_help", "Hours where the market spot price was below 0 ct/kWh, shown as hours and share."),
       analysisMaxSpotPriceLabel: this.localize("card.analysis_max_spot_price_label", "Max spot price"),
       analysisMaxSpotPriceHelp: this.localize("card.analysis_max_spot_price_help", "Highest market spot price (ct/kWh) observed in the selected period."),
+      analysisMinSpotPriceLabel: this.localize("card.analysis_min_spot_price_label", "Min spot price"),
+      analysisMinSpotPriceHelp: this.localize("card.analysis_min_spot_price_help", "Lowest market spot price (ct/kWh) observed in the selected period."),
+      analysisOccurredOnLabel: this.localize("card.analysis_occurred_on_label", "Occurred on"),
       analysisSectionRiskTitle: this.localize("card.analysis_section_risk_title", "RISK AND OPTIMIZATION"),
       analysisFlexibilityPotentialLabel: this.localize("card.analysis_flexibility_potential_label", "Flexibility potential"),
       analysisFlexibilityPotentialHelp: this.localize("card.analysis_flexibility_potential_help", "Percentage of your total consumption that is above your baseline and could theoretically be shifted to other hours."),
@@ -282,6 +297,15 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       analysisSectionRangeTitle: this.localize("card.analysis_section_range_title", "Measurement window"),
       analysisSectionConsumptionTitle: this.localize("card.analysis_section_consumption_title", "Consumption analysis"),
       analysisSectionTariffTitle: this.localize("card.analysis_section_tariff_title", "Tariff and market analysis"),
+      analysisSectionParametersTitle: this.localize("card.analysis_section_parameters_title", "Calculation parameters"),
+      analysisFixedRateAssumedLabel: this.localize("card.analysis_fixed_rate_assumed_label", "Fixed rate assumed"),
+      analysisFixedRateAssumedHelp: this.localize("card.analysis_fixed_rate_assumed_help", "Configured fixed energy rate used for tariff comparison."),
+      analysisFixedBaseFeeLabel: this.localize("card.analysis_fixed_base_fee_label", "Fixed base fee"),
+      analysisFixedBaseFeeHelp: this.localize("card.analysis_fixed_base_fee_help", "Configured monthly base fee for the fixed tariff."),
+      analysisDynamicMarkupLabel: this.localize("card.analysis_dynamic_markup_label", "Dynamic markup"),
+      analysisDynamicMarkupHelp: this.localize("card.analysis_dynamic_markup_help", "Provider surcharge added to market spot prices in the dynamic tariff."),
+      analysisDynamicBaseFeeLabel: this.localize("card.analysis_dynamic_base_fee_label", "Dynamic base fee"),
+      analysisDynamicBaseFeeHelp: this.localize("card.analysis_dynamic_base_fee_help", "Configured monthly base fee for the dynamic tariff."),
       analysisMaxPeakLabel: this.localize("card.analysis_max_peak_label", "Max peak"),
       analysisBaseLoadLabel: this.localize("card.analysis_base_load_label", "Base load (P05)"),
       analysisDailySpreadLabel: this.localize("card.analysis_daily_spread_label", "Avg daily price spread"),
@@ -503,11 +527,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
   }
 
   getTaxNote(taxRate) {
-    return this.localize(
-      "card.card_tax_note",
-      "All values include {taxRate}% tax.",
-      { taxRate: formatNumber(taxRate, 1) }
-    );
+    return "All values include 20.0% tax. Volumetric grid fees and static surcharges are excluded, as they cancel out in the tariff comparison.";
   }
 
   render() {
@@ -1045,7 +1065,14 @@ syncSensorPicker() {
       offPeakSharePercent: response.off_peak_share_percent,
       negativePriceHours: response.negative_price_hours,
       negativePriceShare: response.negative_price_share,
-      maxSpotPrice: response.max_spot_price_ct_kwh
+      maxSpotPrice: response.max_spot_price_ct_kwh,
+      minSpotPrice: response.min_spot_price_ct_kwh,
+      maxSpotPriceAt: response.max_spot_price_at,
+      minSpotPriceAt: response.min_spot_price_at,
+      fixedPriceCt: response.fixed_price_ct,
+      fixedBaseFeeEur: response.fixed_base_fee_eur,
+      spotMarkupCt: response.spot_markup_ct,
+      spotBaseFeeEur: response.spot_base_fee_eur
     });
 
     if (!this._dashboardTab) this._dashboardTab = "monthly";
@@ -1739,6 +1766,15 @@ syncSensorPicker() {
     const maxSpotValue = summary.maxSpotPrice !== null && summary.maxSpotPrice !== undefined
       ? `${formatNumber(summary.maxSpotPrice, 2)} ct/kWh`
       : placeholderValue;
+    const minSpotValue = summary.minSpotPrice !== null && summary.minSpotPrice !== undefined
+      ? `${formatNumber(summary.minSpotPrice, 2)} ct/kWh`
+      : placeholderValue;
+    const maxSpotHelp = summary.maxSpotPriceAt
+      ? `${texts.analysisMaxSpotPriceHelp} ${texts.analysisOccurredOnLabel}: ${this.formatDateTimeEuropean(summary.maxSpotPriceAt)}`
+      : texts.analysisMaxSpotPriceHelp;
+    const minSpotHelp = summary.minSpotPriceAt
+      ? `${texts.analysisMinSpotPriceHelp} ${texts.analysisOccurredOnLabel}: ${this.formatDateTimeEuropean(summary.minSpotPriceAt)}`
+      : texts.analysisMinSpotPriceHelp;
     const negativeHours = Number(summary.negativePriceHours);
     const negativeShare = Number(summary.negativePriceShare);
     const flexibilityPotential = Number(summary.flexibilityPotentialPercent);
@@ -1886,9 +1922,30 @@ syncSensorPicker() {
       { label: texts.analysisAvgSpotLabel, value: `${summary.avgPrice} ct/kWh`, help: texts.analysisAvgSpotHelp },
       { label: texts.analysisEffectiveSpotLabel, value: effectiveSpotValue, help: texts.analysisEffectiveSpotHelp },
       { label: texts.analysisNegativePriceHoursLabel, value: negativePriceValue, help: texts.analysisNegativePriceHoursHelp },
-      { label: texts.analysisMaxSpotPriceLabel, value: maxSpotValue, help: texts.analysisMaxSpotPriceHelp },
+      { label: texts.analysisMaxSpotPriceLabel, value: maxSpotValue, help: maxSpotHelp },
+      { label: texts.analysisMinSpotPriceLabel, value: minSpotValue, help: minSpotHelp },
       { label: texts.analysisDailySpreadLabel, value: dailySpreadValue, help: texts.analysisDailySpreadHelp },
       { label: texts.analysisSpotStdDevLabel, value: stdDevValue, help: texts.analysisSpotStdDevHelp }
+    ];
+
+    const fixedRateAssumedValue = summary.fixedPriceCt !== null && summary.fixedPriceCt !== undefined
+      ? `${formatNumber(summary.fixedPriceCt, 2)} ct/kWh`
+      : placeholderValue;
+    const fixedBaseFeeValue = summary.fixedBaseFeeEur !== null && summary.fixedBaseFeeEur !== undefined
+      ? `${formatNumber(summary.fixedBaseFeeEur, 2)} € / month`
+      : placeholderValue;
+    const dynamicMarkupValue = summary.spotMarkupCt !== null && summary.spotMarkupCt !== undefined
+      ? `${formatNumber(summary.spotMarkupCt, 2)} ct/kWh`
+      : placeholderValue;
+    const dynamicBaseFeeValue = summary.spotBaseFeeEur !== null && summary.spotBaseFeeEur !== undefined
+      ? `${formatNumber(summary.spotBaseFeeEur, 2)} € / month`
+      : placeholderValue;
+
+    const parameterItems = [
+      { label: texts.analysisFixedRateAssumedLabel, value: fixedRateAssumedValue, help: texts.analysisFixedRateAssumedHelp },
+      { label: texts.analysisFixedBaseFeeLabel, value: fixedBaseFeeValue, help: texts.analysisFixedBaseFeeHelp },
+      { label: texts.analysisDynamicMarkupLabel, value: dynamicMarkupValue, help: texts.analysisDynamicMarkupHelp },
+      { label: texts.analysisDynamicBaseFeeLabel, value: dynamicBaseFeeValue, help: texts.analysisDynamicBaseFeeHelp }
     ];
 
     const riskItems = [
@@ -1913,6 +1970,11 @@ syncSensorPicker() {
       <section class="technical-section">
         <div class="technical-section-title">${texts.analysisSectionTariffTitle}</div>
         ${buildGrid("technical-grid-main", priceItems)}
+      </section>
+
+      <section class="technical-section">
+        <div class="technical-section-title">${texts.analysisSectionParametersTitle}</div>
+        ${buildGrid("technical-grid-main", parameterItems)}
       </section>
 
       <section class="technical-section technical-tax-section">
