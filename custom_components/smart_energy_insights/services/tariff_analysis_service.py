@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import timedelta
 
 from homeassistant.util import dt as dt_util
@@ -36,9 +37,26 @@ def analyze_tariffs(statistics: list, price_series: list, pricing_config, inputs
         matched_points.append((start, consumption, spot_price))
 
     matched_hours = len(matched_points)
+    consumption_hours = sum(1 for stat in (statistics or []) if stat.get("start") is not None)
     matched_consumption = sum(consumption for _, consumption, _ in matched_points)
     base_spot_cost_cents = sum(consumption * spot_price for _, consumption, spot_price in matched_points)
     duration_months = matched_hours / 730.5 if matched_hours else 0.0
+    total_consumption_kwh = sum(max(0.0, float(stat.get("state", 0.0) or 0.0)) for stat in (statistics or []))
+
+    expected_hours = 0
+    if statistics:
+        starts = [stat.get("start") for stat in statistics if stat.get("start") is not None]
+        if starts:
+            earliest_start = min(starts)
+            latest_start = max(starts)
+            range_hours = int((latest_start - earliest_start).total_seconds() // 3600) + 1
+            expected_hours = max(0, range_hours)
+
+    data_completeness_ratio = (
+        consumption_hours / expected_hours
+        if expected_hours > 0
+        else None
+    )
 
     tax_multiplier = 1.0 + pricing_config.tax_rate / 100.0 if inputs_are_net else 1.0
     gross_fix_price = pricing_config.fixed_price * tax_multiplier if inputs_are_net else pricing_config.fixed_price
@@ -61,6 +79,8 @@ def analyze_tariffs(statistics: list, price_series: list, pricing_config, inputs
     spot_total_eur = 0.0
     delta_total_eur = 0.0
     cheaper_hours = 0
+    negative_price_hours = 0
+    max_spot_price_ct_kwh = None
 
     for start, consumption, spot_price in matched_points:
         # Align monthly bucketing with heatmap semantics (interval end).
@@ -74,6 +94,10 @@ def analyze_tariffs(statistics: list, price_series: list, pricing_config, inputs
 
         if spot_cost_hour < fixed_cost_hour:
             cheaper_hours += 1
+        if spot_price < 0:
+            negative_price_hours += 1
+        if max_spot_price_ct_kwh is None or spot_price > max_spot_price_ct_kwh:
+            max_spot_price_ct_kwh = spot_price
 
         fixed_total_eur += fixed_cost_hour
         spot_total_eur += spot_cost_hour
@@ -111,13 +135,109 @@ def analyze_tariffs(statistics: list, price_series: list, pricing_config, inputs
         )
 
     spot_cheaper_share = cheaper_hours / matched_hours if matched_hours > 0 else None
+    negative_price_share = negative_price_hours / matched_hours if matched_hours > 0 else None
+    effective_spot_price_ct_kwh = None
+    if matched_consumption > 0:
+        weighted_spot_energy_price_sum = sum(
+            consumption * (spot_price * tax_multiplier + gross_spot_markup)
+            for _, consumption, spot_price in matched_points
+        )
+        effective_spot_price_ct_kwh = weighted_spot_energy_price_sum / matched_consumption
+
+    # Flexibility potential: share of consumption above baseline (P05 * total hours).
+    values = [max(0.0, float(stat.get("state", 0.0) or 0.0)) for stat in (statistics or [])]
+    base_load_p05_kwh = None
+    if values:
+        positive_values = [value for value in values if value > 0.0]
+        percentile_source = sorted(positive_values if positive_values else values)
+        if percentile_source:
+            idx = int((len(percentile_source) - 1) * 0.05)
+            base_load_p05_kwh = percentile_source[idx]
+
+    absolute_base_load_kwh = None
+    flexible_volume_kwh = None
+    flexibility_potential_percent = None
+    if base_load_p05_kwh is not None:
+        absolute_base_load_kwh = base_load_p05_kwh * consumption_hours
+        flexible_volume_kwh = max(0.0, total_consumption_kwh - absolute_base_load_kwh)
+        if total_consumption_kwh > 0:
+            flexibility_potential_percent = (flexible_volume_kwh / total_consumption_kwh) * 100.0
+
+    price_sensitivity_percent = None
+    if (
+        break_even_fixed is not None
+        and effective_spot_price_ct_kwh is not None
+        and effective_spot_price_ct_kwh > 0
+    ):
+        price_sensitivity_percent = ((break_even_fixed / effective_spot_price_ct_kwh) - 1.0) * 100.0
+
+    daily_prices: dict = defaultdict(list)
+    for point in price_series or []:
+        point_start = point.get("start")
+        point_value = point.get("value")
+        if point_start is None or point_value is None:
+            continue
+        price_ct_kwh = float(point_value)
+        adjusted_price_ct_kwh = price_ct_kwh * tax_multiplier + gross_spot_markup
+        day_key = dt_util.as_local(point_start).date()
+        daily_prices[day_key].append(adjusted_price_ct_kwh)
+
+    cheapest_daily_averages = []
+    expensive_daily_averages = []
+    for prices in daily_prices.values():
+        if not prices:
+            continue
+        sorted_prices = sorted(prices)
+        take = min(6, len(sorted_prices))
+        cheapest_daily_averages.append(sum(sorted_prices[:take]) / take)
+        expensive_daily_averages.append(sum(sorted_prices[-take:]) / take)
+
+    avg_cheapest_daily_price_ct_kwh = (
+        sum(cheapest_daily_averages) / len(cheapest_daily_averages)
+        if cheapest_daily_averages
+        else None
+    )
+    avg_most_expensive_daily_price_ct_kwh = (
+        sum(expensive_daily_averages) / len(expensive_daily_averages)
+        if expensive_daily_averages
+        else None
+    )
+
+    max_extra_savings_eur = None
+    max_penalty_risk_eur = None
+    if flexible_volume_kwh is not None and effective_spot_price_ct_kwh is not None:
+        savings_per_kwh_ct = 0.0
+        if avg_cheapest_daily_price_ct_kwh is not None:
+            savings_per_kwh_ct = max(0.0, effective_spot_price_ct_kwh - avg_cheapest_daily_price_ct_kwh)
+        penalty_per_kwh_ct = 0.0
+        if avg_most_expensive_daily_price_ct_kwh is not None:
+            penalty_per_kwh_ct = max(0.0, avg_most_expensive_daily_price_ct_kwh - effective_spot_price_ct_kwh)
+        max_extra_savings_eur = (flexible_volume_kwh * savings_per_kwh_ct) / 100.0
+        max_penalty_risk_eur = (flexible_volume_kwh * penalty_per_kwh_ct) / 100.0
 
     return {
         "matched_hours": matched_hours,
+        "consumption_hours": consumption_hours,
+        "expected_hours": expected_hours,
+        "data_completeness_ratio": data_completeness_ratio,
         "matched_consumption": matched_consumption,
+        "total_consumption_kwh": total_consumption_kwh,
+        "base_load_p05_kwh": base_load_p05_kwh,
+        "absolute_base_load_kwh": absolute_base_load_kwh,
+        "flexible_volume_kwh": flexible_volume_kwh,
+        "flexibility_potential_percent": flexibility_potential_percent,
         "base_spot_cost_cents": base_spot_cost_cents,
         "duration_months": duration_months,
         "spot_cheaper_share": spot_cheaper_share,
+        "effective_spot_price_ct_kwh": effective_spot_price_ct_kwh,
+        "price_sensitivity_percent": price_sensitivity_percent,
+        "negative_price_hours": negative_price_hours,
+        "negative_price_share": negative_price_share,
+        "max_spot_price_ct_kwh": max_spot_price_ct_kwh,
+        "avg_cheapest_daily_price_ct_kwh": avg_cheapest_daily_price_ct_kwh,
+        "avg_most_expensive_daily_price_ct_kwh": avg_most_expensive_daily_price_ct_kwh,
+        "max_extra_savings_eur": max_extra_savings_eur,
+        "max_penalty_risk_eur": max_penalty_risk_eur,
         "break_even_fixed_ct_kwh": break_even_fixed,
         "fixed_total_eur": round(fixed_total_eur, 4),
         "spot_total_eur": round(spot_total_eur, 4),

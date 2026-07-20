@@ -54,6 +54,21 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     return text;
   }
 
+  escapeAttribute(value) {
+    return String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;");
+  }
+
+  formatIsoDateEuropean(value) {
+    const iso = String(value || "").split("T")[0];
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+    if (!match) return iso || "-";
+    return `${match[3]}.${match[2]}.${match[1]}`;
+  }
+
   getTexts() {
     return {
       sourceTitle: this.localize("card.source_title", "Choose data source"),
@@ -171,15 +186,44 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       analysisRangeLabel: this.localize("card.analysis_range_label", "Range"),
       analysisDaysLabel: this.localize("card.analysis_days_label", "Days"),
       analysisHoursLabel: this.localize("card.analysis_hours_label", "Hours"),
+      analysisRangeHelp: this.localize("card.analysis_range_help", "Time window used for this analysis."),
+      analysisDaysHelp: this.localize("card.analysis_days_help", "Matched hours converted to days, rounded to full days."),
+      analysisHoursHelp: this.localize("card.analysis_hours_help", "Number of matched hourly points used in tariff comparison."),
+      analysisDataCompletenessLabel: this.localize("card.analysis_data_completeness_label", "Data completeness"),
+      analysisDataCompletenessHelp: this.localize("card.analysis_data_completeness_help", "Share of available measured hours versus expected hourly slots in the selected period."),
       analysisTotalLabel: this.localize("card.analysis_total_label", "Total consumption"),
       analysisAvgHourLabel: this.localize("card.analysis_avg_hour_label", "Avg per hour"),
       analysisAvgDayLabel: this.localize("card.analysis_avg_day_label", "Avg per day"),
       analysisPeakHourLabel: this.localize("card.analysis_peak_hour_label", "Peak hour"),
       analysisWeekdayAvgLabel: this.localize("card.analysis_weekday_avg_label", "Weekday avg"),
       analysisWeekendAvgLabel: this.localize("card.analysis_weekend_avg_label", "Weekend avg"),
+      analysisTotalHelp: this.localize("card.analysis_total_help", "Sum of all measured consumption values in the selected period."),
+      analysisAvgDayHelp: this.localize("card.analysis_avg_day_help", "Average daily consumption based on measured days in the selected period."),
+      analysisAvgHourHelp: this.localize("card.analysis_avg_hour_help", "Average consumption per measured hour in the selected period."),
+      analysisWeekdayAvgHelp: this.localize("card.analysis_weekday_avg_help", "Average hourly consumption across weekdays (Mon-Fri)."),
+      analysisWeekendAvgHelp: this.localize("card.analysis_weekend_avg_help", "Average hourly consumption across weekend days (Sat-Sun)."),
+      analysisPeakHourHelp: this.localize("card.analysis_peak_hour_help", "Hour of day with the highest average consumption across the selected period."),
       analysisAvgSpotLabel: this.localize("card.analysis_avg_spot_label", "Avg spot price"),
-      analysisBreakEvenLabel: this.localize("card.analysis_break_even_label", "Break-even fixed"),
-      analysisSpotCheaperLabel: this.localize("card.analysis_spot_cheaper_label", "Spot cheaper hours"),
+      analysisAvgSpotHelp: this.localize("card.analysis_avg_spot_help", "Average spot market price (ct/kWh) over the imported price series."),
+      analysisEffectiveSpotLabel: this.localize("card.analysis_effective_spot_label", "Effective spot price"),
+      analysisEffectiveSpotHelp: this.localize("card.analysis_effective_spot_help", "Load-weighted average spot energy price (incl. markup and tax handling), excluding monthly base fee."),
+      analysisNegativePriceHoursLabel: this.localize("card.analysis_negative_price_hours_label", "Negative price hours"),
+      analysisNegativePriceHoursHelp: this.localize("card.analysis_negative_price_hours_help", "Hours where the market spot price was below 0 ct/kWh, shown as hours and share."),
+      analysisMaxSpotPriceLabel: this.localize("card.analysis_max_spot_price_label", "Max spot price"),
+      analysisMaxSpotPriceHelp: this.localize("card.analysis_max_spot_price_help", "Highest market spot price (ct/kWh) observed in the selected period."),
+      analysisSectionRiskTitle: this.localize("card.analysis_section_risk_title", "RISK AND OPTIMIZATION"),
+      analysisFlexibilityPotentialLabel: this.localize("card.analysis_flexibility_potential_label", "Flexibility potential"),
+      analysisFlexibilityPotentialHelp: this.localize("card.analysis_flexibility_potential_help", "Percentage of your total consumption that is above your baseline and could theoretically be shifted to other hours."),
+      analysisPriceSensitivityLabel: this.localize("card.analysis_price_sensitivity_label", "Price sensitivity"),
+      analysisPriceSensitivityHelp: ({ value }) => this.localize(
+        "card.analysis_price_sensitivity_help",
+        "Spot market prices could have been on average {value} higher before a fixed tariff would have been cheaper for your specific usage profile.",
+        { value }
+      ),
+      analysisMaxExtraSavingsLabel: this.localize("card.analysis_max_extra_savings_label", "Max. extra savings"),
+      analysisMaxExtraSavingsHelp: this.localize("card.analysis_max_extra_savings_help", "The maximum additional amount you could save by shifting all your flexible consumption into the cheapest 6 hours of each day."),
+      analysisMaxPenaltyRiskLabel: this.localize("card.analysis_max_penalty_risk_label", "Max. penalty risk"),
+      analysisMaxPenaltyRiskHelp: this.localize("card.analysis_max_penalty_risk_help", "The maximum additional cost if all your flexible consumption occurred during the most expensive 6 hours of each day."),
       analysisSectionRangeTitle: this.localize("card.analysis_section_range_title", "Measurement window"),
       analysisSectionConsumptionTitle: this.localize("card.analysis_section_consumption_title", "Consumption analysis"),
       analysisSectionTariffTitle: this.localize("card.analysis_section_tariff_title", "Tariff and market analysis"),
@@ -187,6 +231,10 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       analysisBaseLoadLabel: this.localize("card.analysis_base_load_label", "Base load (P05)"),
       analysisDailySpreadLabel: this.localize("card.analysis_daily_spread_label", "Avg daily price spread"),
       analysisSpotStdDevLabel: this.localize("card.analysis_spot_std_dev_label", "Spot price std. dev."),
+      analysisMaxPeakHelp: this.localize("card.analysis_max_peak_help", "Highest single-hour consumption value in the selected period."),
+      analysisBaseLoadHelp: this.localize("card.analysis_base_load_help", "Estimated base load as the 5th percentile (P05) of positive hourly consumption values."),
+      analysisDailySpreadHelp: this.localize("card.analysis_daily_spread_help", "Average daily difference between highest and lowest spot price."),
+      analysisSpotStdDevHelp: this.localize("card.analysis_spot_std_dev_help", "Standard deviation of spot prices in the selected period."),
       analysisPlaceholderValue: this.localize("card.analysis_placeholder_value", "-"),
       avgConsumptionLabel: this.localize("card.avg_consumption_label", "Avg consumption"),
       avgPriceLabel: this.localize("card.avg_price_label", "Avg spot price (net)"),
@@ -361,6 +409,28 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       costSpotHelp: this.localize(
         "card.cost_spot_help",
         "Total cost of the spot tariff for the selected period."
+      ),
+      kpiInfoLabel: this.localize("card.kpi_info_label", "More information"),
+      kpiFixedCostHelp: this.localize(
+        "card.kpi_fixed_cost_help",
+        "Total cost of the fixed tariff for the selected period including base fee, markup, and tax."
+      ),
+      kpiSpotCostHelp: this.localize(
+        "card.kpi_spot_cost_help",
+        "Total cost of the spot tariff for the selected period based on hourly market prices including markup, base fee, and tax."
+      ),
+      kpiBreakEvenHelp: this.localize(
+        "card.kpi_break_even_help",
+        "Fixed price in ct/kWh at which fixed and spot tariff would cost the same for this profile."
+      ),
+      kpiSpotCheaperHelp: this.localize(
+        "card.kpi_spot_cheaper_help",
+        "Share of hours in which spot (incl. markup) was cheaper than the currently configured fixed price."
+      ),
+      kpiBreakEvenCompare: ({ fixed, delta }) => this.localize(
+        "card.kpi_break_even_compare",
+        "Current fixed: {fixed} (Delta to break-even: {delta})",
+        { fixed, delta }
       ),
       savingsDailyHelp: this.localize(
         "card.savings_daily_help",
@@ -896,6 +966,7 @@ syncSensorPicker() {
       start,
       end,
       matchedHours: response.matched_hours,
+      dataCompletenessRatio: response.data_completeness_ratio,
       avgConsumption: avgConsumptionStr,
       avgPrice: avgPriceStr,
       totalConsumption: response.total_consumption_kwh,
@@ -908,8 +979,14 @@ syncSensorPicker() {
       baseLoadP05: response.base_load_p05_kwh,
       dailyPriceSpread: response.avg_daily_price_spread_ct_kwh,
       spotPriceStdDev: response.spot_price_stddev_ct_kwh,
-      breakEvenSpot: response.break_even_fixed_ct_kwh,
-      spotCheaperShare: response.spot_cheaper_share
+      effectiveSpotPrice: response.effective_spot_price_ct_kwh,
+      flexibilityPotentialPercent: response.flexibility_potential_percent,
+      priceSensitivityPercent: response.price_sensitivity_percent,
+      maxExtraSavingsEur: response.max_extra_savings_eur,
+      maxPenaltyRiskEur: response.max_penalty_risk_eur,
+      negativePriceHours: response.negative_price_hours,
+      negativePriceShare: response.negative_price_share,
+      maxSpotPrice: response.max_spot_price_ct_kwh
     });
 
     if (!this._dashboardTab) this._dashboardTab = "monthly";
@@ -1408,7 +1485,23 @@ syncSensorPicker() {
     const costSpotEur = Number(totals.spot_cost_eur || 0);
     const savingsEur = costFixEur - costSpotEur;
     const breakEvenFixed = this.latestData.break_even_fixed_ct_kwh;
+    const breakEvenFixedCt = Number(breakEvenFixed);
+    const fixedPriceCt = Number(this.latestData.fixed_price_ct);
     const spotCheaperShare = this.latestData.spot_cheaper_share;
+    const fixedPriceLabel = Number.isFinite(fixedPriceCt)
+      ? `${formatNumber(fixedPriceCt, 2)} ct/kWh`
+      : "-";
+    const breakEvenDeltaCt = Number.isFinite(breakEvenFixedCt) && Number.isFinite(fixedPriceCt)
+      ? fixedPriceCt - breakEvenFixedCt
+      : null;
+    const breakEvenDeltaLabel = Number.isFinite(breakEvenDeltaCt)
+      ? `${breakEvenDeltaCt >= 0 ? "+" : ""}${formatNumber(breakEvenDeltaCt, 2)} ct/kWh`
+      : "-";
+    const breakEvenCompareText = texts.kpiBreakEvenCompare({
+      fixed: fixedPriceLabel,
+      delta: breakEvenDeltaLabel,
+    });
+    const breakEvenHelpText = `${texts.kpiBreakEvenHelp} ${breakEvenCompareText}`;
 
     const bannerContainer = this.querySelector("#dynamicSavingsBanner");
     const isPositive = savingsEur >= 0;
@@ -1438,22 +1531,22 @@ syncSensorPicker() {
 
       <div class="kpi-grid" role="list" aria-label="Tariff KPIs">
         <div class="kpi-card" role="listitem">
-          <div class="kpi-simple-title">FIXED TARIFF COST</div>
+          <div class="kpi-simple-title">FIXED TARIFF COST<span class="kpi-info-marker" role="img" tabindex="0" aria-label="${this.escapeAttribute(texts.kpiInfoLabel)}" title="${this.escapeAttribute(texts.kpiFixedCostHelp)}"><ha-icon icon="mdi:information-outline"></ha-icon></span></div>
           <div class="kpi-simple-value">${formatNumber(costFixEur, 2)} €</div>
         </div>
 
         <div class="kpi-card" role="listitem">
-          <div class="kpi-simple-title">SPOT TARIFF COST</div>
+          <div class="kpi-simple-title">SPOT TARIFF COST<span class="kpi-info-marker" role="img" tabindex="0" aria-label="${this.escapeAttribute(texts.kpiInfoLabel)}" title="${this.escapeAttribute(texts.kpiSpotCostHelp)}"><ha-icon icon="mdi:information-outline"></ha-icon></span></div>
           <div class="kpi-simple-value">${formatNumber(costSpotEur, 2)} €</div>
         </div>
 
         <div class="kpi-card" role="listitem">
-          <div class="kpi-simple-title">BREAK-EVEN FIXED</div>
+          <div class="kpi-simple-title">BREAK-EVEN FIXED<span class="kpi-info-marker" role="img" tabindex="0" aria-label="${this.escapeAttribute(texts.kpiInfoLabel)}" title="${this.escapeAttribute(breakEvenHelpText)}"><ha-icon icon="mdi:information-outline"></ha-icon></span></div>
           <div class="kpi-simple-value">${breakEvenFixed !== null && breakEvenFixed !== undefined ? formatNumber(breakEvenFixed, 2) : "-"} ct/kWh</div>
         </div>
 
         <div class="kpi-card" role="listitem">
-          <div class="kpi-simple-title">SPOT CHEAPER HOURS</div>
+          <div class="kpi-simple-title">SPOT CHEAPER HOURS<span class="kpi-info-marker" role="img" tabindex="0" aria-label="${this.escapeAttribute(texts.kpiInfoLabel)}" title="${this.escapeAttribute(texts.kpiSpotCheaperHelp)}"><ha-icon icon="mdi:information-outline"></ha-icon></span></div>
           <div class="kpi-simple-value">${spotCheaperShare !== null && spotCheaperShare !== undefined ? formatNumber(spotCheaperShare * 100, 1) : "-"} %</div>
         </div>
       </div>
@@ -1542,28 +1635,26 @@ syncSensorPicker() {
     const texts = this._texts || this.getTexts();
     const taxRate = this.latestData?.tax_rate ?? 20.0;
     const taxNote = this.getTaxNote(taxRate);
-    const buildCard = (label, value) => `
+    const buildCard = (label, value, help) => `
       <div class="technical-metric-card">
-        <div class="technical-metric-label">${label}</div>
+        <div class="technical-metric-label">${label}<span class="metric-info-marker" role="img" tabindex="0" aria-label="${this.escapeAttribute(texts.kpiInfoLabel)}" title="${this.escapeAttribute(help)}"><ha-icon icon="mdi:information-outline"></ha-icon></span></div>
         <div class="technical-metric-value">${value}</div>
       </div>
     `;
     const buildGrid = (cls, items) => `
       <div class="${cls}">
-        ${items.map((item) => buildCard(item.label, item.value)).join("")}
+        ${items.map((item) => buildCard(item.label, item.value, item.help || "")).join("")}
       </div>
     `;
 
     const matchedHours = Number(summary.matchedHours || 0);
     const matchedDays = matchedHours > 0 ? matchedHours / 24 : 0;
+    const roundedMatchedDays = Math.round(matchedDays);
+    const completenessRatio = Number(summary.dataCompletenessRatio);
+    const startEu = this.formatIsoDateEuropean(summary.start);
+    const endEu = this.formatIsoDateEuropean(summary.end);
     const peakHourLabel = summary.peakHour !== null && summary.peakHour !== undefined
       ? `${String(summary.peakHour).padStart(2, "0")}:00`
-      : "-";
-    const spotCheaperShare = summary.spotCheaperShare !== null && summary.spotCheaperShare !== undefined
-      ? `${formatNumber(summary.spotCheaperShare * 100, 1)} %`
-      : "-";
-    const breakEvenFixed = summary.breakEvenSpot !== null && summary.breakEvenSpot !== undefined
-      ? `${formatNumber(summary.breakEvenSpot, 2)} ct/kWh`
       : "-";
 
     const placeholderValue = texts.analysisPlaceholderValue;
@@ -1579,30 +1670,69 @@ syncSensorPicker() {
     const stdDevValue = summary.spotPriceStdDev !== null && summary.spotPriceStdDev !== undefined
       ? `${formatNumber(summary.spotPriceStdDev, 2)} ct/kWh`
       : placeholderValue;
+    const completenessValue = Number.isFinite(completenessRatio)
+      ? `${formatNumber(completenessRatio * 100, completenessRatio >= 0.9995 ? 0 : 1)} %`
+      : placeholderValue;
+    const effectiveSpotValue = summary.effectiveSpotPrice !== null && summary.effectiveSpotPrice !== undefined
+      ? `${formatNumber(summary.effectiveSpotPrice, 2)} ct/kWh`
+      : placeholderValue;
+    const maxSpotValue = summary.maxSpotPrice !== null && summary.maxSpotPrice !== undefined
+      ? `${formatNumber(summary.maxSpotPrice, 2)} ct/kWh`
+      : placeholderValue;
+    const negativeHours = Number(summary.negativePriceHours);
+    const negativeShare = Number(summary.negativePriceShare);
+    const flexibilityPotential = Number(summary.flexibilityPotentialPercent);
+    const priceSensitivity = Number(summary.priceSensitivityPercent);
+    const maxExtraSavings = Number(summary.maxExtraSavingsEur);
+    const maxPenaltyRisk = Number(summary.maxPenaltyRiskEur);
+    const negativePriceValue = Number.isFinite(negativeHours) && Number.isFinite(negativeShare)
+      ? `${formatNumber(negativeHours, 0)} h / ${formatNumber(negativeShare * 100, 1)} %`
+      : placeholderValue;
+    const flexibilityPotentialValue = Number.isFinite(flexibilityPotential)
+      ? `${formatNumber(flexibilityPotential, 1)} %`
+      : placeholderValue;
+    const priceSensitivityValue = Number.isFinite(priceSensitivity)
+      ? `${priceSensitivity >= 0 ? "+" : ""}${formatNumber(priceSensitivity, 1)} %`
+      : placeholderValue;
+    const maxExtraSavingsValue = Number.isFinite(maxExtraSavings)
+      ? `${formatNumber(maxExtraSavings, 2)} €`
+      : placeholderValue;
+    const maxPenaltyRiskValue = Number.isFinite(maxPenaltyRisk)
+      ? `${formatNumber(maxPenaltyRisk, 2)} €`
+      : placeholderValue;
 
     const periodItems = [
-      { label: texts.analysisRangeLabel, value: `${summary.start} - ${summary.end}` },
-      { label: texts.analysisDaysLabel, value: `${formatNumber(matchedDays, 1)}` },
-      { label: texts.analysisHoursLabel, value: `${formatNumber(matchedHours, 0)}` }
+      { label: texts.analysisRangeLabel, value: `${startEu} - ${endEu}`, help: texts.analysisRangeHelp },
+      { label: texts.analysisDaysLabel, value: `${formatNumber(roundedMatchedDays, 0)}`, help: texts.analysisDaysHelp },
+      { label: texts.analysisHoursLabel, value: `${formatNumber(matchedHours, 0)}`, help: texts.analysisHoursHelp },
+      { label: texts.analysisDataCompletenessLabel, value: completenessValue, help: texts.analysisDataCompletenessHelp }
     ];
 
     const consumptionItems = [
-      { label: texts.analysisTotalLabel, value: `${formatNumber(summary.totalConsumption || 0, 2)} kWh` },
-      { label: texts.analysisAvgDayLabel, value: `${formatNumber(summary.avgPerDay || 0, 2)} kWh` },
-      { label: texts.analysisAvgHourLabel, value: `${formatNumber(summary.avgPerHour || 0, 3)} kWh` },
-      { label: texts.analysisWeekdayAvgLabel, value: `${formatNumber(summary.weekdayAvg || 0, 3)} kWh` },
-      { label: texts.analysisWeekendAvgLabel, value: `${formatNumber(summary.weekendAvg || 0, 3)} kWh` },
-      { label: texts.analysisPeakHourLabel, value: peakHourLabel },
-      { label: texts.analysisMaxPeakLabel, value: maxPeakValue },
-      { label: texts.analysisBaseLoadLabel, value: baseLoadValue }
+      { label: texts.analysisTotalLabel, value: `${formatNumber(summary.totalConsumption || 0, 2)} kWh`, help: texts.analysisTotalHelp },
+      { label: texts.analysisAvgDayLabel, value: `${formatNumber(summary.avgPerDay || 0, 2)} kWh`, help: texts.analysisAvgDayHelp },
+      { label: texts.analysisAvgHourLabel, value: `${formatNumber(summary.avgPerHour || 0, 3)} kWh`, help: texts.analysisAvgHourHelp },
+      { label: texts.analysisWeekdayAvgLabel, value: `${formatNumber(summary.weekdayAvg || 0, 3)} kWh`, help: texts.analysisWeekdayAvgHelp },
+      { label: texts.analysisWeekendAvgLabel, value: `${formatNumber(summary.weekendAvg || 0, 3)} kWh`, help: texts.analysisWeekendAvgHelp },
+      { label: texts.analysisPeakHourLabel, value: peakHourLabel, help: texts.analysisPeakHourHelp },
+      { label: texts.analysisMaxPeakLabel, value: maxPeakValue, help: texts.analysisMaxPeakHelp },
+      { label: texts.analysisBaseLoadLabel, value: baseLoadValue, help: texts.analysisBaseLoadHelp }
     ];
 
     const priceItems = [
-      { label: texts.analysisAvgSpotLabel, value: `${summary.avgPrice} ct/kWh` },
-      { label: texts.analysisBreakEvenLabel, value: breakEvenFixed },
-      { label: texts.analysisSpotCheaperLabel, value: spotCheaperShare },
-      { label: texts.analysisDailySpreadLabel, value: dailySpreadValue },
-      { label: texts.analysisSpotStdDevLabel, value: stdDevValue }
+      { label: texts.analysisAvgSpotLabel, value: `${summary.avgPrice} ct/kWh`, help: texts.analysisAvgSpotHelp },
+      { label: texts.analysisEffectiveSpotLabel, value: effectiveSpotValue, help: texts.analysisEffectiveSpotHelp },
+      { label: texts.analysisNegativePriceHoursLabel, value: negativePriceValue, help: texts.analysisNegativePriceHoursHelp },
+      { label: texts.analysisMaxSpotPriceLabel, value: maxSpotValue, help: texts.analysisMaxSpotPriceHelp },
+      { label: texts.analysisDailySpreadLabel, value: dailySpreadValue, help: texts.analysisDailySpreadHelp },
+      { label: texts.analysisSpotStdDevLabel, value: stdDevValue, help: texts.analysisSpotStdDevHelp }
+    ];
+
+    const riskItems = [
+      { label: texts.analysisFlexibilityPotentialLabel, value: flexibilityPotentialValue, help: texts.analysisFlexibilityPotentialHelp },
+      { label: texts.analysisPriceSensitivityLabel, value: priceSensitivityValue, help: texts.analysisPriceSensitivityHelp({ value: priceSensitivityValue }) },
+      { label: texts.analysisMaxExtraSavingsLabel, value: maxExtraSavingsValue, help: texts.analysisMaxExtraSavingsHelp },
+      { label: texts.analysisMaxPenaltyRiskLabel, value: maxPenaltyRiskValue, help: texts.analysisMaxPenaltyRiskHelp }
     ];
 
     return `
@@ -1619,6 +1749,11 @@ syncSensorPicker() {
       <section class="technical-section">
         <div class="technical-section-title">${texts.analysisSectionTariffTitle}</div>
         ${buildGrid("technical-grid-main", priceItems)}
+      </section>
+
+      <section class="technical-section">
+        <div class="technical-section-title">${texts.analysisSectionRiskTitle}</div>
+        ${buildGrid("technical-grid-risk", riskItems)}
       </section>
 
       <section class="technical-section technical-tax-section">
@@ -1714,8 +1849,11 @@ syncSensorPicker() {
       .savings-hero-message { font-size: 14px; color: var(--secondary-text-color); line-height: 1.5; }
       .kpi-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 4px; }
       .kpi-card { background: rgba(var(--rgb-primary-text-color), 0.04); border: 1px solid rgba(var(--rgb-divider-color), 0.45); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; justify-content: center; gap: 10px; min-height: 88px; }
-      .kpi-simple-title { font-size: 11px; letter-spacing: 0.45px; text-transform: uppercase; color: var(--secondary-text-color); font-weight: 700; }
+      .kpi-simple-title { font-size: 11px; letter-spacing: 0.45px; text-transform: uppercase; color: var(--secondary-text-color); font-weight: 700; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
       .kpi-simple-value { font-size: 18px; line-height: 1.2; color: var(--primary-text-color); font-weight: 700; }
+      .kpi-info-marker { width: 16px; height: 16px; min-width: 16px; border-radius: 50%; color: var(--secondary-text-color); display: inline-flex; align-items: center; justify-content: center; cursor: help; opacity: 0.82; }
+      .kpi-info-marker ha-icon { --mdc-icon-size: 14px; }
+      .kpi-info-marker:hover, .kpi-info-marker:focus-visible { color: var(--primary-color); opacity: 1; outline: none; }
       .analysis-island { margin-top: 26px; padding: 16px; border-radius: 12px; background: color-mix(in srgb, var(--card-background-color) 90%, black 10%); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.26); }
       .analysis-island-title { font-size: 11px; color: var(--secondary-text-color); text-transform: uppercase; letter-spacing: 0.8px; font-weight: 700; margin-bottom: 12px; }
       .dashboard-tabs { margin-top: 0; }
@@ -1729,11 +1867,15 @@ syncSensorPicker() {
       .analysis-groups { display: flex; flex-direction: column; gap: 12px; }
       .technical-section { border: 1px solid rgba(var(--rgb-divider-color), 0.5); border-radius: 10px; background: rgba(var(--rgb-primary-text-color), 0.02); padding: 12px; }
       .technical-section-title { margin-bottom: 10px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; color: var(--secondary-text-color); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
-      .technical-grid-range { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+      .technical-grid-range { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+      .technical-grid-risk { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
       .technical-grid-main { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
       .technical-metric-card { border: 1px solid rgba(var(--rgb-divider-color), 0.45); border-radius: 8px; background: rgba(var(--rgb-primary-text-color), 0.03); padding: 9px 10px; min-height: 60px; display: flex; flex-direction: column; justify-content: center; gap: 6px; }
-      .technical-metric-label { font-size: 11px; color: var(--secondary-text-color); letter-spacing: 0.25px; }
+      .technical-metric-label { font-size: 11px; color: var(--secondary-text-color); letter-spacing: 0.25px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
       .technical-metric-value { font-size: 16px; font-weight: 700; color: var(--primary-text-color); line-height: 1.2; }
+      .metric-info-marker { width: 16px; height: 16px; min-width: 16px; border-radius: 50%; color: var(--secondary-text-color); display: inline-flex; align-items: center; justify-content: center; cursor: help; opacity: 0.82; }
+      .metric-info-marker ha-icon { --mdc-icon-size: 14px; }
+      .metric-info-marker:hover, .metric-info-marker:focus-visible { color: var(--primary-color); opacity: 1; outline: none; }
       .technical-tax-section { padding-top: 4px; }
       
       .info-box { background-color: rgba(var(--rgb-primary-color), 0.05); border-left: 4px solid var(--primary-color); padding: 16px; margin-bottom: 24px; border-radius: 0 4px 4px 0; }
