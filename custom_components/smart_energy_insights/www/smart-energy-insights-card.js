@@ -232,16 +232,6 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       analysisSectionRiskTitle: this.localize("card.analysis_section_risk_title", "RISK AND OPTIMIZATION"),
       analysisFlexibilityPotentialLabel: this.localize("card.analysis_flexibility_potential_label", "Flexibility potential"),
       analysisFlexibilityPotentialHelp: this.localize("card.analysis_flexibility_potential_help", "Percentage of your total consumption that is above your baseline and could theoretically be shifted to other hours."),
-      analysisPriceSensitivityLabel: this.localize("card.analysis_price_sensitivity_label", "Price sensitivity"),
-      analysisPriceSensitivityHelp: ({ value }) => this.localize(
-        "card.analysis_price_sensitivity_help",
-        "Spot market prices could have been on average {value} higher before a fixed tariff would have been cheaper for your specific usage profile.",
-        { value }
-      ),
-      analysisMaxExtraSavingsLabel: this.localize("card.analysis_max_extra_savings_label", "Max. extra savings"),
-      analysisMaxExtraSavingsHelp: this.localize("card.analysis_max_extra_savings_help", "The maximum additional amount you could save by shifting all your flexible consumption into the cheapest 6 hours of each day."),
-      analysisMaxPenaltyRiskLabel: this.localize("card.analysis_max_penalty_risk_label", "Max. penalty risk"),
-      analysisMaxPenaltyRiskHelp: this.localize("card.analysis_max_penalty_risk_help", "The maximum additional cost if all your flexible consumption occurred during the most expensive 6 hours of each day."),
       analysisCurrentTariffBalanceTitle: this.localize("card.analysis_current_tariff_balance_title", "Current Tariff Balance (Status Quo)"),
       analysisBestCasePotentialTitle: this.localize("card.analysis_best_case_potential_title", "Best Case (Potential)"),
       analysisBestCasePotentialSubtitle: this.localize("card.analysis_best_case_potential_subtitle", "Achievable through active load shifting."),
@@ -261,7 +251,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       analysisCostProjectionWorstLabel: this.localize("card.analysis_cost_projection_worst_label", "Worst case spot"),
       analysisCostProjectionCurrentLabel: this.localize("card.analysis_cost_projection_current_label", "Current Projection"),
       analysisCostProjectionMaxPotentialLabel: this.localize("card.analysis_cost_projection_max_potential_label", "Max potential"),
-      analysisCostProjectionBaselineLabel: this.localize("card.analysis_cost_projection_baseline_label", "0 EUR (Fixed tariff)"),
+      analysisCostProjectionBaselineLabel: this.localize("card.analysis_cost_projection_baseline_label", "Fixed tariff"),
       analysisCostProjectionSavingsZone: this.localize("card.analysis_cost_projection_savings_zone", "Savings zone"),
       analysisCostProjectionRiskZone: this.localize("card.analysis_cost_projection_risk_zone", "Risk zone"),
       analysisTimingProfileTitle: this.localize("card.analysis_timing_profile_title", "Consumption timing profile"),
@@ -269,44 +259,6 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       analysisTimingExpensiveLabel: this.localize("card.analysis_timing_expensive_label", "Expensive hours"),
       analysisTimingAverageLabel: this.localize("card.analysis_timing_average_label", "Average hours"),
       analysisTimingCheapLabel: this.localize("card.analysis_timing_cheap_label", "Cheap hours"),
-      analysisTariffFitTitle: this.localize("card.analysis_tariff_fit_title", "Evidence-based assessment scorecard"),
-      analysisTariffFitHelp: this.localize("card.analysis_tariff_fit_help", "Recommendation based on flexibility potential, timing profile and market stress tolerance."),
-      analysisTariffFitHeadlinePrefix: this.localize("card.analysis_tariff_fit_headline_prefix", "Dynamic Tariff Fit:"),
-      analysisTariffFitFactorsTitle: this.localize("card.analysis_tariff_fit_factors_title", "Contributing factors"),
-      analysisTariffFitFactorCheapLabel: this.localize("card.analysis_tariff_fit_factor_cheap_label", "Cheap hours share"),
-      analysisTariffFitFactorExpensiveLabel: this.localize("card.analysis_tariff_fit_factor_expensive_label", "Expensive hours share"),
-      analysisTariffFitFactorAverageLabel: this.localize("card.analysis_tariff_fit_factor_average_label", "Average hours share"),
-      analysisTariffFitLevelHigh: this.localize("card.analysis_tariff_fit_level_high", "High"),
-      analysisTariffFitLevelMedium: this.localize("card.analysis_tariff_fit_level_medium", "Moderate"),
-      analysisTariffFitLevelLow: this.localize("card.analysis_tariff_fit_level_low", "Low"),
-      analysisTariffFitHeadline: ({ level }) => this.localize(
-        "card.analysis_tariff_fit_headline",
-        "Dynamic tariff fit: {level}",
-        { level }
-      ),
-      analysisTariffFitStrongSummary: this.localize(
-        "card.analysis_tariff_fit_strong_summary",
-        "Your consumption behavior strongly aligns with cheap market hours, outweighing your peak usage."
-      ),
-      analysisTariffFitHighSummary: ({ sensitivity }) => this.localize(
-        "card.analysis_tariff_fit_high_summary",
-        "Your consumption behavior aligns well with cheaper market hours. Spot pricing is likely advantageous even under stress ({sensitivity}).",
-        { sensitivity }
-      ),
-      analysisTariffFitMediumSummary: ({ sensitivity }) => this.localize(
-        "card.analysis_tariff_fit_medium_summary",
-        "Your profile is mixed. A spot tariff can work, but timing discipline matters. Current stress tolerance is {sensitivity}.",
-        { sensitivity }
-      ),
-      analysisTariffFitLowSummary: ({ sensitivity }) => this.localize(
-        "card.analysis_tariff_fit_low_summary",
-        "Your current pattern leans toward expensive hours. A fixed tariff may offer better stability at this stress tolerance ({sensitivity}).",
-        { sensitivity }
-      ),
-      analysisPeakExposureLabel: this.localize("card.analysis_peak_exposure_label", "Peak exposure"),
-      analysisPeakExposureHelp: this.localize("card.analysis_peak_exposure_help", "Share of your matched consumption that occurred during each day's 6 most expensive market hours."),
-      analysisOffPeakShareLabel: this.localize("card.analysis_offpeak_share_label", "Off-peak share"),
-      analysisOffPeakShareHelp: this.localize("card.analysis_offpeak_share_help", "Share of your matched consumption that occurred during each day's 6 cheapest market hours."),
       analysisSectionRangeTitle: this.localize("card.analysis_section_range_title", "Measurement window"),
       analysisSectionConsumptionTitle: this.localize("card.analysis_section_consumption_title", "Consumption analysis"),
       analysisSectionTariffTitle: this.localize("card.analysis_section_tariff_title", "Tariff and market analysis"),
@@ -1734,10 +1686,10 @@ syncSensorPicker() {
     const maxExtraSavings = Number(this.latestData.max_extra_savings_eur);
     const maxPenaltyRisk = Number(this.latestData.max_penalty_risk_eur);
     const maxExtraSavingsHeroValue = Number.isFinite(maxExtraSavings)
-      ? `+${formatNumber(maxExtraSavings, 2)} €`
+      ? `-${formatNumber(Math.abs(maxExtraSavings), 2)} €`
       : texts.analysisPlaceholderValue;
     const maxPenaltyRiskHeroValue = Number.isFinite(maxPenaltyRisk)
-      ? `+${formatNumber(maxPenaltyRisk, 2)} €`
+      ? `+${formatNumber(Math.abs(maxPenaltyRisk), 2)} €`
       : texts.analysisPlaceholderValue;
     const breakEvenFixed = this.latestData.break_even_fixed_ct_kwh;
     const breakEvenFixedCt = Number(breakEvenFixed);
@@ -1949,49 +1901,20 @@ syncSensorPicker() {
     const minSpotHelp = summary.minSpotPriceAt
       ? `${texts.analysisMinSpotPriceHelp} ${texts.analysisOccurredOnLabel}: ${this.formatDateTimeEuropean(summary.minSpotPriceAt)}`
       : texts.analysisMinSpotPriceHelp;
-    const negativeHours = Number(summary.negativePriceHours);
-    const negativeShare = Number(summary.negativePriceShare);
     const flexibilityPotential = Number(summary.flexibilityPotentialPercent);
-    const priceSensitivity = Number(summary.priceSensitivityPercent);
-    const maxExtraSavings = Number(summary.maxExtraSavingsEur);
-    const maxPenaltyRisk = Number(summary.maxPenaltyRiskEur);
     const peakExposure = Number(summary.peakExposurePercent);
     const offPeakShare = Number(summary.offPeakSharePercent);
-    const negativePriceValue = Number.isFinite(negativeHours) && Number.isFinite(negativeShare)
-      ? `${formatNumber(negativeHours, 0)} h / ${formatNumber(negativeShare * 100, 1)} %`
-      : placeholderValue;
     const flexibilityPotentialValue = Number.isFinite(flexibilityPotential)
       ? `${formatNumber(flexibilityPotential, 1)} %`
-      : placeholderValue;
-    const priceSensitivityValue = Number.isFinite(priceSensitivity)
-      ? `${priceSensitivity >= 0 ? "+" : ""}${formatNumber(priceSensitivity, 1)} %`
-      : placeholderValue;
-    const maxExtraSavingsValue = Number.isFinite(maxExtraSavings)
-      ? `${formatNumber(maxExtraSavings, 2)} €`
-      : placeholderValue;
-    const maxPenaltyRiskValue = Number.isFinite(maxPenaltyRisk)
-      ? `${formatNumber(maxPenaltyRisk, 2)} €`
-      : placeholderValue;
-    const maxExtraSavingsHeroValue = Number.isFinite(maxExtraSavings)
-      ? `+${formatNumber(maxExtraSavings, 2)} €`
-      : placeholderValue;
-    const maxPenaltyRiskHeroValue = Number.isFinite(maxPenaltyRisk)
-      ? `+${formatNumber(maxPenaltyRisk, 2)} €`
-      : placeholderValue;
-    const peakExposureValue = Number.isFinite(peakExposure)
-      ? `${formatNumber(peakExposure, 1)} %`
-      : placeholderValue;
-    const offPeakShareValue = Number.isFinite(offPeakShare)
-      ? `${formatNumber(offPeakShare, 1)} %`
       : placeholderValue;
     const fixedTariffCost = Number(summary.fixedTariffCostEur);
     const spotTariffCost = Number(summary.spotTariffCostEur);
     const hasCostProjection = Number.isFinite(fixedTariffCost)
       && Number.isFinite(spotTariffCost)
-      && Number.isFinite(maxExtraSavings)
-      && Number.isFinite(maxPenaltyRisk);
-    const maxSavingsDelta = hasCostProjection ? -Math.max(0, maxExtraSavings) : null;
-    const maxRiskDelta = hasCostProjection ? Math.max(0, maxPenaltyRisk) : null;
+      && Number.isFinite(summary.maxExtraSavingsEur)
+      && Number.isFinite(summary.maxPenaltyRiskEur);
+    const maxSavingsDelta = hasCostProjection ? -Math.max(0, Number(summary.maxExtraSavingsEur)) : null;
+    const maxRiskDelta = hasCostProjection ? Math.max(0, Number(summary.maxPenaltyRiskEur)) : null;
     const currentDelta = hasCostProjection ? (spotTariffCost - fixedTariffCost) : null;
     const currentDeltaLabel = Number.isFinite(currentDelta)
       ? `${formatNumber(Math.abs(currentDelta), 2)} €`
@@ -2012,6 +1935,8 @@ syncSensorPicker() {
     let currentLeftPct = 50;
     let currentWidthPct = 0;
     let currentLabelClass = "savings";
+    const axisEdgePaddingPx = 6;
+    let currentMarkerPct = 50;
 
     if (hasCostProjection) {
       deltaExtent = Math.max(
@@ -2024,15 +1949,16 @@ syncSensorPicker() {
       maxSavingsPct = Math.max(0, Math.min(100, deltaToPct(maxSavingsDelta)));
       maxRiskPct = Math.max(0, Math.min(100, deltaToPct(maxRiskDelta)));
       currentPct = Math.max(0, Math.min(100, deltaToPct(currentDelta)));
-      currentLeftPct = Math.min(50, currentPct);
-      currentWidthPct = Math.abs(currentPct - 50);
+      currentMarkerPct = Math.max(0, Math.min(100, currentPct));
+      currentLeftPct = Math.min(50, Math.max(0, currentMarkerPct));
+      currentWidthPct = Math.abs(currentMarkerPct - 50);
       currentLabelClass = currentDelta <= 0 ? "savings" : "risk";
     }
 
+    const hasTimingProfile = Number.isFinite(peakExposure) && Number.isFinite(offPeakShare);
     let expensiveShare = 0;
     let averageShare = 0;
     let cheapShare = 0;
-    const hasTimingProfile = Number.isFinite(peakExposure) && Number.isFinite(offPeakShare);
     if (hasTimingProfile) {
       expensiveShare = Math.max(0, peakExposure);
       cheapShare = Math.max(0, offPeakShare);
@@ -2047,46 +1973,15 @@ syncSensorPicker() {
       }
     }
 
-    let fitScore = 0;
-    if (Number.isFinite(priceSensitivity)) {
-      if (priceSensitivity >= 15) fitScore += 2;
-      else if (priceSensitivity >= 5) fitScore += 1;
-      else if (priceSensitivity < 0) fitScore -= 2;
-    }
-    if (Number.isFinite(offPeakShare)) {
-      if (offPeakShare >= 35) fitScore += 2;
-      else if (offPeakShare >= 25) fitScore += 1;
-    }
-    if (Number.isFinite(peakExposure)) {
-      if (peakExposure >= 30) fitScore -= 2;
-      else if (peakExposure >= 20) fitScore -= 1;
-      else fitScore += 1;
-    }
-    if (Number.isFinite(flexibilityPotential) && flexibilityPotential >= 25) {
-      fitScore += 1;
-    }
-
-    let fitLevel = "medium";
-    if (fitScore >= 3) fitLevel = "high";
-    else if (fitScore <= 0) fitLevel = "low";
-    const fitLevelLabel = fitLevel === "high"
-      ? texts.analysisTariffFitLevelHigh
-      : fitLevel === "low"
-        ? texts.analysisTariffFitLevelLow
-        : texts.analysisTariffFitLevelMedium;
-    const sensitivityLabel = Number.isFinite(priceSensitivity)
-      ? `${priceSensitivity >= 0 ? "+" : ""}${formatNumber(priceSensitivity, 1)} %`
+    const cheapShareValue = hasTimingProfile
+      ? `${formatNumber(cheapShare, 1)} %`
       : placeholderValue;
-    const fitSummary = fitLevel === "high"
-      ? texts.analysisTariffFitStrongSummary
-      : fitLevel === "low"
-        ? texts.analysisTariffFitLowSummary({ sensitivity: sensitivityLabel })
-        : texts.analysisTariffFitMediumSummary({ sensitivity: sensitivityLabel });
-    const fitIcon = fitLevel === "high"
-      ? "mdi:check-circle"
-      : fitLevel === "low"
-        ? "mdi:alert-circle"
-        : "mdi:star-circle";
+    const expensiveShareValue = hasTimingProfile
+      ? `${formatNumber(expensiveShare, 1)} %`
+      : placeholderValue;
+    const averageShareValue = hasTimingProfile
+      ? `${formatNumber(averageShare, 1)} %`
+      : placeholderValue;
 
     const periodItems = [
       { label: texts.analysisRangeLabel, value: `${startEu} - ${endEu}`, help: texts.analysisRangeHelp },
@@ -2109,7 +2004,7 @@ syncSensorPicker() {
     const priceItems = [
       { label: texts.analysisAvgSpotLabel, value: `${summary.avgPrice} ct/kWh`, help: texts.analysisAvgSpotHelp },
       { label: texts.analysisEffectiveSpotLabel, value: effectiveSpotValue, help: texts.analysisEffectiveSpotHelp },
-      { label: texts.analysisNegativePriceHoursLabel, value: negativePriceValue, help: texts.analysisNegativePriceHoursHelp },
+      { label: texts.analysisNegativePriceHoursLabel, value: placeholderValue, help: texts.analysisNegativePriceHoursHelp },
       { label: texts.analysisSpotCheaperLabel, value: spotCheaperValue, help: texts.analysisSpotCheaperHelp },
       { label: texts.analysisMaxSpotPriceLabel, value: maxSpotValue, help: maxSpotHelp },
       { label: texts.analysisMinSpotPriceLabel, value: minSpotValue, help: minSpotHelp },
@@ -2137,11 +2032,11 @@ syncSensorPicker() {
       { label: texts.analysisDynamicBaseFeeLabel, value: dynamicBaseFeeValue, help: texts.analysisDynamicBaseFeeHelp }
     ];
 
-    const riskItems = [
+    const profileItems = [
       { label: texts.analysisFlexibilityPotentialLabel, value: flexibilityPotentialValue, help: texts.analysisFlexibilityPotentialHelp },
-      { label: texts.analysisPriceSensitivityLabel, value: priceSensitivityValue, help: texts.analysisPriceSensitivityHelp({ value: priceSensitivityValue }) },
-      { label: texts.analysisMaxExtraSavingsLabel, value: maxExtraSavingsValue, help: texts.analysisMaxExtraSavingsHelp },
-      { label: texts.analysisMaxPenaltyRiskLabel, value: maxPenaltyRiskValue, help: texts.analysisMaxPenaltyRiskHelp }
+      { label: texts.analysisTimingCheapLabel, value: cheapShareValue, help: texts.analysisTimingProfileHelp },
+      { label: texts.analysisTimingExpensiveLabel, value: expensiveShareValue, help: texts.analysisTimingProfileHelp },
+      { label: texts.analysisTimingAverageLabel, value: averageShareValue, help: texts.analysisTimingProfileHelp }
     ];
 
     return {
@@ -2171,11 +2066,6 @@ syncSensorPicker() {
       </section>
     `,
       risk: `
-      <section class="technical-section">
-        <div class="technical-section-title">${texts.analysisSectionRiskTitle}</div>
-        ${buildGrid("technical-grid-risk", riskItems)}
-      </section>
-
       <section class="technical-section risk-visual-section">
         <div class="technical-section-title">
           ${texts.analysisCostProjectionTitle}
@@ -2184,11 +2074,11 @@ syncSensorPicker() {
         <div class="risk-chart-card projection-chart-card" role="img" aria-label="${this.escapeAttribute(texts.analysisCostProjectionTitle)}">
           ${hasCostProjection ? `
             <div class="delta-axis">
-              <div class="delta-bg savings" style="left:${maxSavingsPct.toFixed(2)}%; width:${(50 - maxSavingsPct).toFixed(2)}%"></div>
-              <div class="delta-bg risk" style="left:50%; width:${(maxRiskPct - 50).toFixed(2)}%"></div>
+              <div class="delta-bg savings" style="left:calc(${maxSavingsPct.toFixed(2)}% + ${axisEdgePaddingPx}px); width:calc(${Math.max(0, 50 - maxSavingsPct).toFixed(2)}% - ${axisEdgePaddingPx}px)"></div>
+              <div class="delta-bg risk" style="left:50%; width:calc(${Math.max(0, maxRiskPct - 50).toFixed(2)}% - ${axisEdgePaddingPx}px)"></div>
               <div class="delta-baseline" title="${texts.analysisCostProjectionBaselineLabel}"></div>
               <div class="delta-current ${currentLabelClass}" style="left:${currentLeftPct.toFixed(2)}%; width:${currentWidthPct.toFixed(2)}%"></div>
-              <div class="delta-marker ${currentLabelClass}" style="left:${currentPct.toFixed(2)}%">
+              <div class="delta-marker ${currentLabelClass}" style="left:${currentMarkerPct.toFixed(2)}%">
                 <div class="delta-marker-callout">
                   <span>${texts.analysisCostProjectionCurrentLabel}</span>
                   <strong>${currentDeltaLabel}</strong>
@@ -2215,44 +2105,8 @@ syncSensorPicker() {
       </section>
 
       <section class="technical-section">
-        <div class="technical-section-title">
-          ${texts.analysisTariffFitTitle}
-          <span class="metric-info-marker" role="img" tabindex="0" aria-label="${this.escapeAttribute(texts.kpiInfoLabel)}" title="${this.escapeAttribute(texts.analysisTariffFitHelp)}"><ha-icon icon="mdi:information-outline"></ha-icon></span>
-        </div>
-        <div class="tariff-fit-card ${fitLevel}">
-          <div class="tariff-fit-verdict">
-            <div class="tariff-fit-icon"><ha-icon icon="${fitIcon}"></ha-icon></div>
-            <div class="tariff-fit-content">
-              <div class="tariff-fit-headline">${texts.analysisTariffFitHeadlinePrefix} <span class="tariff-fit-level ${fitLevel}">${fitLevelLabel}</span></div>
-              <div class="tariff-fit-summary">${fitSummary}</div>
-            </div>
-          </div>
-          <div class="tariff-fit-divider" role="separator" aria-hidden="true"></div>
-          ${hasTimingProfile ? `
-            <div class="tariff-fit-factors">
-              <div class="tariff-fit-factors-title">${texts.analysisTariffFitFactorsTitle}</div>
-              <div class="tariff-fit-factors-grid">
-                <div class="tariff-fit-factor positive">
-                  <div class="tariff-fit-factor-indicator" aria-hidden="true"><ha-icon icon="mdi:arrow-up-bold"></ha-icon></div>
-                  <div class="tariff-fit-factor-value">${formatNumber(cheapShare, 1)} %</div>
-                  <div class="tariff-fit-factor-label">${texts.analysisTariffFitFactorCheapLabel}</div>
-                </div>
-                <div class="tariff-fit-factor negative">
-                  <div class="tariff-fit-factor-indicator" aria-hidden="true"><ha-icon icon="mdi:arrow-down-bold"></ha-icon></div>
-                  <div class="tariff-fit-factor-value">${formatNumber(expensiveShare, 1)} %</div>
-                  <div class="tariff-fit-factor-label">${texts.analysisTariffFitFactorExpensiveLabel}</div>
-                </div>
-                <div class="tariff-fit-factor neutral">
-                  <div class="tariff-fit-factor-indicator" aria-hidden="true"><ha-icon icon="mdi:minus"></ha-icon></div>
-                  <div class="tariff-fit-factor-value">${formatNumber(averageShare, 1)} %</div>
-                  <div class="tariff-fit-factor-label">${texts.analysisTariffFitFactorAverageLabel}</div>
-                </div>
-              </div>
-            </div>
-          ` : `
-            <div class="risk-empty">${placeholderValue}</div>
-          `}
-        </div>
+        <div class="technical-section-title">${texts.analysisTimingProfileTitle}</div>
+        ${buildGrid("technical-grid-risk", profileItems)}
       </section>
     `,
     };
@@ -2436,10 +2290,10 @@ syncSensorPicker() {
 
       .delta-axis { position: relative; height: 30px; border-radius: 999px; background: rgba(var(--rgb-primary-text-color), 0.08); overflow: visible; margin-top: 2px; }
       .delta-bg { position: absolute; top: 6px; bottom: 6px; border-radius: 999px; opacity: 0.5; }
-      .delta-bg.savings { background: linear-gradient(90deg, rgba(78, 168, 112, 0.8), rgba(101, 195, 136, 0.9)); }
-      .delta-bg.risk { background: linear-gradient(90deg, rgba(197, 112, 80, 0.9), rgba(160, 74, 52, 0.9)); }
+      .delta-bg.savings { background: linear-gradient(90deg, rgba(78, 168, 112, 0.8), rgba(101, 195, 136, 0.9)); border-top-right-radius: 0; border-bottom-right-radius: 0; }
+      .delta-bg.risk { background: linear-gradient(90deg, rgba(197, 112, 80, 0.9), rgba(160, 74, 52, 0.9)); border-top-left-radius: 0; border-bottom-left-radius: 0; }
       .delta-baseline { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; transform: translateX(-1px); background: rgba(255, 255, 255, 0.9); z-index: 3; }
-      .delta-current { position: absolute; top: 8px; bottom: 8px; border-radius: 999px; z-index: 4; }
+      .delta-current { position: absolute; top: 8px; bottom: 8px; border-radius: 0; z-index: 4; }
       .delta-current.savings { background: linear-gradient(90deg, rgba(43, 139, 83, 0.95), rgba(84, 188, 126, 0.98)); }
       .delta-current.risk { background: linear-gradient(90deg, rgba(207, 102, 71, 0.95), rgba(170, 70, 50, 0.98)); }
       .delta-marker { position: absolute; top: 0; bottom: 0; width: 0; transform: translateX(-50%); z-index: 8; pointer-events: none; }
