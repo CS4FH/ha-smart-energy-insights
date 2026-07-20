@@ -187,6 +187,8 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       dateRangeSensorRequired: this.localize("card.date_range_sensor_required", "Please select a sensor first."),
       dateRangeError: this.localize("card.date_range_error", "No data found for this range."),
       analysisTitle: this.localize("card.analysis_title", "Load profile analysis"),
+      analysisDetailedAnalysisClosedHint: this.localize("card.analysis_detailed_analysis_closed_hint", "Tap to open"),
+      analysisDetailedAnalysisOpenHint: this.localize("card.analysis_detailed_analysis_open_hint", "Tap to close"),
       dashboardTabMonthly: this.localize("card.dashboard_tab_monthly", "Monthly comparison"),
       dashboardTabUsage: this.localize("card.dashboard_tab_usage", "Usage behavior"),
       dashboardTabRisk: this.localize("card.dashboard_tab_risk", "Risk & optimization"),
@@ -240,6 +242,17 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       analysisMaxExtraSavingsHelp: this.localize("card.analysis_max_extra_savings_help", "The maximum additional amount you could save by shifting all your flexible consumption into the cheapest 6 hours of each day."),
       analysisMaxPenaltyRiskLabel: this.localize("card.analysis_max_penalty_risk_label", "Max. penalty risk"),
       analysisMaxPenaltyRiskHelp: this.localize("card.analysis_max_penalty_risk_help", "The maximum additional cost if all your flexible consumption occurred during the most expensive 6 hours of each day."),
+      analysisCurrentTariffBalanceTitle: this.localize("card.analysis_current_tariff_balance_title", "Current Tariff Balance (Status Quo)"),
+      analysisBestCasePotentialTitle: this.localize("card.analysis_best_case_potential_title", "Best Case (Potential)"),
+      analysisBestCasePotentialSubtitle: this.localize("card.analysis_best_case_potential_subtitle", "Achievable through active load shifting."),
+      analysisWorstCaseRiskTitle: this.localize("card.analysis_worst_case_risk_title", "Worst Case (Risk)"),
+      analysisWorstCaseRiskSubtitle: this.localize("card.analysis_worst_case_risk_subtitle", "Risk upon high peak-hour usage."),
+      analysisStatusQuoFixedProjectionLabel: this.localize("card.analysis_status_quo_fixed_projection_label", "Fixed projection"),
+      analysisStatusQuoSpotProjectionLabel: this.localize("card.analysis_status_quo_spot_projection_label", "Spot projection"),
+      analysisStatusQuoDifferenceLabel: this.localize("card.analysis_status_quo_difference_label", "Difference"),
+      analysisStatusQuoSpotHigherLabel: this.localize("card.analysis_status_quo_spot_higher_label", "Spot higher"),
+      analysisStatusQuoFixedHigherLabel: this.localize("card.analysis_status_quo_fixed_higher_label", "Fixed higher"),
+      analysisStatusQuoBalancedLabel: this.localize("card.analysis_status_quo_balanced_label", "Balanced"),
       analysisCostProjectionTitle: this.localize("card.analysis_cost_projection_title", "Cost projection range"),
       analysisCostProjectionHelp: this.localize("card.analysis_cost_projection_help", "Projected spot-cost corridor from best to worst case compared against your fixed-tariff baseline."),
       analysisCostProjectionFixedLabel: this.localize("card.analysis_cost_projection_fixed_label", "Fixed baseline"),
@@ -309,7 +322,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       analysisMaxPeakLabel: this.localize("card.analysis_max_peak_label", "Max peak"),
       analysisBaseLoadLabel: this.localize("card.analysis_base_load_label", "Base load (P05)"),
       analysisDailySpreadLabel: this.localize("card.analysis_daily_spread_label", "Avg daily price spread"),
-      analysisSpotStdDevLabel: this.localize("card.analysis_spot_std_dev_label", "Spot price std. dev."),
+      analysisSpotStdDevLabel: this.localize("card.analysis_spot_std_dev_label", "Break-even fixed"),
       analysisSpotCheaperLabel: this.localize("card.analysis_spot_cheaper_label", "Spot cheaper hours"),
       analysisSpotCheaperHelp: this.localize(
         "card.analysis_spot_cheaper_help",
@@ -318,7 +331,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       analysisMaxPeakHelp: this.localize("card.analysis_max_peak_help", "Highest single-hour consumption value in the selected period."),
       analysisBaseLoadHelp: this.localize("card.analysis_base_load_help", "Estimated base load as the 5th percentile (P05) of positive hourly consumption values."),
       analysisDailySpreadHelp: this.localize("card.analysis_daily_spread_help", "Average daily difference between highest and lowest spot price."),
-      analysisSpotStdDevHelp: this.localize("card.analysis_spot_std_dev_help", "Standard deviation of spot prices in the selected period."),
+      analysisSpotStdDevHelp: this.localize("card.analysis_spot_std_dev_help", "Fixed price at which costs equal the spot tariff, based on current tariffs and market prices."),
       analysisPlaceholderValue: this.localize("card.analysis_placeholder_value", "-"),
       avgConsumptionLabel: this.localize("card.avg_consumption_label", "Avg consumption"),
       avgPriceLabel: this.localize("card.avg_price_label", "Avg spot price (net)"),
@@ -1079,6 +1092,7 @@ syncSensorPicker() {
       minSpotPrice: response.min_spot_price_ct_kwh,
       maxSpotPriceAt: response.max_spot_price_at,
       minSpotPriceAt: response.min_spot_price_at,
+      breakEvenFixedCtKwh: response.break_even_fixed_ct_kwh,
       fixedPriceCt: response.fixed_price_ct,
       fixedBaseFeeEur: response.fixed_base_fee_eur,
       spotMarkupCt: response.spot_markup_ct,
@@ -1086,6 +1100,7 @@ syncSensorPicker() {
     });
 
     if (!this._dashboardTab) this._dashboardTab = "monthly";
+    if (typeof this._analysisOpen !== "boolean") this._analysisOpen = false;
 
     container.innerHTML = renderDashboardHtml({
       filename: filenameStr,
@@ -1094,8 +1109,17 @@ syncSensorPicker() {
       technicalAnalysisGroups: analysisViews.technical,
       riskOptimizationGroups: analysisViews.risk,
       texts,
-      dashboardTab: this._dashboardTab
+      dashboardTab: this._dashboardTab,
+      analysisOpen: this._analysisOpen
     });
+
+    const analysisIsland = this.querySelector(".analysis-island");
+    if (analysisIsland) {
+      analysisIsland.addEventListener("toggle", () => {
+        this._analysisOpen = analysisIsland.open;
+        this.saveUiState();
+      });
+    }
 
     this.querySelectorAll("[data-dashboard-tab]").forEach((button) => {
       button.addEventListener("click", () => {
@@ -1699,6 +1723,22 @@ syncSensorPicker() {
     const costFixEur = Number(totals.fixed_cost_eur || 0);
     const costSpotEur = Number(totals.spot_cost_eur || 0);
     const savingsEur = costFixEur - costSpotEur;
+    const currentDelta = costSpotEur - costFixEur;
+    const currentDeltaLabel = `${formatNumber(Math.abs(currentDelta), 2)} €`;
+    const currentDeltaDirection = currentDelta > 0 ? "risk" : currentDelta < 0 ? "savings" : "neutral";
+    const currentDeltaVerdict = currentDeltaDirection === "risk"
+      ? texts.analysisStatusQuoSpotHigherLabel
+      : currentDeltaDirection === "savings"
+        ? texts.analysisStatusQuoFixedHigherLabel
+        : texts.analysisStatusQuoBalancedLabel;
+    const maxExtraSavings = Number(this.latestData.max_extra_savings_eur);
+    const maxPenaltyRisk = Number(this.latestData.max_penalty_risk_eur);
+    const maxExtraSavingsHeroValue = Number.isFinite(maxExtraSavings)
+      ? `+${formatNumber(maxExtraSavings, 2)} €`
+      : texts.analysisPlaceholderValue;
+    const maxPenaltyRiskHeroValue = Number.isFinite(maxPenaltyRisk)
+      ? `+${formatNumber(maxPenaltyRisk, 2)} €`
+      : texts.analysisPlaceholderValue;
     const breakEvenFixed = this.latestData.break_even_fixed_ct_kwh;
     const breakEvenFixedCt = Number(breakEvenFixed);
     const fixedPriceCt = Number(this.latestData.fixed_price_ct);
@@ -1718,46 +1758,54 @@ syncSensorPicker() {
     const breakEvenHelpText = `${texts.kpiBreakEvenHelp} ${breakEvenCompareText}`;
 
     const bannerContainer = this.querySelector("#dynamicSavingsBanner");
-    const isPositive = savingsEur >= 0;
-    const savColor = isPositive ? "#4caf50" : "#f44336";
-    const savBg = isPositive ? "rgba(76, 175, 80, 0.1)" : "rgba(244, 67, 54, 0.1)";
-    const savIcon = isPositive ? "💰" : "⚠️";
-    const savTitle = isPositive ? texts.savingsTitlePositive : texts.savingsTitleNegative;
-    const savMessage = isPositive ? texts.savingsMessagePositive : texts.savingsMessageNegative;
 
     bannerContainer.innerHTML = `
-      <div class="savings-hero-card" style="background-color: ${savBg}; border-left-color: ${savColor};">
-        <div class="savings-hero-head">
-          <div class="savings-hero-icon">${savIcon}</div>
-          <div class="savings-hero-main">
-            <div class="savings-hero-title">
-              ${savTitle}
+      <div class="tariff-hero-grid" role="group" aria-label="${this.escapeAttribute(texts.analysisCurrentTariffBalanceTitle)}">
+        <section class="tariff-hero-card tariff-hero-anchor ${currentDeltaDirection}" aria-label="${this.escapeAttribute(texts.analysisCurrentTariffBalanceTitle)}">
+          <div class="tariff-hero-card-topline">
+            <div class="tariff-hero-card-heading-wrap">
+              <div class="tariff-hero-card-title">${texts.analysisCurrentTariffBalanceTitle}</div>
+              <div class="tariff-hero-card-subtitle">${currentDeltaVerdict}</div>
             </div>
-            <div class="savings-hero-value">
-              ${formatNumber(Math.abs(savingsEur), 2)} €
+            <div class="tariff-hero-card-badge ${currentDeltaDirection}">${texts.analysisStatusQuoDifferenceLabel}</div>
+          </div>
+          <div class="tariff-hero-anchor-main">
+            <div class="tariff-hero-anchor-value ${currentDeltaDirection}">${currentDeltaLabel}</div>
+            <div class="tariff-hero-anchor-unit">${texts.analysisStatusQuoDifferenceLabel}</div>
+          </div>
+          <div class="tariff-hero-anchor-footer">
+            <div class="tariff-hero-footer-item">
+              <span>${texts.analysisStatusQuoFixedProjectionLabel}</span>
+              <strong>${formatNumber(costFixEur, 2)} €</strong>
+            </div>
+            <div class="tariff-hero-footer-item">
+              <span>${texts.analysisStatusQuoSpotProjectionLabel}</span>
+              <strong>${formatNumber(costSpotEur, 2)} €</strong>
             </div>
           </div>
-        </div>
-        <div class="savings-hero-message">
-          ${savMessage}
-        </div>
-      </div>
+        </section>
 
-      <div class="kpi-grid" role="list" aria-label="Tariff KPIs">
-        <div class="kpi-card" role="listitem">
-          <div class="kpi-simple-title">FIXED TARIFF COST<span class="kpi-info-marker" role="img" tabindex="0" aria-label="${this.escapeAttribute(texts.kpiInfoLabel)}" title="${this.escapeAttribute(texts.kpiFixedCostHelp)}"><ha-icon icon="mdi:information-outline"></ha-icon></span></div>
-          <div class="kpi-simple-value">${formatNumber(costFixEur, 2)} €</div>
-        </div>
+        <section class="tariff-hero-card tariff-hero-potential">
+          <div class="tariff-hero-card-topline">
+            <div class="tariff-hero-card-heading-wrap">
+              <div class="tariff-hero-card-title">${texts.analysisBestCasePotentialTitle}</div>
+              <div class="tariff-hero-card-subtitle">${texts.analysisBestCasePotentialSubtitle}</div>
+            </div>
+            <div class="tariff-hero-card-badge positive">Potential</div>
+          </div>
+          <div class="tariff-hero-compact-value positive">${maxExtraSavingsHeroValue}</div>
+        </section>
 
-        <div class="kpi-card" role="listitem">
-          <div class="kpi-simple-title">SPOT TARIFF COST<span class="kpi-info-marker" role="img" tabindex="0" aria-label="${this.escapeAttribute(texts.kpiInfoLabel)}" title="${this.escapeAttribute(texts.kpiSpotCostHelp)}"><ha-icon icon="mdi:information-outline"></ha-icon></span></div>
-          <div class="kpi-simple-value">${formatNumber(costSpotEur, 2)} €</div>
-        </div>
-
-        <div class="kpi-card" role="listitem">
-          <div class="kpi-simple-title">BREAK-EVEN FIXED<span class="kpi-info-marker" role="img" tabindex="0" aria-label="${this.escapeAttribute(texts.kpiInfoLabel)}" title="${this.escapeAttribute(breakEvenHelpText)}"><ha-icon icon="mdi:information-outline"></ha-icon></span></div>
-          <div class="kpi-simple-value">${breakEvenFixed !== null && breakEvenFixed !== undefined ? formatNumber(breakEvenFixed, 2) : "-"} ct/kWh</div>
-        </div>
+        <section class="tariff-hero-card tariff-hero-risk">
+          <div class="tariff-hero-card-topline">
+            <div class="tariff-hero-card-heading-wrap">
+              <div class="tariff-hero-card-title">${texts.analysisWorstCaseRiskTitle}</div>
+              <div class="tariff-hero-card-subtitle">${texts.analysisWorstCaseRiskSubtitle}</div>
+            </div>
+            <div class="tariff-hero-card-badge negative">Risk</div>
+          </div>
+          <div class="tariff-hero-compact-value negative">${maxPenaltyRiskHeroValue}</div>
+        </section>
       </div>
     `;
   }
@@ -1876,8 +1924,8 @@ syncSensorPicker() {
     const dailySpreadValue = summary.dailyPriceSpread !== null && summary.dailyPriceSpread !== undefined
       ? `${formatNumber(summary.dailyPriceSpread, 2)} ct/kWh`
       : placeholderValue;
-    const stdDevValue = summary.spotPriceStdDev !== null && summary.spotPriceStdDev !== undefined
-      ? `${formatNumber(summary.spotPriceStdDev, 2)} ct/kWh`
+    const breakEvenFixedValue = summary.breakEvenFixedCtKwh !== null && summary.breakEvenFixedCtKwh !== undefined
+      ? `${formatNumber(summary.breakEvenFixedCtKwh, 2)} ct/kWh`
       : placeholderValue;
     const spotCheaperShare = Number(summary.spotCheaperShare);
     const spotCheaperValue = Number.isFinite(spotCheaperShare)
@@ -1924,6 +1972,12 @@ syncSensorPicker() {
     const maxPenaltyRiskValue = Number.isFinite(maxPenaltyRisk)
       ? `${formatNumber(maxPenaltyRisk, 2)} €`
       : placeholderValue;
+    const maxExtraSavingsHeroValue = Number.isFinite(maxExtraSavings)
+      ? `+${formatNumber(maxExtraSavings, 2)} €`
+      : placeholderValue;
+    const maxPenaltyRiskHeroValue = Number.isFinite(maxPenaltyRisk)
+      ? `+${formatNumber(maxPenaltyRisk, 2)} €`
+      : placeholderValue;
     const peakExposureValue = Number.isFinite(peakExposure)
       ? `${formatNumber(peakExposure, 1)} %`
       : placeholderValue;
@@ -1940,8 +1994,16 @@ syncSensorPicker() {
     const maxRiskDelta = hasCostProjection ? Math.max(0, maxPenaltyRisk) : null;
     const currentDelta = hasCostProjection ? (spotTariffCost - fixedTariffCost) : null;
     const currentDeltaLabel = Number.isFinite(currentDelta)
-      ? `${currentDelta >= 0 ? "+" : ""}${formatNumber(currentDelta, 2)} €`
+      ? `${formatNumber(Math.abs(currentDelta), 2)} €`
       : placeholderValue;
+    const currentDeltaDirection = Number.isFinite(currentDelta)
+      ? (currentDelta > 0 ? "risk" : currentDelta < 0 ? "savings" : "neutral")
+      : "neutral";
+    const currentDeltaVerdict = currentDeltaDirection === "risk"
+      ? texts.analysisStatusQuoSpotHigherLabel
+      : currentDeltaDirection === "savings"
+        ? texts.analysisStatusQuoFixedHigherLabel
+        : texts.analysisStatusQuoBalancedLabel;
 
     let deltaExtent = 1;
     let maxSavingsPct = 0;
@@ -2052,7 +2114,7 @@ syncSensorPicker() {
       { label: texts.analysisMaxSpotPriceLabel, value: maxSpotValue, help: maxSpotHelp },
       { label: texts.analysisMinSpotPriceLabel, value: minSpotValue, help: minSpotHelp },
       { label: texts.analysisDailySpreadLabel, value: dailySpreadValue, help: texts.analysisDailySpreadHelp },
-      { label: texts.analysisSpotStdDevLabel, value: stdDevValue, help: texts.analysisSpotStdDevHelp }
+      { label: texts.analysisSpotStdDevLabel, value: breakEvenFixedValue, help: texts.analysisSpotStdDevHelp }
     ];
 
     const fixedRateAssumedValue = summary.fixedPriceCt !== null && summary.fixedPriceCt !== undefined
@@ -2214,6 +2276,7 @@ syncSensorPicker() {
       }
       this._optimizationMode = parsed.optimizationMode || "shift_score";
       this._dashboardTab = parsed.dashboardTab || "monthly";
+      this._analysisOpen = Boolean(parsed.analysisOpen);
       this._selectedSensor = parsed.selectedSensor || this._selectedSensor;
     } catch (err) {
       console.warn("Failed to load UI state", err);
@@ -2229,6 +2292,7 @@ syncSensorPicker() {
         spotPriceMode: (this._spotPriceMode === "fixed" ? "fixed" : "absolute"),
         optimizationMode: this._optimizationMode || "shift_score",
         dashboardTab: this._dashboardTab || "monthly",
+        analysisOpen: Boolean(this._analysisOpen),
         selectedSensor: this._selectedSensor || null
       };
       localStorage.setItem("sei_ui_state", JSON.stringify(payload));
@@ -2280,6 +2344,35 @@ syncSensorPicker() {
       .source-toggle-text-btn:hover { color: var(--primary-text-color); }
 
       .top-dashboard-grid { margin-bottom: 24px; }
+      .banner-column { display: flex; flex-direction: column; gap: 16px; }
+      .tariff-hero-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: stretch; }
+      .tariff-hero-card { box-sizing: border-box; min-width: 0; border: 1px solid rgba(var(--rgb-divider-color), 0.5); border-radius: 16px; background: linear-gradient(180deg, rgba(var(--rgb-primary-text-color), 0.04), rgba(var(--rgb-primary-text-color), 0.02)); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16); padding: 18px; display: flex; flex-direction: column; justify-content: space-between; gap: 14px; height: 100%; overflow: hidden; }
+      .tariff-hero-anchor { grid-row: 1 / span 2; background: linear-gradient(180deg, rgba(var(--rgb-primary-text-color), 0.05), rgba(var(--rgb-primary-text-color), 0.025)); }
+      .tariff-hero-potential { border-color: rgba(76, 175, 80, 0.28); background: linear-gradient(180deg, rgba(76, 175, 80, 0.12), rgba(var(--rgb-primary-text-color), 0.03)); }
+      .tariff-hero-risk { border-color: rgba(244, 67, 54, 0.28); background: linear-gradient(180deg, rgba(244, 67, 54, 0.12), rgba(var(--rgb-primary-text-color), 0.03)); }
+      .tariff-hero-card-topline { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+      .tariff-hero-card-heading-wrap { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+      .tariff-hero-card-title { font-size: 13px; text-transform: uppercase; letter-spacing: 0.9px; color: var(--secondary-text-color); font-weight: 700; }
+      .tariff-hero-card-subtitle { font-size: 13px; line-height: 1.35; color: var(--secondary-text-color); max-width: 28ch; }
+      .tariff-hero-card-badge { flex: 0 0 auto; align-self: flex-start; padding: 5px 9px; border-radius: 999px; border: 1px solid rgba(var(--rgb-divider-color), 0.55); background: rgba(var(--rgb-primary-text-color), 0.06); color: var(--secondary-text-color); font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; }
+      .tariff-hero-card-badge.positive { color: #63c07b; border-color: rgba(99, 192, 123, 0.34); background: rgba(99, 192, 123, 0.12); }
+      .tariff-hero-card-badge.negative { color: #e08a78; border-color: rgba(224, 138, 120, 0.34); background: rgba(224, 138, 120, 0.12); }
+      .tariff-hero-card-badge.risk { color: #e08a78; }
+      .tariff-hero-card-badge.savings { color: #63c07b; }
+      .tariff-hero-anchor-main { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+      .tariff-hero-anchor-value { font-size: clamp(30px, 3.6vw, 44px); font-weight: 800; letter-spacing: -0.03em; line-height: 1.05; color: var(--primary-text-color); }
+      .tariff-hero-anchor-value.risk { color: #f1a08b; }
+      .tariff-hero-anchor-value.savings { color: #73d19a; }
+      .tariff-hero-anchor-value.neutral { color: var(--primary-text-color); }
+      .tariff-hero-anchor-unit { font-size: 12px; text-transform: uppercase; letter-spacing: 0.7px; color: var(--secondary-text-color); font-weight: 700; }
+      .tariff-hero-anchor-footer { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+      .tariff-hero-footer-item { border: 1px solid rgba(var(--rgb-divider-color), 0.45); border-radius: 12px; background: rgba(var(--rgb-primary-text-color), 0.04); padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+      .tariff-hero-footer-item span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.45px; color: var(--secondary-text-color); font-weight: 700; }
+      .tariff-hero-footer-item strong { font-size: 16px; line-height: 1.2; color: var(--primary-text-color); font-weight: 800; }
+      .tariff-hero-compact-value { font-size: clamp(26px, 3vw, 38px); font-weight: 800; letter-spacing: -0.03em; line-height: 1.08; }
+      .tariff-hero-compact-value.positive { color: #73d19a; }
+      .tariff-hero-compact-value.negative { color: #f1a08b; }
+      .tariff-hero-compact-value.neutral { color: var(--primary-text-color); }
       .savings-hero-card { border: 1px solid rgba(var(--rgb-divider-color), 0.25); border-left: 4px solid; border-radius: 0 8px 8px 0; padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; gap: 14px; }
       .savings-hero-head { display: flex; align-items: center; gap: 18px; }
       .savings-hero-icon { font-size: 42px; line-height: 1; }
@@ -2294,8 +2387,26 @@ syncSensorPicker() {
       .kpi-info-marker { width: 16px; height: 16px; min-width: 16px; border-radius: 50%; color: var(--secondary-text-color); display: inline-flex; align-items: center; justify-content: center; cursor: help; opacity: 0.82; }
       .kpi-info-marker ha-icon { --mdc-icon-size: 14px; }
       .kpi-info-marker:hover, .kpi-info-marker:focus-visible { color: var(--primary-color); opacity: 1; outline: none; }
-      .analysis-island { margin-top: 26px; padding: 16px; border-radius: 12px; background: color-mix(in srgb, var(--card-background-color) 90%, black 10%); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.26); }
-      .analysis-island-title { font-size: 11px; color: var(--secondary-text-color); text-transform: uppercase; letter-spacing: 0.8px; font-weight: 700; margin-bottom: 12px; }
+      .analysis-island { margin-top: 26px; padding: 0; border-radius: 12px; background: color-mix(in srgb, var(--card-background-color) 90%, black 10%); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.26); overflow: clip; }
+      .analysis-island[open] { padding-bottom: 4px; }
+      .analysis-island-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px; cursor: pointer; list-style: none; user-select: none; }
+      .analysis-island-summary::-webkit-details-marker { display: none; }
+      .analysis-island-summary-text { font-size: 11px; color: var(--secondary-text-color); text-transform: uppercase; letter-spacing: 0.8px; font-weight: 700; }
+      .analysis-island-summary-hint { margin-left: auto; font-size: 11px; color: var(--secondary-text-color); letter-spacing: 0.2px; white-space: nowrap; }
+      .analysis-island-summary-hint.open { display: none; }
+      .analysis-island[open] .analysis-island-summary-hint.closed { display: none; }
+      .analysis-island[open] .analysis-island-summary-hint.open { display: inline; }
+      .analysis-island-summary-icon { position: relative; width: 14px; height: 14px; flex: 0 0 auto; color: var(--secondary-text-color); transition: transform 0.2s ease, color 0.2s ease; }
+      .analysis-island-summary-icon::before { content: ""; position: absolute; inset: 0; margin: auto; width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); }
+      .analysis-island[open] .analysis-island-summary-icon { transform: translateY(2px); color: var(--primary-color); }
+      .analysis-island[open] .analysis-island-summary-icon::before { transform: rotate(225deg); }
+      .analysis-island-summary:hover .analysis-island-summary-text,
+      .analysis-island-summary:hover .analysis-island-summary-text,
+      .analysis-island-summary:focus-visible .analysis-island-summary-text,
+      .analysis-island-summary:hover .analysis-island-summary-hint,
+      .analysis-island-summary:focus-visible .analysis-island-summary-hint { color: var(--primary-text-color); }
+      .analysis-island-summary:focus-visible { outline: 2px solid var(--primary-color); outline-offset: -2px; }
+      .analysis-island > .dashboard-tabs { padding: 0 16px 16px; }
       .dashboard-tabs { margin-top: 0; }
       .dashboard-tab-navigation { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
       .dashboard-tab-button { min-height: 40px; padding: 8px 12px; border: 1px solid var(--divider-color); border-radius: 8px; background: var(--card-background-color); color: var(--primary-text-color); font-size: 13px; font-weight: 600; cursor: pointer; }
@@ -2482,12 +2593,21 @@ syncSensorPicker() {
         .source-chooser-header { align-items: flex-start; flex-direction: column; }
         .source-header-actions { width: 100%; justify-content: space-between; }
         .dashboard-minimal-header { align-items: flex-start; flex-direction: column; }
-        .savings-hero-card { padding: 16px; }
-        .savings-hero-head { gap: 12px; }
-        .savings-hero-icon { font-size: 36px; }
-        .savings-hero-value { font-size: 28px; }
+        .tariff-hero-grid { grid-template-columns: 1fr; grid-template-rows: auto; }
+        .tariff-hero-anchor { grid-row: auto; }
+        .tariff-hero-card { padding: 14px; gap: 10px; }
+        .tariff-hero-card-topline { gap: 8px; }
+        .tariff-hero-card-title { font-size: 12px; letter-spacing: 0.7px; }
+        .tariff-hero-card-subtitle { max-width: none; font-size: 12px; }
+        .tariff-hero-anchor-value { font-size: 30px; }
+        .tariff-hero-compact-value { font-size: 24px; }
+        .tariff-hero-anchor-footer { grid-template-columns: 1fr; }
+        .tariff-hero-card-badge { align-self: flex-start; }
         .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .dashboard-tab-navigation { grid-template-columns: 1fr; }
+        .analysis-island-summary { padding: 14px; }
+        .analysis-island-summary-hint { font-size: 10px; }
+        .analysis-island > .dashboard-tabs { padding: 0 14px 14px; }
         .technical-grid-range { grid-template-columns: 1fr; }
         .technical-grid-risk { grid-template-columns: 1fr; }
         .technical-grid-main { grid-template-columns: repeat(2, minmax(0, 1fr)); }

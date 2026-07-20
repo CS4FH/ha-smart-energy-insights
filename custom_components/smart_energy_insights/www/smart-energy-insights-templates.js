@@ -77,7 +77,8 @@ export function renderDashboardHtml({
   technicalAnalysisGroups,
   riskOptimizationGroups,
   texts,
-  dashboardTab
+  dashboardTab,
+  analysisOpen
 }) {
   return `
     <div class="dashboard-wrapper">
@@ -90,40 +91,45 @@ export function renderDashboardHtml({
         <div class="banner-column" id="dynamicSavingsBanner"></div>
       </div>
 
-      <section class="analysis-island" aria-label="${texts.detailedAnalysisTitle}">
-        <div class="analysis-island-title">${texts.detailedAnalysisTitle}</div>
+      <details class="analysis-island"${analysisOpen ? " open" : ""}>
+        <summary class="analysis-island-summary" aria-label="${texts.detailedAnalysisTitle}">
+          <span class="analysis-island-summary-text">${texts.detailedAnalysisTitle}</span>
+          <span class="analysis-island-summary-hint closed">${texts.analysisDetailedAnalysisClosedHint}</span>
+          <span class="analysis-island-summary-hint open">${texts.analysisDetailedAnalysisOpenHint}</span>
+          <span class="analysis-island-summary-icon" aria-hidden="true"></span>
+        </summary>
 
-      <section class="dashboard-tabs" aria-label="Dashboard sections">
-        <div class="dashboard-tab-navigation" role="tablist">
-          <button class="dashboard-tab-button${dashboardTab === "monthly" ? " active" : ""}" data-dashboard-tab="monthly" role="tab" aria-selected="${String(dashboardTab === "monthly")}" aria-controls="dashboardTabMonthly">${texts.dashboardTabMonthly}</button>
-          <button class="dashboard-tab-button${dashboardTab === "usage" ? " active" : ""}" data-dashboard-tab="usage" role="tab" aria-selected="${String(dashboardTab === "usage")}" aria-controls="dashboardTabUsage">${texts.dashboardTabUsage}</button>
-          <button class="dashboard-tab-button${dashboardTab === "risk" ? " active" : ""}" data-dashboard-tab="risk" role="tab" aria-selected="${String(dashboardTab === "risk")}" aria-controls="dashboardTabRisk">${texts.dashboardTabRisk}</button>
-          <button class="dashboard-tab-button${dashboardTab === "technical" ? " active" : ""}" data-dashboard-tab="technical" role="tab" aria-selected="${String(dashboardTab === "technical")}" aria-controls="dashboardTabTechnical">${texts.dashboardTabTechnical}</button>
-        </div>
-
-        <div id="dashboardTabMonthly" class="dashboard-tab-panel" data-dashboard-tab-panel="monthly" role="tabpanel"${dashboardTab === "monthly" ? "" : " hidden"}>
-          ${monthlyTariffHtml}
-        </div>
-
-        <div id="dashboardTabUsage" class="dashboard-tab-panel" data-dashboard-tab-panel="usage" role="tabpanel"${dashboardTab === "usage" ? "" : " hidden"}>
-          <div class="heatmap-area">
-            ${heatmapsHtml}
+        <section class="dashboard-tabs" aria-label="Dashboard sections">
+          <div class="dashboard-tab-navigation" role="tablist">
+            <button class="dashboard-tab-button${dashboardTab === "monthly" ? " active" : ""}" data-dashboard-tab="monthly" role="tab" aria-selected="${String(dashboardTab === "monthly")}" aria-controls="dashboardTabMonthly">${texts.dashboardTabMonthly}</button>
+            <button class="dashboard-tab-button${dashboardTab === "usage" ? " active" : ""}" data-dashboard-tab="usage" role="tab" aria-selected="${String(dashboardTab === "usage")}" aria-controls="dashboardTabUsage">${texts.dashboardTabUsage}</button>
+            <button class="dashboard-tab-button${dashboardTab === "risk" ? " active" : ""}" data-dashboard-tab="risk" role="tab" aria-selected="${String(dashboardTab === "risk")}" aria-controls="dashboardTabRisk">${texts.dashboardTabRisk}</button>
+            <button class="dashboard-tab-button${dashboardTab === "technical" ? " active" : ""}" data-dashboard-tab="technical" role="tab" aria-selected="${String(dashboardTab === "technical")}" aria-controls="dashboardTabTechnical">${texts.dashboardTabTechnical}</button>
           </div>
-        </div>
 
-        <div id="dashboardTabRisk" class="dashboard-tab-panel" data-dashboard-tab-panel="risk" role="tabpanel"${dashboardTab === "risk" ? "" : " hidden"}>
-          <div class="analysis-groups">
-            ${riskOptimizationGroups}
+          <div id="dashboardTabMonthly" class="dashboard-tab-panel" data-dashboard-tab-panel="monthly" role="tabpanel"${dashboardTab === "monthly" ? "" : " hidden"}>
+            ${monthlyTariffHtml}
           </div>
-        </div>
 
-        <div id="dashboardTabTechnical" class="dashboard-tab-panel" data-dashboard-tab-panel="technical" role="tabpanel"${dashboardTab === "technical" ? "" : " hidden"}>
-          <div class="analysis-groups">
-            ${technicalAnalysisGroups}
+          <div id="dashboardTabUsage" class="dashboard-tab-panel" data-dashboard-tab-panel="usage" role="tabpanel"${dashboardTab === "usage" ? "" : " hidden"}>
+            <div class="heatmap-area">
+              ${heatmapsHtml}
+            </div>
           </div>
-        </div>
-      </section>
-      </section>
+
+          <div id="dashboardTabRisk" class="dashboard-tab-panel" data-dashboard-tab-panel="risk" role="tabpanel"${dashboardTab === "risk" ? "" : " hidden"}>
+            <div class="analysis-groups">
+              ${riskOptimizationGroups}
+            </div>
+          </div>
+
+          <div id="dashboardTabTechnical" class="dashboard-tab-panel" data-dashboard-tab-panel="technical" role="tabpanel"${dashboardTab === "technical" ? "" : " hidden"}>
+            <div class="analysis-groups">
+              ${technicalAnalysisGroups}
+            </div>
+          </div>
+        </section>
+      </details>
     </div>
   `;
 }
