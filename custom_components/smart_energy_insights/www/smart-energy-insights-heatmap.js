@@ -1,8 +1,10 @@
 export function generateHeatmapHTML(data, title, unit, reverseColors, formatNumber, legendLabels, fixedScale, options) {
   if (!data || data.length === 0) return "";
-  const days = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
   const flatData = data.flat().filter((value) => Number.isFinite(value));
   const heatmapOptions = options || {};
+  const days = Array.isArray(heatmapOptions.dayLabels) && heatmapOptions.dayLabels.length === 7
+    ? heatmapOptions.dayLabels
+    : ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 
   let min;
   let max;

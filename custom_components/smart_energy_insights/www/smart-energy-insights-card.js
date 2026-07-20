@@ -397,6 +397,13 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       heatmapLegendHigher: this.localize("card.heatmap_legend_higher", "Higher"),
       heatmapLegendCheaper: this.localize("card.heatmap_legend_cheaper", "Cheaper"),
       heatmapLegendExpensive: this.localize("card.heatmap_legend_expensive", "More expensive"),
+      heatmapDayMonday: this.localize("card.heatmap_day_monday", "Mon"),
+      heatmapDayTuesday: this.localize("card.heatmap_day_tuesday", "Tue"),
+      heatmapDayWednesday: this.localize("card.heatmap_day_wednesday", "Wed"),
+      heatmapDayThursday: this.localize("card.heatmap_day_thursday", "Thu"),
+      heatmapDayFriday: this.localize("card.heatmap_day_friday", "Fri"),
+      heatmapDaySaturday: this.localize("card.heatmap_day_saturday", "Sat"),
+      heatmapDaySunday: this.localize("card.heatmap_day_sunday", "Sun"),
       monthlyTariffTitle: this.localize(
         "card.monthly_tariff_title",
         "Monthly tariff balance"
@@ -1202,6 +1209,15 @@ syncSensorPicker() {
     const selectedConsumptionMode = this._consumptionMode === "relative_mean" ? "relative_mean" : "absolute";
     const selectedSpotMode = this._spotPriceMode === "fixed" ? "fixed" : "absolute";
     const selectedOptimizationMode = this._optimizationMode || "shift_score";
+    const heatmapDayLabels = [
+      texts.heatmapDayMonday,
+      texts.heatmapDayTuesday,
+      texts.heatmapDayWednesday,
+      texts.heatmapDayThursday,
+      texts.heatmapDayFriday,
+      texts.heatmapDaySaturday,
+      texts.heatmapDaySunday,
+    ];
     const wholeYearHeatmaps = {
       consumption_heatmap: response.consumption_heatmap,
       price_heatmap: response.price_heatmap,
@@ -1351,7 +1367,7 @@ syncSensorPicker() {
           formatNumber,
           consumptionLegend,
           consumptionScale,
-          consumptionInfoText ? { infoText: consumptionInfoText } : null
+          consumptionInfoText ? { infoText: consumptionInfoText, dayLabels: heatmapDayLabels } : { dayLabels: heatmapDayLabels }
         );
         const referenceFormatted = Number.isFinite(priceReference) ? formatNumber(priceReference, 2) : "-";
         let priceInfoText = texts.heatmapPriceAbsoluteInfo;
@@ -1369,7 +1385,7 @@ syncSensorPicker() {
             ? { low: texts.heatmapLegendCheaper, high: texts.heatmapLegendExpensive }
             : { low: texts.heatmapLegendLow, high: texts.heatmapLegendHigh },
           priceScale,
-          priceInfoText ? { infoText: priceInfoText } : null
+          priceInfoText ? { infoText: priceInfoText, dayLabels: heatmapDayLabels } : { dayLabels: heatmapDayLabels }
         );
         const optimizationHtml = selectedOptimizationMode === "cost_gradient"
           ? generateHeatmapHTML(
@@ -1385,6 +1401,7 @@ syncSensorPicker() {
               optimizationScale,
               {
                 infoText: texts.heatmapOptimizationCostGradientInfo,
+                dayLabels: heatmapDayLabels,
               }
             )
           : generateHeatmapHTML(
@@ -1404,6 +1421,7 @@ syncSensorPicker() {
                 colorMode: "optimization",
                 hideValueExtremes: true,
                 legendBarStyle: "background: linear-gradient(90deg, hsla(6, 74%, 46%, 0.95) 0%, hsla(215, 10%, 24%, 0.95) 50%, hsla(135, 62%, 38%, 0.95) 100%);",
+                dayLabels: heatmapDayLabels,
               }
             );
 
