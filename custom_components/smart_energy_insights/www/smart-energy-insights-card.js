@@ -378,6 +378,10 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
         "card.monthly_tariff_title",
         "Monthly tariff balance"
       ),
+      monthlyTariffDataAvailabilityLabel: this.localize(
+        "card.monthly_tariff_data_availability_label",
+        "Data availability"
+      ),
       monthlyTariffInfo: this.localize(
         "card.monthly_tariff_info",
         "Each month shows the cost difference of dynamic tariff versus fixed tariff. Negative means savings with dynamic, positive means extra cost."
@@ -1796,18 +1800,43 @@ syncSensorPicker() {
       texts.monthDec
     ];
 
-    const thresholdEur = 0.15;
-    const maxAbs = Math.max(0.01, ...months.map((item) => Math.abs(Number(item.delta_eur || 0))));
-
-    const cells = months
+    const renderedMonths = months
       .slice()
-      .sort((a, b) => Number(a.month || 0) - Number(b.month || 0))
+      .sort((a, b) => Number(a.month || 0) - Number(b.month || 0));
+
+    if (renderedMonths.length === 0) {
+      return `
+        <div class="monthly-tariff-panel">
+          <div class="monthly-tariff-title">${texts.monthlyTariffTitle}</div>
+          <div class="monthly-tariff-info">${texts.monthlyTariffInfo}</div>
+          <div class="monthly-tariff-empty">${texts.monthlyTariffNoData}</div>
+        </div>
+      `;
+    }
+
+    const thresholdEur = 0.15;
+    const maxAbs = Math.max(0.01, ...renderedMonths.map((item) => Math.abs(Number(item.delta_eur || 0))));
+
+    const cells = renderedMonths
       .map((item) => {
         const monthIndex = Math.max(1, Math.min(12, Number(item.month || 1))) - 1;
         const delta = Number(item.delta_eur || 0);
         const matchedHours = Number(item.matched_hours || 0);
+        const monthDays = new Date(2026, monthIndex + 1, 0).getDate();
+        const matchedDays = Math.max(0, Math.round(matchedHours / 24));
+        const availabilityLabel = `${matchedDays}/${monthDays}`;
         const intensity = Math.min(1, Math.abs(delta) / maxAbs);
-        const hasData = matchedHours > 0;
+        const hasData = matchedDays > 0;
+        const badgeClass = !hasData
+          ? "none"
+          : matchedDays >= monthDays
+            ? "full"
+            : "partial";
+        const badgeIcon = !hasData
+          ? "⚠"
+          : matchedDays >= monthDays
+            ? "✓"
+            : "⚠";
 
         let cellClass = "neutral";
         if (!hasData) {
@@ -1819,11 +1848,12 @@ syncSensorPicker() {
         }
 
         const centerValue = !hasData
-          ? "-"
+          ? `${formatNumber(0, 2)} €`
           : `${delta > 0 ? "+" : ""}${formatNumber(delta, 2)} €`;
 
         return `
           <div class="monthly-cell-card ${cellClass}" title="${monthLabels[monthIndex]} | ${texts.monthlyTariffTooltipDelta}: ${delta > 0 ? "+" : ""}${formatNumber(delta, 2)} € | ${texts.monthlyTariffTooltipHours}: ${formatNumber(matchedHours, 0)}" style="--intensity:${intensity.toFixed(3)}">
+            <div class="monthly-cell-badge ${badgeClass}"><span class="monthly-cell-badge-icon" aria-hidden="true">${badgeIcon}</span><span>${availabilityLabel}</span></div>
             <div class="monthly-cell-head">${monthLabels[monthIndex]}</div>
             <div class="monthly-cell-center">${centerValue}</div>
           </div>
@@ -2396,21 +2426,26 @@ syncSensorPicker() {
       .monthly-tariff-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
       @media(min-width: 900px) { .monthly-tariff-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
       @media(min-width: 1300px) { .monthly-tariff-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-      .monthly-cell-card { border: 1px solid rgba(var(--rgb-divider-color), 0.45); border-radius: 10px; padding: 10px; min-height: 84px; display: grid; grid-template-rows: auto 1fr; align-items: center; justify-items: center; text-align: center; gap: 8px; }
+      .monthly-cell-card { position: relative; border: 1px solid rgba(var(--rgb-divider-color), 0.45); border-radius: 10px; padding: 16px 10px 10px; min-height: 84px; display: grid; grid-template-rows: auto 1fr; align-items: center; justify-items: center; text-align: center; gap: 8px; }
       .monthly-cell-card.savings { background: color-mix(in srgb, #c9ebd9 calc(78% + var(--intensity) * 20%), rgba(var(--rgb-card-background-color), 0.9)); border-color: rgba(49, 122, 78, 0.35); }
       .monthly-cell-card.neutral { background: color-mix(in srgb, #ece0b8 calc(78% + var(--intensity) * 20%), rgba(var(--rgb-card-background-color), 0.9)); border-color: rgba(143, 122, 38, 0.35); }
       .monthly-cell-card.extra { background: color-mix(in srgb, #efcbc8 calc(78% + var(--intensity) * 20%), rgba(var(--rgb-card-background-color), 0.9)); border-color: rgba(155, 59, 59, 0.35); }
-      .monthly-cell-card.nodata { background: rgba(var(--rgb-primary-text-color), 0.04); opacity: 0.72; }
+      .monthly-cell-card.nodata { background: color-mix(in srgb, #ece0b8 78%, rgba(var(--rgb-card-background-color), 0.9)); border-color: rgba(155, 122, 31, 0.35); }
+      .monthly-cell-badge { position: absolute; top: 8px; right: 8px; display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; border-radius: 999px; font-size: 10px; line-height: 1; font-weight: 700; letter-spacing: 0.15px; background: rgba(var(--rgb-primary-text-color), 0.08); color: var(--secondary-text-color); }
+      .monthly-cell-badge-icon { font-size: 11px; line-height: 1; }
+      .monthly-cell-badge.full { color: #2f7a4d; background: rgba(47, 122, 77, 0.14); }
+      .monthly-cell-badge.partial { color: #9b7a1f; background: rgba(155, 122, 31, 0.16); }
+      .monthly-cell-badge.none { color: #9b7a1f; background: rgba(155, 122, 31, 0.16); }
       .monthly-cell-head { font-size: 12px; font-weight: 800; letter-spacing: 0.45px; text-transform: uppercase; color: #2d3640; padding: 2px 8px; border-radius: 999px; background: rgba(45, 54, 64, 0.12); }
       .monthly-cell-center { font-size: 15px; font-weight: 700; text-align: center; color: var(--primary-text-color); letter-spacing: 0.1px; display: flex; align-items: center; justify-content: center; min-height: 28px; }
       .monthly-cell-card.savings .monthly-cell-head { color: #225a3d; background: rgba(34, 90, 61, 0.12); }
       .monthly-cell-card.neutral .monthly-cell-head { color: #7f6721; background: rgba(127, 103, 33, 0.14); }
       .monthly-cell-card.extra .monthly-cell-head { color: #893737; background: rgba(137, 55, 55, 0.12); }
-      .monthly-cell-card.nodata .monthly-cell-head { color: var(--secondary-text-color); background: rgba(var(--rgb-primary-text-color), 0.12); }
+      .monthly-cell-card.nodata .monthly-cell-head { color: #7f6721; background: rgba(127, 103, 33, 0.14); }
       .monthly-cell-card.savings .monthly-cell-center { color: #317a4e; }
       .monthly-cell-card.neutral .monthly-cell-center { color: #8f7a26; }
       .monthly-cell-card.extra .monthly-cell-center { color: #9b3b3b; }
-      .monthly-cell-card.nodata .monthly-cell-center { color: var(--secondary-text-color); }
+      .monthly-cell-card.nodata .monthly-cell-center { color: #8f7a26; }
       .card-tax-note { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--divider-color); color: var(--secondary-text-color); text-align: center; font-size: 12px; opacity: 0.9; }
 
       /* Upload Formular wenn Daten geladen sind */
