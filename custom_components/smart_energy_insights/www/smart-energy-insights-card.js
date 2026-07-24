@@ -261,16 +261,16 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       analysisSectionRiskTitle: this.localize("card.analysis_section_risk_title", "RISK AND OPTIMIZATION"),
       analysisFlexibilityPotentialLabel: this.localize("card.analysis_flexibility_potential_label", "Flexibility potential"),
       analysisFlexibilityPotentialHelp: this.localize("card.analysis_flexibility_potential_help", "Percentage of your total consumption that is above your baseline and could theoretically be shifted to other hours."),
-      analysisCurrentTariffBalanceTitle: this.localize("card.analysis_current_tariff_balance_title", "Current Tariff Balance (Status Quo)"),
+      analysisCurrentTariffBalanceTitle: this.localize("card.analysis_current_tariff_balance_title", "Projected Savings"),
       analysisBestCasePotentialTitle: this.localize("card.analysis_best_case_potential_title", "Best Case (Potential)"),
       analysisBestCasePotentialSubtitle: this.localize("card.analysis_best_case_potential_subtitle", "Achievable through active load shifting."),
       analysisWorstCaseRiskTitle: this.localize("card.analysis_worst_case_risk_title", "Worst Case (Risk)"),
       analysisWorstCaseRiskSubtitle: this.localize("card.analysis_worst_case_risk_subtitle", "Risk upon high peak-hour usage."),
       analysisStatusQuoFixedProjectionLabel: this.localize("card.analysis_status_quo_fixed_projection_label", "Fixed projection"),
       analysisStatusQuoSpotProjectionLabel: this.localize("card.analysis_status_quo_spot_projection_label", "Spot projection"),
-      analysisStatusQuoDifferenceLabel: this.localize("card.analysis_status_quo_difference_label", "Difference"),
       analysisStatusQuoSpotHigherLabel: this.localize("card.analysis_status_quo_spot_higher_label", "Spot higher"),
       analysisStatusQuoFixedHigherLabel: this.localize("card.analysis_status_quo_fixed_higher_label", "Fixed higher"),
+      analysisStatusQuoSpotCheaperSubtitle: this.localize("card.analysis_status_quo_spot_cheaper_subtitle", "Spot tariff is currently cheaper than fixed tariff."),
       analysisStatusQuoBalancedLabel: this.localize("card.analysis_status_quo_balanced_label", "Balanced"),
       analysisCostProjectionTitle: this.localize("card.analysis_cost_projection_title", "Cost projection range"),
       analysisCostProjectionHelp: this.localize("card.analysis_cost_projection_help", "Projected spot-cost corridor from best to worst case compared against your fixed-tariff baseline."),
@@ -2062,7 +2062,7 @@ syncSensorPicker() {
     const currentDeltaVerdict = currentDeltaDirection === "risk"
       ? texts.analysisStatusQuoSpotHigherLabel
       : currentDeltaDirection === "savings"
-        ? texts.analysisStatusQuoFixedHigherLabel
+        ? texts.analysisStatusQuoSpotCheaperSubtitle
         : texts.analysisStatusQuoBalancedLabel;
     const maxExtraSavings = Number(this.latestData.max_extra_savings_eur);
     const maxPenaltyRisk = Number(this.latestData.max_penalty_risk_eur);
@@ -2076,10 +2076,10 @@ syncSensorPicker() {
       ? currentDelta + Math.abs(maxPenaltyRisk)
       : null;
     const bestCaseHeroValue = Number.isFinite(bestCaseTotal)
-      ? `${bestCaseTotal <= 0 ? "-" : "+"}${formatNumber(Math.abs(bestCaseTotal), 2)} €`
+      ? `${formatNumber(Math.abs(bestCaseTotal), 2)} €`
       : texts.analysisPlaceholderValue;
     const worstCaseHeroValue = Number.isFinite(worstCaseTotal)
-      ? `${worstCaseTotal >= 0 ? "+" : "-"}${formatNumber(Math.abs(worstCaseTotal), 2)} €`
+      ? `${formatNumber(Math.abs(worstCaseTotal), 2)} €`
       : texts.analysisPlaceholderValue;
     const bestCaseDirection = Number.isFinite(bestCaseTotal)
       ? (bestCaseTotal < 0 ? "positive" : bestCaseTotal > 0 ? "negative" : "neutral")
@@ -2115,11 +2115,9 @@ syncSensorPicker() {
               <div class="tariff-hero-card-title">${texts.analysisCurrentTariffBalanceTitle}</div>
               <div class="tariff-hero-card-subtitle">${currentDeltaVerdict}</div>
             </div>
-            <div class="tariff-hero-card-badge ${currentDeltaDirection}">${texts.analysisStatusQuoDifferenceLabel}</div>
           </div>
           <div class="tariff-hero-anchor-main">
             <div class="tariff-hero-anchor-value ${currentDeltaDirection}">${currentDeltaLabel}</div>
-            <div class="tariff-hero-anchor-unit">${texts.analysisStatusQuoDifferenceLabel}</div>
           </div>
           <div class="tariff-hero-anchor-footer">
             <div class="tariff-hero-footer-item">
@@ -2139,7 +2137,6 @@ syncSensorPicker() {
               <div class="tariff-hero-card-title">${texts.analysisBestCasePotentialTitle}</div>
               <div class="tariff-hero-card-subtitle">${texts.analysisBestCasePotentialSubtitle}</div>
             </div>
-            <div class="tariff-hero-card-badge positive">Potential</div>
           </div>
           <div class="tariff-hero-compact-value ${bestCaseDirection}">${bestCaseHeroValue}</div>
         </section>
@@ -2150,7 +2147,6 @@ syncSensorPicker() {
               <div class="tariff-hero-card-title">${texts.analysisWorstCaseRiskTitle}</div>
               <div class="tariff-hero-card-subtitle">${texts.analysisWorstCaseRiskSubtitle}</div>
             </div>
-            <div class="tariff-hero-card-badge negative">Risk</div>
           </div>
           <div class="tariff-hero-compact-value ${worstCaseDirection}">${worstCaseHeroValue}</div>
         </section>
