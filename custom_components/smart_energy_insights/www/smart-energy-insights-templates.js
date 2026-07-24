@@ -99,7 +99,6 @@ export function renderBaseCard(texts) {
 }
 
 export function renderDashboardHtml({
-  filename,
   heatmapsHtml,
   monthlyTariffHtml,
   technicalAnalysisGroups,
@@ -110,10 +109,6 @@ export function renderDashboardHtml({
 }) {
   return `
     <div class="dashboard-wrapper">
-      <div class="dashboard-minimal-header">
-        <div class="dashboard-current-profile">${texts.currentProfileLabel} <span>${filename}</span></div>
-      </div>
-
       <div class="top-dashboard-grid">
         <div class="banner-column" id="dynamicSavingsBanner"></div>
       </div>

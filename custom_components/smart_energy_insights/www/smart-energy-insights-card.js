@@ -12,7 +12,7 @@ import {
   uploadCsv
 } from "./smart-energy-insights-api.js?v=20260724a";
 import { generateHeatmapHTML } from "./smart-energy-insights-heatmap.js?v=20260724a";
-import { renderBaseCard, renderDashboardHtml } from "./smart-energy-insights-templates.js?v=20260724b";
+import { renderBaseCard, renderDashboardHtml } from "./smart-energy-insights-templates.js?v=20260724c";
 import { formatNumber } from "./smart-energy-insights-utils.js";
 
 class SmartEnergyInsightsUploadCard extends HTMLElement {
@@ -166,7 +166,6 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
         this.localize("card.upload_success_message", "{count} values were imported.", { count }),
       uploadErrorTitle: this.localize("card.upload_error_title", "Upload failed"),
       uploadAnotherTitle: this.localize("card.upload_another_title", "Upload another load profile"),
-      profileDefaultFilename: this.localize("card.profile_default_filename", "Profile_loaded.csv"),
       lastImported: this.localize("card.last_imported", "Last imported"),
       profileTitle: this.localize("card.profile_title", "Current load profile:"),
       currentProfileLabel: this.localize("card.current_profile_label", "Current profile:"),
@@ -1298,7 +1297,6 @@ syncSensorPicker() {
     const start = response.start ? response.start.split('T')[0] : 'N/A';
     const end = response.end ? response.end.split('T')[0] : 'N/A';
     
-    const filenameStr = response.filename || texts.profileDefaultFilename;
     const avgConsumptionStr = formatNumber(response.avg_consumption_kwh, 3);
     const avgPriceStr = formatNumber(response.avg_price_ct_kwh, 2);
 
@@ -1346,7 +1344,6 @@ syncSensorPicker() {
     if (typeof this._analysisOpen !== "boolean") this._analysisOpen = false;
 
     container.innerHTML = renderDashboardHtml({
-      filename: filenameStr,
       heatmapsHtml,
       monthlyTariffHtml,
       technicalAnalysisGroups: analysisViews.technical,
@@ -2076,17 +2073,13 @@ syncSensorPicker() {
       ? currentDelta + Math.abs(maxPenaltyRisk)
       : null;
     const bestCaseHeroValue = Number.isFinite(bestCaseTotal)
-      ? `${formatNumber(Math.abs(bestCaseTotal), 2)} €`
+      ? `- ${formatNumber(Math.abs(bestCaseTotal), 2)} €`
       : texts.analysisPlaceholderValue;
     const worstCaseHeroValue = Number.isFinite(worstCaseTotal)
-      ? `${formatNumber(Math.abs(worstCaseTotal), 2)} €`
+      ? `+ ${formatNumber(Math.abs(worstCaseTotal), 2)} €`
       : texts.analysisPlaceholderValue;
-    const bestCaseDirection = Number.isFinite(bestCaseTotal)
-      ? (bestCaseTotal < 0 ? "positive" : bestCaseTotal > 0 ? "negative" : "neutral")
-      : "neutral";
-    const worstCaseDirection = Number.isFinite(worstCaseTotal)
-      ? (worstCaseTotal > 0 ? "negative" : worstCaseTotal < 0 ? "positive" : "neutral")
-      : "neutral";
+    const bestCaseDirection = Number.isFinite(bestCaseTotal) ? "positive" : "neutral";
+    const worstCaseDirection = Number.isFinite(worstCaseTotal) ? "negative" : "neutral";
     const breakEvenFixed = this.latestData.break_even_fixed_ct_kwh;
     const breakEvenFixedCt = Number(breakEvenFixed);
     const fixedPriceCt = Number(this.latestData.fixed_price_ct);
@@ -2600,7 +2593,7 @@ syncSensorPicker() {
       .integration-settings-chip:hover { color: var(--primary-color); border-color: var(--primary-color); background: rgba(var(--rgb-primary-color), 0.08); }
       .integration-settings-chip ha-icon { --mdc-icon-size: 20px; }
 
-      .source-card { margin: 16px; border-radius: 12px; overflow: clip; background: color-mix(in srgb, var(--card-background-color) 90%, black 10%); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28); }
+      .source-card { margin: 24px 24px 0; border-radius: 12px; overflow: clip; background: color-mix(in srgb, var(--card-background-color) 90%, black 10%); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28); }
       .source-chooser-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 18px 20px; }
       .source-chooser-title { font-size: 14px; font-weight: 600; color: var(--primary-text-color); }
       .source-chooser-desc { font-size: 12px; color: var(--secondary-text-color); }
@@ -2658,9 +2651,6 @@ syncSensorPicker() {
       
       /* Dashboard Wrapper */
       .dashboard-wrapper { padding: 24px; }
-      .dashboard-minimal-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
-      .dashboard-current-profile { font-size: 13px; color: var(--secondary-text-color); letter-spacing: 0.2px; }
-      .dashboard-current-profile span { color: var(--primary-text-color); font-weight: 600; }
       .source-toggle-text-btn { border: none; background: transparent; color: var(--primary-color); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.45px; cursor: pointer; padding: 0; }
       .source-toggle-text-btn:hover { color: var(--primary-text-color); }
 
@@ -2708,7 +2698,7 @@ syncSensorPicker() {
       .kpi-info-marker { width: 16px; height: 16px; min-width: 16px; border-radius: 50%; color: var(--secondary-text-color); display: inline-flex; align-items: center; justify-content: center; cursor: help; opacity: 0.82; }
       .kpi-info-marker ha-icon { --mdc-icon-size: 14px; }
       .kpi-info-marker:hover, .kpi-info-marker:focus-visible { color: var(--primary-color); opacity: 1; outline: none; }
-      .analysis-island { margin-top: 26px; padding: 0; border-radius: 12px; background: color-mix(in srgb, var(--card-background-color) 90%, black 10%); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.26); overflow: clip; }
+      .analysis-island { margin-top: 0; padding: 0; border-radius: 12px; background: color-mix(in srgb, var(--card-background-color) 90%, black 10%); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.26); overflow: clip; }
       .analysis-island[open] { padding-bottom: 4px; }
       .analysis-island-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px; cursor: pointer; list-style: none; user-select: none; }
       .analysis-island-summary::-webkit-details-marker { display: none; }
@@ -2919,10 +2909,8 @@ syncSensorPicker() {
       .cancel-button { background-color: var(--secondary-background-color); color: var(--primary-text-color); }
       .cancel-button:hover:not(:disabled) { background-color: var(--divider-color); }
       @media(max-width: 600px) {
-        .source-card { margin: 12px; }
         .source-chooser-header { align-items: flex-start; flex-direction: column; }
         .source-header-actions { width: 100%; justify-content: space-between; }
-        .dashboard-minimal-header { align-items: flex-start; flex-direction: column; }
         .tariff-hero-grid { grid-template-columns: 1fr; grid-template-rows: auto; }
         .tariff-hero-anchor { grid-row: auto; }
         .tariff-hero-card { padding: 14px; gap: 10px; }
