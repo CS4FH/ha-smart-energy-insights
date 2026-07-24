@@ -12,7 +12,7 @@ import {
   uploadCsv
 } from "./smart-energy-insights-api.js?v=20260724a";
 import { generateHeatmapHTML } from "./smart-energy-insights-heatmap.js?v=20260724a";
-import { renderBaseCard, renderDashboardHtml } from "./smart-energy-insights-templates.js?v=20260724a";
+import { renderBaseCard, renderDashboardHtml } from "./smart-energy-insights-templates.js?v=20260724b";
 import { formatNumber } from "./smart-energy-insights-utils.js";
 
 class SmartEnergyInsightsUploadCard extends HTMLElement {
@@ -171,6 +171,8 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       profileTitle: this.localize("card.profile_title", "Current load profile:"),
       currentProfileLabel: this.localize("card.current_profile_label", "Current profile:"),
       switchSourceButton: this.localize("card.switch_source_button", "Switch source"),
+      sourceClosedHint: this.localize("card.source_closed_hint", "Tap to open"),
+      sourceOpenHint: this.localize("card.source_open_hint", "Tap to close"),
       detailedAnalysisTitle: this.localize("card.detailed_analysis_title", "Detailed analysis"),
       profileMeta: ({ count, start, end, uploadDate }) =>
         this.localize(
@@ -601,9 +603,23 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     uploadBtn.addEventListener("click", () => { this.uploadFile(); });
     cancelBtn.addEventListener("click", () => { this.resetUI(); });
 
-    sourceCsvSwitch.addEventListener("click", () => { this.selectSource("csv"); });
-    sourceSensorSwitch.addEventListener("click", () => { this.selectSource("sensor"); });
-    integrationSettingsBtn.addEventListener("click", () => this.navigateToIntegrations());
+    sourceCsvSwitch.addEventListener("click", (event) => { event.stopPropagation(); this.selectSource("csv"); });
+    sourceSensorSwitch.addEventListener("click", (event) => { event.stopPropagation(); this.selectSource("sensor"); });
+    integrationSettingsBtn.addEventListener("click", (event) => { event.stopPropagation(); this.navigateToIntegrations(); });
+
+    const sourceSelector = this.querySelector("#sourceSelector");
+    const sourceCardSummary = this.querySelector("#sourceSelector > summary");
+    if (sourceSelector && sourceCardSummary) {
+      sourceCardSummary.addEventListener("click", (event) => {
+        if (!this.hasLoadedData(this.latestData)) {
+          event.preventDefault();
+        }
+      });
+      sourceSelector.addEventListener("toggle", () => {
+        this._sourcePanelOpen = sourceSelector.open;
+        this.saveUiState();
+      });
+    }
 
     if (addDeviceBtn) addDeviceBtn.addEventListener("click", () => this.openDeviceEditor());
     if (cancelDeviceBtn) cancelDeviceBtn.addEventListener("click", () => this.closeDeviceEditor());
@@ -1016,17 +1032,11 @@ syncSensorPicker() {
     const hasData = this.hasLoadedData(this.latestData);
     this.renderMonitoredDevices();
 
-    if (!hasData) {
-      if (sourceSelector) sourceSelector.style.display = "block";
-      if (dashboardContainer) dashboardContainer.style.display = "none";
-      return;
-    }
-
     if (sourceSelector) {
-      sourceSelector.style.display = this._sourcePanelOpen ? "block" : "none";
+      sourceSelector.open = !hasData || this._sourcePanelOpen !== false;
     }
     if (dashboardContainer) {
-      dashboardContainer.style.display = "block";
+      dashboardContainer.style.display = hasData ? "block" : "none";
     }
   }
 
@@ -1261,11 +1271,10 @@ syncSensorPicker() {
     this.querySelector("#cancelBtn").disabled = false;
   }
 
-  renderDashboard(response, options = {}) {
+  renderDashboard(response) {
     const container = this.querySelector("#dashboardContainer");
     if (!container) return;
     const texts = this._texts || this.getTexts();
-    const collapseSourcePanel = options.collapseSourcePanel === true;
 
     if (!this.hasLoadedData(response)) {
       this.clearDashboardForSourceSwitch();
@@ -1273,9 +1282,6 @@ syncSensorPicker() {
     }
 
     this.latestData = response;
-    if (collapseSourcePanel) {
-      this._sourcePanelOpen = false;
-    }
     this.updateLayoutVisibility();
     if (response.source === "sensor" && response.sensor_entity_id) {
       this._loadedSensorEntityId = response.sensor_entity_id;
@@ -1416,7 +1422,8 @@ syncSensorPicker() {
     const toggleSourcePanelBtn = this.querySelector("#toggleSourcePanelBtn");
     if (toggleSourcePanelBtn) {
       toggleSourcePanelBtn.addEventListener("click", () => {
-        this._sourcePanelOpen = !this._sourcePanelOpen;
+        this._sourcePanelOpen = !(this._sourcePanelOpen !== false);
+        this.saveUiState();
         this.updateLayoutVisibility();
         if (this._sourcePanelOpen) {
           requestAnimationFrame(() => {
@@ -2543,6 +2550,7 @@ syncSensorPicker() {
 
   loadUiState() {
     this._uiStateLoaded = true;
+    this._sourcePanelOpen = true;
     try {
       const raw = localStorage.getItem("sei_ui_state");
       if (!raw) return;
@@ -2560,6 +2568,7 @@ syncSensorPicker() {
       this._optimizationMode = parsed.optimizationMode || "shift_score";
       this._dashboardTab = parsed.dashboardTab || "monthly";
       this._analysisOpen = Boolean(parsed.analysisOpen);
+      this._sourcePanelOpen = parsed.sourcePanelOpen !== undefined ? Boolean(parsed.sourcePanelOpen) : true;
       this._selectedSensor = parsed.selectedSensor || this._selectedSensor;
       this._selectedConsumptionProfile = parsed.selectedConsumptionProfile || "total";
     } catch (err) {
@@ -2577,6 +2586,7 @@ syncSensorPicker() {
         optimizationMode: this._optimizationMode || "shift_score",
         dashboardTab: this._dashboardTab || "monthly",
         analysisOpen: Boolean(this._analysisOpen),
+        sourcePanelOpen: this._sourcePanelOpen !== false,
         selectedSensor: this._selectedSensor || null,
         selectedConsumptionProfile: this._selectedConsumptionProfile || "total"
       };
@@ -2594,7 +2604,7 @@ syncSensorPicker() {
       .integration-settings-chip:hover { color: var(--primary-color); border-color: var(--primary-color); background: rgba(var(--rgb-primary-color), 0.08); }
       .integration-settings-chip ha-icon { --mdc-icon-size: 20px; }
 
-      .source-card { margin: 16px; border-radius: 12px; overflow: hidden; background: color-mix(in srgb, var(--card-background-color) 90%, black 10%); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28); }
+      .source-card { margin: 16px; border-radius: 12px; overflow: clip; background: color-mix(in srgb, var(--card-background-color) 90%, black 10%); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28); }
       .source-chooser-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 16px; }
       .source-chooser-title { font-size: 14px; font-weight: 600; color: var(--primary-text-color); }
       .source-chooser-desc { font-size: 12px; color: var(--secondary-text-color); }
@@ -2602,6 +2612,21 @@ syncSensorPicker() {
       .source-selector-buttons { display: inline-flex; border: 1px solid var(--divider-color); border-radius: 999px; overflow: hidden; background: var(--secondary-background-color); }
       .source-switch { padding: 6px 14px; border: none; background: transparent; color: var(--primary-text-color); cursor: pointer; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
       .source-switch.active { background: var(--primary-color); color: white; }
+      .source-card-summary { cursor: pointer; list-style: none; user-select: none; }
+      .source-card-summary::-webkit-details-marker { display: none; }
+      .source-card-summary-hint { font-size: 11px; color: var(--secondary-text-color); letter-spacing: 0.2px; white-space: nowrap; }
+      .source-card-summary-hint.open { display: none; }
+      .source-card[open] .source-card-summary-hint.closed { display: none; }
+      .source-card[open] .source-card-summary-hint.open { display: inline; }
+      .source-card-summary-icon { position: relative; width: 14px; height: 14px; flex: 0 0 auto; color: var(--secondary-text-color); transition: transform 0.2s ease, color 0.2s ease; }
+      .source-card-summary-icon::before { content: ""; position: absolute; inset: 0; margin: auto; width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); }
+      .source-card[open] .source-card-summary-icon { transform: translateY(2px); color: var(--primary-color); }
+      .source-card[open] .source-card-summary-icon::before { transform: rotate(225deg); }
+      .source-card-summary:hover .source-chooser-title,
+      .source-card-summary:focus-visible .source-chooser-title,
+      .source-card-summary:hover .source-card-summary-hint,
+      .source-card-summary:focus-visible .source-card-summary-hint { color: var(--primary-text-color); }
+      .source-card-summary:focus-visible { outline: 2px solid var(--primary-color); outline-offset: -2px; }
 
       .upload-card { width: 100%; max-width: 1200px; margin: 0 auto; height: fit-content; }
       .source-content { padding: 16px; }

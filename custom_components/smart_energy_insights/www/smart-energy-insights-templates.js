@@ -1,22 +1,25 @@
 export function renderBaseCard(texts) {
   return `
     <ha-card id="mainCard" class="upload-card">
-      <div class="source-card" id="sourceSelector">
-        <div class="source-chooser-header">
+      <details class="source-card" id="sourceSelector" open>
+        <summary class="source-chooser-header source-card-summary" aria-label="${texts.sourceTitle}">
           <div>
             <div class="source-chooser-title">${texts.sourceTitle}</div>
             <div class="source-chooser-desc">${texts.sourceDescription}</div>
           </div>
           <div class="source-header-actions">
             <div class="source-selector-buttons" role="tablist">
-              <button id="sourceSensorSwitch" class="source-switch" data-source="sensor" role="tab" aria-controls="sensorSection" aria-selected="false">${texts.sourceSensor}</button>
-              <button id="sourceCsvSwitch" class="source-switch" data-source="csv" role="tab" aria-controls="csvSection" aria-selected="true">${texts.sourceCsv}</button>
+              <button id="sourceSensorSwitch" class="source-switch" data-source="sensor" role="tab" aria-controls="sensorSection" aria-selected="false" type="button">${texts.sourceSensor}</button>
+              <button id="sourceCsvSwitch" class="source-switch" data-source="csv" role="tab" aria-controls="csvSection" aria-selected="true" type="button">${texts.sourceCsv}</button>
             </div>
-            <button id="integrationSettingsBtn" class="integration-settings-chip" title="${texts.integrationSettingsLabel}" aria-label="${texts.integrationSettingsLabel}">
+            <button id="integrationSettingsBtn" class="integration-settings-chip" title="${texts.integrationSettingsLabel}" aria-label="${texts.integrationSettingsLabel}" type="button">
               <ha-icon icon="mdi:cog"></ha-icon>
             </button>
+            <span class="source-card-summary-hint closed">${texts.sourceClosedHint}</span>
+            <span class="source-card-summary-hint open">${texts.sourceOpenHint}</span>
+            <span class="source-card-summary-icon" aria-hidden="true"></span>
           </div>
-        </div>
+        </summary>
 
         <div class="source-content" id="sourceContent">
         <div class="source-section" id="csvSection" role="tabpanel" aria-labelledby="sourceCsvSwitch">
@@ -88,7 +91,7 @@ export function renderBaseCard(texts) {
           </div>
         </div>
         </div>
-      </div>
+      </details>
 
       <div id="dashboardContainer"></div>
     </ha-card>

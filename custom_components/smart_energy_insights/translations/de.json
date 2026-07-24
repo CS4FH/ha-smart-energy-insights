@@ -81,6 +81,8 @@
     "profile_title": "Aktuelles Lastprofil:",
     "current_profile_label": "Aktuelles Profil:",
     "switch_source_button": "Quelle wechseln",
+    "source_closed_hint": "Zum Oeffnen tippen",
+    "source_open_hint": "Zum Schliessen tippen",
     "detailed_analysis_title": "Detaillierte Analyse",
     "profile_meta": "{count} Werte &bull; Zeitraum: {start} bis {end} &bull; Hochgeladen: {upload_date}",
     "date_range_label": "Zeitraum",

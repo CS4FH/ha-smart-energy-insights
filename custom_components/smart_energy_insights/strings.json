@@ -80,6 +80,8 @@
     "profile_title": "Current load profile:",
     "current_profile_label": "Current profile:",
     "switch_source_button": "Switch source",
+    "source_closed_hint": "Tap to open",
+    "source_open_hint": "Tap to close",
     "detailed_analysis_title": "Detailed analysis",
     "profile_meta": "{count} values &bull; Period: {start} to {end} &bull; Uploaded: {upload_date}",
     "date_range_label": "Date range",
