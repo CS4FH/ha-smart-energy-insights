@@ -637,7 +637,6 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
         if (!button) return;
         const entityId = button.dataset.entityId;
         if (button.dataset.deviceAction === "remove") this.removeMonitoredDevice(entityId);
-        if (button.dataset.deviceAction === "rename") this.renameMonitoredDevice(entityId);
       });
     }
 
@@ -829,7 +828,6 @@ syncSensorPicker() {
           <span class="monitored-device-entity">${this.escapeAttribute(device.entity_id)}</span>
         </div>
         <div class="monitored-device-actions">
-          <button class="device-icon-button" type="button" data-device-action="rename" data-entity-id="${this.escapeAttribute(device.entity_id)}" title="${texts.deviceSave}" aria-label="${texts.deviceSave}"><ha-icon icon="mdi:content-save-outline"></ha-icon></button>
           <button class="device-icon-button danger" type="button" data-device-action="remove" data-entity-id="${this.escapeAttribute(device.entity_id)}" title="${texts.deviceRemove}" aria-label="${texts.deviceRemove}"><ha-icon icon="mdi:delete-outline"></ha-icon></button>
         </div>
       </div>
@@ -2233,7 +2231,7 @@ syncSensorPicker() {
           : `${delta > 0 ? "+" : ""}${formatNumber(delta, 2)} €`;
 
         return `
-          <div class="monthly-cell-card ${cellClass}" title="${monthLabels[monthIndex]} | ${texts.monthlyTariffTooltipDelta}: ${delta > 0 ? "+" : ""}${formatNumber(delta, 2)} € | ${texts.monthlyTariffTooltipHours}: ${formatNumber(matchedHours, 0)}" style="--intensity:${intensity.toFixed(3)}">
+          <div class="monthly-cell-card ${cellClass}" title="${monthLabels[monthIndex]} | ${texts.monthlyTariffTooltipHours}: ${formatNumber(matchedHours, 0)}" style="--intensity:${intensity.toFixed(3)}">
             <div class="monthly-cell-badge ${badgeClass}"><span class="monthly-cell-badge-icon" aria-hidden="true">${badgeIcon}</span><span>${availabilityLabel}</span></div>
             <div class="monthly-cell-head">${monthLabels[monthIndex]}</div>
             <div class="monthly-cell-center">${centerValue}</div>
@@ -2266,6 +2264,13 @@ syncSensorPicker() {
         ${items.map((item) => buildCard(item.label, item.value, item.help || "")).join("")}
       </div>
     `;
+    // Splits a rendered metric into a prominent numeric value and a muted unit
+    // suffix (e.g. "3182.64" + "kWh") so the grid can be scanned quickly.
+    const metricValue = (numberText, unit) => (
+      unit
+        ? `<span class="technical-metric-number">${numberText}</span><span class="technical-metric-unit">${unit}</span>`
+        : `<span class="technical-metric-number">${numberText}</span>`
+    );
 
     const matchedHours = Number(summary.matchedHours || 0);
     const hasMatchedTariffData = matchedHours > 0;
@@ -2280,39 +2285,39 @@ syncSensorPicker() {
 
     const placeholderValue = texts.analysisPlaceholderValue;
     const maxPeakValue = summary.maxPeak !== null && summary.maxPeak !== undefined
-      ? `${formatNumber(summary.maxPeak, 3)} kWh`
-      : placeholderValue;
+      ? metricValue(formatNumber(summary.maxPeak, 3), "kWh")
+      : metricValue(placeholderValue, "");
     const baseLoadValue = summary.baseLoadP05 !== null && summary.baseLoadP05 !== undefined
-      ? `${formatNumber(summary.baseLoadP05, 3)} kWh`
-      : placeholderValue;
+      ? metricValue(formatNumber(summary.baseLoadP05, 3), "kWh")
+      : metricValue(placeholderValue, "");
     const dailySpreadValue = summary.dailyPriceSpread !== null && summary.dailyPriceSpread !== undefined
-      ? `${formatNumber(summary.dailyPriceSpread, 2)} ct/kWh`
-      : placeholderValue;
+      ? metricValue(formatNumber(summary.dailyPriceSpread, 2), "ct/kWh")
+      : metricValue(placeholderValue, "");
     const breakEvenFixedValue = summary.breakEvenFixedCtKwh !== null && summary.breakEvenFixedCtKwh !== undefined
-      ? `${formatNumber(summary.breakEvenFixedCtKwh, 2)} ct/kWh`
-      : placeholderValue;
+      ? metricValue(formatNumber(summary.breakEvenFixedCtKwh, 2), "ct/kWh")
+      : metricValue(placeholderValue, "");
     const spotCheaperShare = Number(summary.spotCheaperShare);
     const spotCheaperValue = hasMatchedTariffData && Number.isFinite(spotCheaperShare)
-      ? `${formatNumber(spotCheaperShare * 100, 1)} %`
-      : placeholderValue;
+      ? metricValue(formatNumber(spotCheaperShare * 100, 1), "%")
+      : metricValue(placeholderValue, "");
     const negativePriceHours = Number(summary.negativePriceHours);
     const negativePriceShare = Number(summary.negativePriceShare);
     const negativePriceValue = hasMatchedTariffData
-      ? `${formatNumber(Number.isFinite(negativePriceHours) ? negativePriceHours : 0, 0)} h`
-        + (Number.isFinite(negativePriceShare) ? ` (${formatNumber(negativePriceShare * 100, 1)} %)` : "")
-      : placeholderValue;
+      ? metricValue(formatNumber(Number.isFinite(negativePriceHours) ? negativePriceHours : 0, 0), "h")
+        + (Number.isFinite(negativePriceShare) ? ` <span class="technical-metric-unit">(${formatNumber(negativePriceShare * 100, 1)} %)</span>` : "")
+      : metricValue(placeholderValue, "");
     const completenessValue = Number.isFinite(completenessRatio)
-      ? `${formatNumber(completenessRatio * 100, completenessRatio >= 0.9995 ? 0 : 1)} %`
-      : placeholderValue;
+      ? metricValue(formatNumber(completenessRatio * 100, completenessRatio >= 0.9995 ? 0 : 1), "%")
+      : metricValue(placeholderValue, "");
     const effectiveSpotValue = summary.effectiveSpotPrice !== null && summary.effectiveSpotPrice !== undefined
-      ? `${formatNumber(summary.effectiveSpotPrice, 2)} ct/kWh`
-      : placeholderValue;
+      ? metricValue(formatNumber(summary.effectiveSpotPrice, 2), "ct/kWh")
+      : metricValue(placeholderValue, "");
     const maxSpotValue = summary.maxSpotPrice !== null && summary.maxSpotPrice !== undefined
-      ? `${formatNumber(summary.maxSpotPrice, 2)} ct/kWh`
-      : placeholderValue;
+      ? metricValue(formatNumber(summary.maxSpotPrice, 2), "ct/kWh")
+      : metricValue(placeholderValue, "");
     const minSpotValue = summary.minSpotPrice !== null && summary.minSpotPrice !== undefined
-      ? `${formatNumber(summary.minSpotPrice, 2)} ct/kWh`
-      : placeholderValue;
+      ? metricValue(formatNumber(summary.minSpotPrice, 2), "ct/kWh")
+      : metricValue(placeholderValue, "");
     const maxSpotHelp = summary.maxSpotPriceAt
       ? `${texts.analysisMaxSpotPriceHelp} ${texts.analysisOccurredOnLabel}: ${this.formatDateTimeEuropean(summary.maxSpotPriceAt)}`
       : texts.analysisMaxSpotPriceHelp;
@@ -2323,8 +2328,8 @@ syncSensorPicker() {
     const peakExposure = Number(summary.peakExposurePercent);
     const offPeakShare = Number(summary.offPeakSharePercent);
     const flexibilityPotentialValue = Number.isFinite(flexibilityPotential)
-      ? `${formatNumber(flexibilityPotential, 1)} %`
-      : placeholderValue;
+      ? metricValue(formatNumber(flexibilityPotential, 1), "%")
+      : metricValue(placeholderValue, "");
     const fixedTariffCost = Number(summary.fixedTariffCostEur);
     const spotTariffCost = Number(summary.spotTariffCostEur);
     const hasCostProjection = Number.isFinite(fixedTariffCost)
@@ -2399,35 +2404,35 @@ syncSensorPicker() {
     }
 
     const cheapShareValue = hasTimingProfile
-      ? `${formatNumber(cheapShare, 1)} %`
-      : placeholderValue;
+      ? metricValue(formatNumber(cheapShare, 1), "%")
+      : metricValue(placeholderValue, "");
     const expensiveShareValue = hasTimingProfile
-      ? `${formatNumber(expensiveShare, 1)} %`
-      : placeholderValue;
+      ? metricValue(formatNumber(expensiveShare, 1), "%")
+      : metricValue(placeholderValue, "");
     const averageShareValue = hasTimingProfile
-      ? `${formatNumber(averageShare, 1)} %`
-      : placeholderValue;
+      ? metricValue(formatNumber(averageShare, 1), "%")
+      : metricValue(placeholderValue, "");
 
     const periodItems = [
-      { label: texts.analysisRangeLabel, value: `${startEu} - ${endEu}`, help: texts.analysisRangeHelp },
-      { label: texts.analysisDaysLabel, value: `${formatNumber(roundedMatchedDays, 0)}`, help: texts.analysisDaysHelp },
-      { label: texts.analysisHoursLabel, value: `${formatNumber(matchedHours, 0)}`, help: texts.analysisHoursHelp },
+      { label: texts.analysisRangeLabel, value: metricValue(`${startEu} - ${endEu}`, ""), help: texts.analysisRangeHelp },
+      { label: texts.analysisDaysLabel, value: metricValue(formatNumber(roundedMatchedDays, 0), ""), help: texts.analysisDaysHelp },
+      { label: texts.analysisHoursLabel, value: metricValue(formatNumber(matchedHours, 0), ""), help: texts.analysisHoursHelp },
       { label: texts.analysisDataCompletenessLabel, value: completenessValue, help: texts.analysisDataCompletenessHelp }
     ];
 
     const consumptionItems = [
-      { label: texts.analysisTotalLabel, value: `${formatNumber(summary.totalConsumption || 0, 2)} kWh`, help: texts.analysisTotalHelp },
-      { label: texts.analysisAvgDayLabel, value: `${formatNumber(summary.avgPerDay || 0, 2)} kWh`, help: texts.analysisAvgDayHelp },
-      { label: texts.analysisAvgHourLabel, value: `${formatNumber(summary.avgPerHour || 0, 3)} kWh`, help: texts.analysisAvgHourHelp },
-      { label: texts.analysisWeekdayAvgLabel, value: `${formatNumber(summary.weekdayAvg || 0, 3)} kWh`, help: texts.analysisWeekdayAvgHelp },
-      { label: texts.analysisWeekendAvgLabel, value: `${formatNumber(summary.weekendAvg || 0, 3)} kWh`, help: texts.analysisWeekendAvgHelp },
-      { label: texts.analysisPeakHourLabel, value: peakHourLabel, help: texts.analysisPeakHourHelp },
+      { label: texts.analysisTotalLabel, value: metricValue(formatNumber(summary.totalConsumption || 0, 2), "kWh"), help: texts.analysisTotalHelp },
+      { label: texts.analysisAvgDayLabel, value: metricValue(formatNumber(summary.avgPerDay || 0, 2), "kWh"), help: texts.analysisAvgDayHelp },
+      { label: texts.analysisAvgHourLabel, value: metricValue(formatNumber(summary.avgPerHour || 0, 3), "kWh"), help: texts.analysisAvgHourHelp },
+      { label: texts.analysisWeekdayAvgLabel, value: metricValue(formatNumber(summary.weekdayAvg || 0, 3), "kWh"), help: texts.analysisWeekdayAvgHelp },
+      { label: texts.analysisWeekendAvgLabel, value: metricValue(formatNumber(summary.weekendAvg || 0, 3), "kWh"), help: texts.analysisWeekendAvgHelp },
+      { label: texts.analysisPeakHourLabel, value: metricValue(peakHourLabel, ""), help: texts.analysisPeakHourHelp },
       { label: texts.analysisMaxPeakLabel, value: maxPeakValue, help: texts.analysisMaxPeakHelp },
       { label: texts.analysisBaseLoadLabel, value: baseLoadValue, help: texts.analysisBaseLoadHelp }
     ];
 
     const priceItems = [
-      { label: texts.analysisAvgSpotLabel, value: `${summary.avgPrice} ct/kWh`, help: texts.analysisAvgSpotHelp },
+      { label: texts.analysisAvgSpotLabel, value: metricValue(summary.avgPrice, "ct/kWh"), help: texts.analysisAvgSpotHelp },
       { label: texts.analysisEffectiveSpotLabel, value: effectiveSpotValue, help: texts.analysisEffectiveSpotHelp },
       { label: texts.analysisNegativePriceHoursLabel, value: negativePriceValue, help: texts.analysisNegativePriceHoursHelp },
       { label: texts.analysisSpotCheaperLabel, value: spotCheaperValue, help: texts.analysisSpotCheaperHelp },
@@ -2438,17 +2443,17 @@ syncSensorPicker() {
     ];
 
     const fixedRateAssumedValue = summary.fixedPriceCt !== null && summary.fixedPriceCt !== undefined
-      ? `${formatNumber(summary.fixedPriceCt, 2)} ct/kWh`
-      : placeholderValue;
+      ? metricValue(formatNumber(summary.fixedPriceCt, 2), "ct/kWh")
+      : metricValue(placeholderValue, "");
     const fixedBaseFeeValue = summary.fixedBaseFeeEur !== null && summary.fixedBaseFeeEur !== undefined
-      ? `${formatNumber(summary.fixedBaseFeeEur, 2)} € / month`
-      : placeholderValue;
+      ? metricValue(formatNumber(summary.fixedBaseFeeEur, 2), "€ / month")
+      : metricValue(placeholderValue, "");
     const dynamicMarkupValue = summary.spotMarkupCt !== null && summary.spotMarkupCt !== undefined
-      ? `${formatNumber(summary.spotMarkupCt, 2)} ct/kWh`
-      : placeholderValue;
+      ? metricValue(formatNumber(summary.spotMarkupCt, 2), "ct/kWh")
+      : metricValue(placeholderValue, "");
     const dynamicBaseFeeValue = summary.spotBaseFeeEur !== null && summary.spotBaseFeeEur !== undefined
-      ? `${formatNumber(summary.spotBaseFeeEur, 2)} € / month`
-      : placeholderValue;
+      ? metricValue(formatNumber(summary.spotBaseFeeEur, 2), "€ / month")
+      : metricValue(placeholderValue, "");
 
     const parameterItems = [
       { label: texts.analysisFixedRateAssumedLabel, value: fixedRateAssumedValue, help: texts.analysisFixedRateAssumedHelp },
@@ -2630,9 +2635,9 @@ syncSensorPicker() {
       .monitored-device-fields { display: grid; gap: 3px; min-width: 0; }
       .monitored-device-entity { overflow: hidden; color: var(--secondary-text-color); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
       .monitored-device-actions { display: flex; gap: 4px; }
-      .device-icon-button { width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--divider-color); border-radius: 6px; background: transparent; color: var(--primary-text-color); cursor: pointer; }
+      .device-icon-button { width: 44px; height: 44px; padding: 10px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--divider-color); border-radius: 8px; background: transparent; color: var(--primary-text-color); cursor: pointer; box-sizing: border-box; transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease; }
       .device-icon-button:hover { border-color: var(--primary-color); color: var(--primary-color); }
-      .device-icon-button.danger:hover { border-color: var(--error-color); color: var(--error-color); }
+      .device-icon-button.danger:hover, .device-icon-button.danger:focus-visible { border-color: var(--error-color); color: var(--error-color); background: rgba(244, 67, 54, 0.12); }
       .device-icon-button ha-icon { --mdc-icon-size: 18px; }
       .device-editor { display: grid; gap: 8px; margin-top: 10px; padding: 14px; border: 1px solid var(--divider-color); border-radius: 6px; }
       .device-editor[hidden], #monitoredDevicesContent[hidden], #monitoredDevicesPrerequisite[hidden] { display: none; }
@@ -2734,7 +2739,9 @@ syncSensorPicker() {
       .technical-grid-main { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
       .technical-metric-card { border: 1px solid rgba(var(--rgb-divider-color), 0.45); border-radius: 8px; background: rgba(var(--rgb-primary-text-color), 0.03); padding: 9px 10px; min-height: 60px; display: flex; flex-direction: column; justify-content: center; gap: 6px; }
       .technical-metric-label { font-size: 11px; color: var(--secondary-text-color); letter-spacing: 0.25px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-      .technical-metric-value { font-size: 16px; font-weight: 700; color: var(--primary-text-color); line-height: 1.2; }
+      .technical-metric-value { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px; line-height: 1.2; }
+      .technical-metric-number { font-size: 18px; font-weight: 700; color: var(--primary-text-color); }
+      .technical-metric-unit { font-size: 12px; font-weight: 400; color: var(--secondary-text-color); }
       .metric-info-marker { width: 16px; height: 16px; min-width: 16px; border-radius: 50%; color: var(--secondary-text-color); display: inline-flex; align-items: center; justify-content: center; cursor: help; opacity: 0.82; }
       .metric-info-marker ha-icon { --mdc-icon-size: 14px; }
       .metric-info-marker:hover, .metric-info-marker:focus-visible { color: var(--primary-color); opacity: 1; outline: none; }
