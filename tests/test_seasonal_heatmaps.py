@@ -8,10 +8,10 @@ from custom_components.smart_energy_insights.insights_view import _build_seasona
 
 def test_build_seasonal_heatmaps_uses_northern_hemisphere_months() -> None:
     statistics = [
-        {"start": datetime(2026, 1, 15, 12, tzinfo=timezone.utc), "state": 1.0},
-        {"start": datetime(2026, 3, 15, 12, tzinfo=timezone.utc), "state": 2.0},
-        {"start": datetime(2026, 6, 15, 12, tzinfo=timezone.utc), "state": 3.0},
-        {"start": datetime(2026, 9, 15, 12, tzinfo=timezone.utc), "state": 4.0},
+        {"start": datetime(2026, 1, 15, 8, tzinfo=timezone.utc), "state": 1.0},
+        {"start": datetime(2026, 3, 15, 9, tzinfo=timezone.utc), "state": 2.0},
+        {"start": datetime(2026, 6, 15, 10, tzinfo=timezone.utc), "state": 3.0},
+        {"start": datetime(2026, 9, 15, 11, tzinfo=timezone.utc), "state": 4.0},
         {"start": datetime(2026, 12, 15, 12, tzinfo=timezone.utc), "state": 5.0},
     ]
     price_series = [

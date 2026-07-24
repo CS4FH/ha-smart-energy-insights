@@ -79,3 +79,47 @@ export async function loadSensorData(hass, entityId, startDate, endDate, options
 
   return data;
 }
+
+async function parseApiResponse(response) {
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data.error || `HTTP error! status: ${response.status}`);
+    error.code = data.code || null;
+    throw error;
+  }
+  return data;
+}
+
+export async function loadMonitoredDevices(hass) {
+  if (!hass) return [];
+  const response = await hass.fetchWithAuth("/api/smart_energy_insights/devices", {
+    method: "GET"
+  });
+  const data = await parseApiResponse(response);
+  return Array.isArray(data.devices) ? data.devices : [];
+}
+
+export async function saveMonitoredDevices(hass, devices) {
+  if (!hass) throw new Error("Home Assistant instance not found");
+  const response = await hass.fetchWithAuth("/api/smart_energy_insights/devices", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ devices })
+  });
+  const data = await parseApiResponse(response);
+  return Array.isArray(data.devices) ? data.devices : [];
+}
+
+export async function loadDeviceAnalysis(hass, entityId, startDate, endDate) {
+  if (!hass) throw new Error("Home Assistant instance not found");
+  const response = await hass.fetchWithAuth("/api/smart_energy_insights/device-analysis", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      entity_id: entityId,
+      start: startDate || null,
+      end: endDate || null
+    })
+  });
+  return parseApiResponse(response);
+}

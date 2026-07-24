@@ -6,13 +6,19 @@ from homeassistant.core import HomeAssistant
 from homeassistant.components.http import StaticPathConfig
 
 from .const import DOMAIN
-from .insights_view import SmartEnergyInsightsSensorView, SmartEnergyInsightsUploadView
+from .insights_view import (
+    SmartEnergyInsightsDeviceAnalysisView,
+    SmartEnergyInsightsDevicesView,
+    SmartEnergyInsightsSensorView,
+    SmartEnergyInsightsUploadView,
+)
 from .panel import (
     async_cleanup_panel_storage,
     async_setup_panel,
     async_unload_panel,
 )
 from .repositories.cache_repository import async_clear_cache
+from .repositories.device_repository import async_clear_devices
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -41,6 +47,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.http.register_view(SmartEnergyInsightsUploadView())
     # Register HTTP view for sensor imports
     hass.http.register_view(SmartEnergyInsightsSensorView())
+    hass.http.register_view(SmartEnergyInsightsDevicesView())
+    hass.http.register_view(SmartEnergyInsightsDeviceAnalysisView())
 
     # Setup Smart Energy Insights Lovelace panel with auto-registered resource
     await async_setup_panel(hass)
@@ -57,6 +65,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Unload panel if this is the last entry
         if not hass.data[DOMAIN]:
             await async_clear_cache(hass)
+            await async_clear_devices(hass)
             await async_unload_panel(hass)
             hass.data.pop(DOMAIN, None)
 
@@ -71,3 +80,4 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     if not hass.config_entries.async_entries(DOMAIN):
         await async_cleanup_panel_storage(hass)
         await async_clear_cache(hass)
+        await async_clear_devices(hass)

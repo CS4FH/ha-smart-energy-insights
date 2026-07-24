@@ -3,13 +3,16 @@
  */
 
 import {
+  loadDeviceAnalysis,
   loadHeatmaps,
+  loadMonitoredDevices,
   loadSensorData,
+  saveMonitoredDevices,
   setActiveSource,
   uploadCsv
-} from "./smart-energy-insights-api.js";
-import { generateHeatmapHTML } from "./smart-energy-insights-heatmap.js?v=20260720b";
-import { renderBaseCard, renderDashboardHtml } from "./smart-energy-insights-templates.js?v=20260720a";
+} from "./smart-energy-insights-api.js?v=20260724a";
+import { generateHeatmapHTML } from "./smart-energy-insights-heatmap.js?v=20260724a";
+import { renderBaseCard, renderDashboardHtml } from "./smart-energy-insights-templates.js?v=20260724a";
 import { formatNumber } from "./smart-energy-insights-utils.js";
 
 class SmartEnergyInsightsUploadCard extends HTMLElement {
@@ -29,9 +32,11 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     this._hass = hass;
     if (isFirstLoad) {
       this.loadHeatmapsFromBackend();
+      this.loadMonitoredDevicesFromBackend();
     }
     if (this.contentAdded) {
       this.syncSensorPicker();
+      this.syncDevicePicker();
     }
   }
 
@@ -126,6 +131,24 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       ),
       sensorLoaded: this.localize("card.sensor_loaded", "Sensor data loaded."),
       sensorLoadButton: this.localize("card.sensor_load_button", "Load profile"),
+      devicesTitle: this.localize("card.devices_title", "Monitored devices"),
+      devicesDescription: this.localize(
+        "card.devices_description",
+        "Add optional energy sensors for individual household devices."
+      ),
+      devicesRequiresProfile: this.localize(
+        "card.devices_requires_profile",
+        "Load a main consumption profile before adding devices."
+      ),
+      devicesEmpty: this.localize("card.devices_empty", "No devices configured."),
+      deviceAdd: this.localize("card.device_add", "Add device"),
+      deviceSave: this.localize("card.device_save", "Save"),
+      deviceRemove: this.localize("card.device_remove", "Remove device"),
+      deviceNameLabel: this.localize("card.device_name_label", "Display name"),
+      deviceSensorLabel: this.localize("card.device_sensor_label", "Energy sensor"),
+      deviceSensorPlaceholder: this.localize("card.device_sensor_placeholder", "Choose a device sensor"),
+      deviceNameRequired: this.localize("card.device_name_required", "Enter a display name."),
+      deviceSaveError: this.localize("card.device_save_error", "Could not save monitored devices."),
       uploadTitle: this.localize("card.upload_title", "Upload new CSV"),
       uploadPrompt: this.localize("card.upload_prompt", "Drag & Drop or"),
       uploadFileSelect: this.localize("card.upload_file_select", "Choose file"),
@@ -292,6 +315,18 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       heatmapConsumptionTitle: this.localize(
         "card.heatmap_consumption_title",
         "Consumption heatmap (kWh)"
+      ),
+      heatmapDeviceConsumptionTitle: (name) => this.localize(
+        "card.heatmap_device_consumption_title",
+        "{name} consumption (kWh)",
+        { name }
+      ),
+      consumptionProfileLabel: this.localize("card.consumption_profile_label", "Consumption profile"),
+      consumptionProfileTotal: this.localize("card.consumption_profile_total", "Total consumption"),
+      consumptionProfileUnavailable: (name) => this.localize(
+        "card.consumption_profile_unavailable",
+        "{name} (no overlapping data)",
+        { name }
       ),
       heatmapPriceTitle: this.localize(
         "card.heatmap_price_title",
@@ -523,6 +558,8 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
 
     this.attachEventListeners();
     this.syncSensorPicker();
+    this.syncDevicePicker();
+    this.renderMonitoredDevices();
     this.updateSourceUI();
     this.updateLayoutVisibility();
     this.applyStyles();
@@ -539,6 +576,11 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     const sensorPicker = this.querySelector("#sensorPicker");
     const sensorLoadBtn = this.querySelector("#sensorLoadBtn");
     const integrationSettingsBtn = this.querySelector("#integrationSettingsBtn");
+    const addDeviceBtn = this.querySelector("#addDeviceBtn");
+    const cancelDeviceBtn = this.querySelector("#cancelDeviceBtn");
+    const saveDeviceBtn = this.querySelector("#saveDeviceBtn");
+    const deviceSensorPicker = this.querySelector("#deviceSensorPicker");
+    const monitoredDevicesList = this.querySelector("#monitoredDevicesList");
 
     filePickerBtn.addEventListener("click", () => fileInput.click());
     fileInput.addEventListener("change", (e) => {
@@ -558,6 +600,27 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     sourceCsvSwitch.addEventListener("click", () => { this.selectSource("csv"); });
     sourceSensorSwitch.addEventListener("click", () => { this.selectSource("sensor"); });
     integrationSettingsBtn.addEventListener("click", () => this.navigateToIntegrations());
+
+    if (addDeviceBtn) addDeviceBtn.addEventListener("click", () => this.openDeviceEditor());
+    if (cancelDeviceBtn) cancelDeviceBtn.addEventListener("click", () => this.closeDeviceEditor());
+    if (saveDeviceBtn) saveDeviceBtn.addEventListener("click", () => this.addMonitoredDevice());
+    if (deviceSensorPicker) {
+      deviceSensorPicker.addEventListener("value-changed", (event) => {
+        this.selectDeviceSensor(event.detail?.value || null);
+      });
+      deviceSensorPicker.addEventListener("change", (event) => {
+        this.selectDeviceSensor(event.target?.value || null);
+      });
+    }
+    if (monitoredDevicesList) {
+      monitoredDevicesList.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-device-action]");
+        if (!button) return;
+        const entityId = button.dataset.entityId;
+        if (button.dataset.deviceAction === "remove") this.removeMonitoredDevice(entityId);
+        if (button.dataset.deviceAction === "rename") this.renameMonitoredDevice(entityId);
+      });
+    }
 
     if (sensorLoadBtn) {
       sensorLoadBtn.addEventListener("click", () => {
@@ -701,6 +764,162 @@ syncSensorPicker() {
     }
   }
 
+  getCompatibleEnergySensors() {
+    return Object.values(this._hass?.states || {}).filter((state) => {
+      const attrs = state.attributes || {};
+      return attrs.device_class === "energy"
+        && (attrs.state_class === "total_increasing" || attrs.state_class === "total")
+        && (attrs.unit_of_measurement === "kWh" || attrs.unit_of_measurement === "Wh");
+    });
+  }
+
+  async loadMonitoredDevicesFromBackend() {
+    try {
+      this._monitoredDevices = await loadMonitoredDevices(this._hass);
+    } catch (error) {
+      console.error("Failed to load monitored devices", error);
+      this._monitoredDevices = [];
+    }
+    this.renderMonitoredDevices();
+    this.syncDevicePicker();
+    if (this.latestData) this.refreshDeviceAnalyses(this.latestData);
+  }
+
+  renderMonitoredDevices() {
+    const list = this.querySelector("#monitoredDevicesList");
+    const content = this.querySelector("#monitoredDevicesContent");
+    const prerequisite = this.querySelector("#monitoredDevicesPrerequisite");
+    if (!list || !content || !prerequisite) return;
+
+    const texts = this._texts || this.getTexts();
+    const hasProfile = this.hasLoadedData(this.latestData);
+    content.hidden = !hasProfile;
+    prerequisite.hidden = hasProfile;
+    if (!hasProfile) return;
+
+    const devices = Array.isArray(this._monitoredDevices) ? this._monitoredDevices : [];
+    if (devices.length === 0) {
+      list.innerHTML = `<div class="devices-empty">${texts.devicesEmpty}</div>`;
+      return;
+    }
+
+    list.innerHTML = devices.map((device) => `
+      <div class="monitored-device-row">
+        <div class="monitored-device-fields">
+          <input class="device-name-input" data-device-name="${this.escapeAttribute(device.entity_id)}" value="${this.escapeAttribute(device.name)}" maxlength="80" aria-label="${texts.deviceNameLabel}" />
+          <span class="monitored-device-entity">${this.escapeAttribute(device.entity_id)}</span>
+        </div>
+        <div class="monitored-device-actions">
+          <button class="device-icon-button" type="button" data-device-action="rename" data-entity-id="${this.escapeAttribute(device.entity_id)}" title="${texts.deviceSave}" aria-label="${texts.deviceSave}"><ha-icon icon="mdi:content-save-outline"></ha-icon></button>
+          <button class="device-icon-button danger" type="button" data-device-action="remove" data-entity-id="${this.escapeAttribute(device.entity_id)}" title="${texts.deviceRemove}" aria-label="${texts.deviceRemove}"><ha-icon icon="mdi:delete-outline"></ha-icon></button>
+        </div>
+      </div>
+    `).join("");
+  }
+
+  openDeviceEditor() {
+    const editor = this.querySelector("#deviceEditor");
+    if (editor) editor.hidden = false;
+    this._deviceEditorEntityId = null;
+    const nameInput = this.querySelector("#deviceNameInput");
+    if (nameInput) nameInput.value = "";
+    this.syncDevicePicker();
+  }
+
+  closeDeviceEditor() {
+    const editor = this.querySelector("#deviceEditor");
+    if (editor) editor.hidden = true;
+    this._deviceEditorEntityId = null;
+  }
+
+  selectDeviceSensor(entityId) {
+    this._deviceEditorEntityId = entityId;
+    const state = entityId ? this._hass?.states?.[entityId] : null;
+    const nameInput = this.querySelector("#deviceNameInput");
+    if (nameInput && state && !nameInput.value.trim()) {
+      nameInput.value = state.attributes?.friendly_name || entityId;
+    }
+  }
+
+  syncDevicePicker() {
+    const picker = this.querySelector("#deviceSensorPicker");
+    if (!picker || !this._hass) return;
+    const texts = this._texts || this.getTexts();
+    const excluded = new Set((this._monitoredDevices || []).map((device) => device.entity_id));
+    if (this._activeSource === "sensor" && this._loadedSensorEntityId) {
+      excluded.add(this._loadedSensorEntityId);
+    }
+    const matches = this.getCompatibleEnergySensors().filter((state) => !excluded.has(state.entity_id));
+    const entityIds = matches.map((state) => state.entity_id);
+
+    picker.hass = this._hass;
+    picker.label = texts.deviceSensorLabel;
+    picker.placeholder = texts.deviceSensorPlaceholder;
+    picker.includeDomains = ["sensor"];
+    picker.includeEntities = entityIds;
+    picker.excludeEntities = [...excluded];
+    picker.disabled = entityIds.length === 0;
+    if (picker.value !== (this._deviceEditorEntityId || "")) {
+      picker.value = this._deviceEditorEntityId || "";
+    }
+  }
+
+  async persistMonitoredDevices(devices) {
+    const texts = this._texts || this.getTexts();
+    try {
+      this._monitoredDevices = await saveMonitoredDevices(this._hass, devices);
+      this._deviceAnalysisProfileKey = null;
+      this.closeDeviceEditor();
+      this.renderMonitoredDevices();
+      this.syncDevicePicker();
+      if (this.latestData) this.renderDashboard(this.latestData, { collapseSourcePanel: false });
+    } catch (error) {
+      const message = this.querySelector("#deviceMessage");
+      if (message) {
+        message.hidden = false;
+        message.className = "sensor-message error";
+        message.textContent = error.message || texts.deviceSaveError;
+      }
+    }
+  }
+
+  addMonitoredDevice() {
+    const texts = this._texts || this.getTexts();
+    const name = this.querySelector("#deviceNameInput")?.value.trim() || "";
+    if (!this._deviceEditorEntityId || !name) {
+      const message = this.querySelector("#deviceMessage");
+      if (message) {
+        message.hidden = false;
+        message.className = "sensor-message error";
+        message.textContent = texts.deviceNameRequired;
+      }
+      return;
+    }
+    this.persistMonitoredDevices([
+      ...(this._monitoredDevices || []),
+      { entity_id: this._deviceEditorEntityId, name }
+    ]);
+  }
+
+  renameMonitoredDevice(entityId) {
+    const input = this.querySelector(`[data-device-name="${CSS.escape(entityId)}"]`);
+    const name = input?.value.trim() || "";
+    if (!name) return;
+    this.persistMonitoredDevices((this._monitoredDevices || []).map((device) => (
+      device.entity_id === entityId ? { ...device, name } : device
+    )));
+  }
+
+  removeMonitoredDevice(entityId) {
+    if (this._selectedConsumptionProfile === entityId) {
+      this._selectedConsumptionProfile = "total";
+      this._selectedDeviceAnalysis = null;
+    }
+    this.persistMonitoredDevices(
+      (this._monitoredDevices || []).filter((device) => device.entity_id !== entityId)
+    );
+  }
+
   updateSourceUI() {
     const isSensor = this._activeSource === "sensor";
     const sourceCsvSwitch = this.querySelector("#sourceCsvSwitch");
@@ -735,6 +954,7 @@ syncSensorPicker() {
     const sourceSelector = this.querySelector("#sourceSelector");
     const dashboardContainer = this.querySelector("#dashboardContainer");
     const hasData = this.hasLoadedData(this.latestData);
+    this.renderMonitoredDevices();
 
     if (!hasData) {
       if (sourceSelector) sourceSelector.style.display = "block";
@@ -1110,6 +1330,13 @@ syncSensorPicker() {
       });
     });
 
+    const consumptionProfileSelect = this.querySelector("#consumptionProfileSelect");
+    if (consumptionProfileSelect) {
+      consumptionProfileSelect.addEventListener("change", (event) => {
+        this.selectConsumptionProfile(event.target.value || "total");
+      });
+    }
+
     this.querySelectorAll("[data-spot-price-mode]").forEach((button) => {
       button.addEventListener("click", () => {
         this._spotPriceMode = button.dataset.spotPriceMode || "absolute";
@@ -1140,10 +1367,67 @@ syncSensorPicker() {
     }
 
     this.updateSavingsBanner(true);
+    this.refreshDeviceAnalyses(response);
+  }
+
+  getDeviceAnalysisKey(response) {
+    const devices = (this._monitoredDevices || []).map((device) => device.entity_id).join(",");
+    return `${response.source || ""}|${response.available_start || response.start || ""}|${response.available_end || response.end || ""}|${devices}`;
+  }
+
+  async refreshDeviceAnalyses(response) {
+    const devices = this._monitoredDevices || [];
+    const key = this.getDeviceAnalysisKey(response);
+    if (this._deviceAnalysisProfileKey === key) return;
+    this._deviceAnalysisProfileKey = key;
+    this._deviceAnalysisCache = new Map();
+    this._unavailableDevices = new Set();
+    if (devices.length === 0) return;
+
+    await Promise.all(devices.map(async (device) => {
+      try {
+        const analysis = await loadDeviceAnalysis(this._hass, device.entity_id);
+        if (this._deviceAnalysisProfileKey === key) {
+          this._deviceAnalysisCache.set(device.entity_id, analysis);
+        }
+      } catch (error) {
+        if (this._deviceAnalysisProfileKey === key && error.code === "no_overlap") {
+          this._unavailableDevices.add(device.entity_id);
+        } else {
+          console.error(`Failed to load device analysis for ${device.entity_id}`, error);
+        }
+      }
+    }));
+
+    if (this._deviceAnalysisProfileKey !== key || this.latestData !== response) return;
+    if (this._selectedConsumptionProfile !== "total"
+      && !this._deviceAnalysisCache.has(this._selectedConsumptionProfile)) {
+      this._selectedConsumptionProfile = "total";
+      this.saveUiState();
+    }
+    this.renderDashboard(response, { collapseSourcePanel: false });
+  }
+
+  async selectConsumptionProfile(entityId) {
+    if (entityId === "total") {
+      this._selectedConsumptionProfile = "total";
+    } else if (this._deviceAnalysisCache?.has(entityId)) {
+      this._selectedConsumptionProfile = entityId;
+    } else {
+      this._selectedConsumptionProfile = "total";
+    }
+    this.saveUiState();
+    this.renderDashboard(this.latestData, { collapseSourcePanel: false });
   }
 
   buildSeasonalHeatmapsHtml(response) {
     const texts = this._texts || this.getTexts();
+    const selectedProfile = this._selectedConsumptionProfile || "total";
+    const deviceAnalysis = selectedProfile !== "total"
+      ? this._deviceAnalysisCache?.get(selectedProfile)
+      : null;
+    const isDeviceProfile = Boolean(deviceAnalysis);
+    const consumptionSource = deviceAnalysis || response;
     const monthly = Array.isArray(response.tariff_monthly)
       ? response.tariff_monthly
       : Array.isArray(response.monthly_tariff_comparison?.months)
@@ -1172,10 +1456,13 @@ syncSensorPicker() {
       winter: texts.heatmapSeasonRangeWinter
     };
 
-    const totalMatchedHours = Number(response.matched_hours || 0);
+    const totalMatchedHours = Number(consumptionSource.matched_hours || 0);
     const seasonMatchedHours = (seasonKey) => {
       if (seasonKey === "whole_year") {
         return totalMatchedHours;
+      }
+      if (isDeviceProfile) {
+        return Number(consumptionSource.seasonal_heatmaps?.[seasonKey]?.matched_hours || 0);
       }
       const monthsForSeason = seasonMonths[seasonKey] || [];
       return monthsForSeason.reduce((sum, monthNumber) => sum + Number(monthHours.get(monthNumber) || 0), 0);
@@ -1201,7 +1488,7 @@ syncSensorPicker() {
       texts.heatmapDaySunday,
     ];
     const wholeYearHeatmaps = {
-      consumption_heatmap: response.consumption_heatmap,
+      consumption_heatmap: consumptionSource.consumption_heatmap,
       price_heatmap: response.price_heatmap,
     };
     const fixedPrice = Number(response.fixed_price_ct);
@@ -1209,11 +1496,17 @@ syncSensorPicker() {
     const resolvedSpotMode = selectedSpotMode === "fixed" && hasFixedPrice ? "fixed" : "absolute";
     const priceReference = resolvedSpotMode === "fixed" ? fixedPrice : null;
     const seasonalHeatmaps = response.seasonal_heatmaps || {};
+    const consumptionSeasonalHeatmaps = consumptionSource.seasonal_heatmaps || {};
 
     const seasonHeatmaps = seasons.map((season) => (
       season.key === "whole_year"
         ? wholeYearHeatmaps
-        : seasonalHeatmaps[season.key] || wholeYearHeatmaps
+        : {
+            consumption_heatmap: consumptionSeasonalHeatmaps[season.key]?.consumption_heatmap
+              || wholeYearHeatmaps.consumption_heatmap,
+            price_heatmap: seasonalHeatmaps[season.key]?.price_heatmap
+              || wholeYearHeatmaps.price_heatmap
+          }
     ));
 
     const consumptionDisplayHeatmaps = seasonHeatmaps.map((heatmaps) =>
@@ -1315,9 +1608,8 @@ syncSensorPicker() {
         const seasonCoverageWarningText = showCoverageWarning
           ? texts.heatmapCoverageWarningLow({ coverage: coveragePct })
           : "";
-        const data = season.key === "whole_year"
-          ? wholeYearHeatmaps
-          : seasonalHeatmaps[season.key] || wholeYearHeatmaps;
+        const seasonIndex = seasons.findIndex((item) => item.key === season.key);
+        const data = seasonHeatmaps[seasonIndex] || wholeYearHeatmaps;
         const seasonPriceHeatmap = Number.isFinite(priceReference)
           ? this.computePriceDeltaHeatmap(data.price_heatmap, priceReference)
           : data.price_heatmap;
@@ -1332,7 +1624,9 @@ syncSensorPicker() {
           selectedOptimizationMode
         );
         let consumptionInfoText = texts.heatmapConsumptionAbsoluteInfo;
-        let consumptionTitle = texts.heatmapConsumptionTitle;
+        let consumptionTitle = isDeviceProfile
+          ? texts.heatmapDeviceConsumptionTitle(deviceAnalysis.name)
+          : texts.heatmapConsumptionTitle;
         let consumptionUnit = "kWh";
         let consumptionLegend = { low: texts.heatmapLegendLow, high: texts.heatmapLegendHigh };
         if (selectedConsumptionMode === "relative_mean") {
@@ -1429,13 +1723,13 @@ syncSensorPicker() {
               </div>
               ${priceHtml}
             </section>
-            <section class="heatmap-subcard heatmap-subcard-optimization">
+            ${isDeviceProfile ? "" : `<section class="heatmap-subcard heatmap-subcard-optimization">
               <div class="heatmap-subcard-controls" role="group" aria-label="Optimization view">
                 <span class="spot-mode-label">${texts.heatmapOptimizationModeLabel}</span>
                 <div class="optimization-mode-buttons">${optimizationModeButtons}</div>
               </div>
               ${optimizationHtml}
-            </section>
+            </section>`}
           </div>
         `;
       })
@@ -1444,6 +1738,18 @@ syncSensorPicker() {
     return `
       <section class="seasonal-heatmaps">
         <div class="seasonal-heatmaps-card">
+          <div class="consumption-profile-control">
+            <label for="consumptionProfileSelect">${texts.consumptionProfileLabel}</label>
+            <select id="consumptionProfileSelect" class="consumption-profile-select">
+              <option value="total"${!isDeviceProfile ? " selected" : ""}>${texts.consumptionProfileTotal}</option>
+              ${(this._monitoredDevices || []).map((device) => {
+                const unavailable = this._unavailableDevices?.has(device.entity_id);
+                const selected = isDeviceProfile && device.entity_id === selectedProfile;
+                const label = unavailable ? texts.consumptionProfileUnavailable(device.name) : device.name;
+                return `<option value="${this.escapeAttribute(device.entity_id)}"${selected ? " selected" : ""}${unavailable ? " disabled" : ""}>${this.escapeAttribute(label)}</option>`;
+              }).join("")}
+            </select>
+          </div>
           <div class="heatmap-season-navigation" role="group" aria-label="Heatmap season">
             ${buttons}
           </div>
@@ -2173,6 +2479,7 @@ syncSensorPicker() {
       this._dashboardTab = parsed.dashboardTab || "monthly";
       this._analysisOpen = Boolean(parsed.analysisOpen);
       this._selectedSensor = parsed.selectedSensor || this._selectedSensor;
+      this._selectedConsumptionProfile = parsed.selectedConsumptionProfile || "total";
     } catch (err) {
       console.warn("Failed to load UI state", err);
     }
@@ -2188,7 +2495,8 @@ syncSensorPicker() {
         optimizationMode: this._optimizationMode || "shift_score",
         dashboardTab: this._dashboardTab || "monthly",
         analysisOpen: Boolean(this._analysisOpen),
-        selectedSensor: this._selectedSensor || null
+        selectedSensor: this._selectedSensor || null,
+        selectedConsumptionProfile: this._selectedConsumptionProfile || "total"
       };
       localStorage.setItem("sei_ui_state", JSON.stringify(payload));
     } catch (err) {
@@ -2219,6 +2527,20 @@ syncSensorPicker() {
       .source-section-header { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
       .source-section-title { font-size: 14px; font-weight: 600; color: var(--primary-text-color); }
       .source-section-desc { font-size: 12px; color: var(--secondary-text-color); }
+      .monitored-devices-section { margin-top: 12px; border-top: 1px solid var(--divider-color); padding-top: 14px; }
+      .device-prerequisite, .devices-empty { color: var(--secondary-text-color); font-size: 12px; padding: 8px 0; }
+      .monitored-devices-list { display: grid; gap: 8px; }
+      .monitored-device-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px; border: 1px solid var(--divider-color); border-radius: 6px; background: var(--card-background-color); }
+      .monitored-device-fields { display: grid; gap: 3px; min-width: 0; }
+      .monitored-device-entity { overflow: hidden; color: var(--secondary-text-color); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+      .monitored-device-actions { display: flex; gap: 4px; }
+      .device-icon-button { width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--divider-color); border-radius: 6px; background: transparent; color: var(--primary-text-color); cursor: pointer; }
+      .device-icon-button:hover { border-color: var(--primary-color); color: var(--primary-color); }
+      .device-icon-button.danger:hover { border-color: var(--error-color); color: var(--error-color); }
+      .device-icon-button ha-icon { --mdc-icon-size: 18px; }
+      .device-editor { display: grid; gap: 8px; margin-top: 10px; padding: 10px; border: 1px solid var(--divider-color); border-radius: 6px; }
+      .device-editor[hidden], #monitoredDevicesContent[hidden], #monitoredDevicesPrerequisite[hidden] { display: none; }
+      .device-name-input { width: 100%; min-width: 0; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--divider-color); border-radius: 6px; background: var(--card-background-color); color: var(--primary-text-color); font-size: 14px; }
       .section-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
       .sensor-picker { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
       .sensor-label { font-size: 13px; color: var(--secondary-text-color); }
@@ -2396,6 +2718,9 @@ syncSensorPicker() {
       .heatmap-context-line { font-size: 12px; color: var(--secondary-text-color); line-height: 1.4; }
       .heatmap-coverage-warning { font-size: 12px; line-height: 1.4; color: #8f4a00; background: rgba(255, 171, 64, 0.16); border: 1px solid rgba(255, 171, 64, 0.32); border-radius: 8px; padding: 6px 8px; }
       .heatmap-season-navigation { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+      .consumption-profile-control { display: grid; grid-template-columns: auto minmax(180px, 320px); justify-content: end; align-items: center; gap: 10px; margin-bottom: 12px; }
+      .consumption-profile-control label { color: var(--secondary-text-color); font-size: 12px; font-weight: 600; }
+      .consumption-profile-select { width: 100%; padding: 8px 10px; border: 1px solid var(--divider-color); border-radius: 6px; background: var(--card-background-color); color: var(--primary-text-color); font-size: 13px; }
       .heatmap-season-button { min-height: 36px; padding: 8px 10px; border: 1px solid var(--divider-color); border-radius: 6px; background: var(--card-background-color); color: var(--primary-text-color); font-size: 13px; cursor: pointer; }
       .heatmap-season-button:hover { border-color: var(--primary-color); }
       .heatmap-season-button.active { background: var(--primary-color); border-color: var(--primary-color); color: white; }
@@ -2521,6 +2846,7 @@ syncSensorPicker() {
         .tariff-fit-verdict { grid-template-columns: 1fr; }
         .tariff-fit-factors-grid { grid-template-columns: 1fr; }
         .heatmap-season-navigation { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .consumption-profile-control { grid-template-columns: 1fr; justify-content: stretch; }
         .heatmap-season-button:last-child { grid-column: span 2; }
         .heatmap-subcard { padding: 12px; }
         .consumption-mode-buttons,

@@ -11,6 +11,8 @@ from homeassistant.components.recorder.statistics import StatisticMetaData
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    DEVICE_ANALYSIS_API_ENDPOINT,
+    DEVICES_API_ENDPOINT,
     DOMAIN,
     MAX_UPLOAD_FILE_SIZE_MB,
     SENSOR_API_ENDPOINT,
@@ -18,6 +20,7 @@ from .const import (
 )
 from .repositories.cache_repository import async_load_cache, async_update_cache
 from .repositories.csv_repository import parse_and_validate_csv
+from .repositories.device_repository import async_load_devices, async_save_devices
 from .repositories.statistics_repository import async_add_external_stats
 from .repositories.statistics_repository import async_get_statistics_during_period
 from .services.pricing_service import (
@@ -512,6 +515,76 @@ def _resolve_date_range(start_value: str | None, end_value: str | None, default_
     return start_time, end_time
 
 
+def _get_energy_sensor(hass, entity_id: str):
+    """Return a compatible energy sensor and its kWh conversion factor."""
+    state = hass.states.get(entity_id)
+    if not state:
+        return None
+
+    attrs = state.attributes or {}
+    if attrs.get("device_class") != "energy":
+        return None
+    if attrs.get("state_class") not in {"total", "total_increasing"}:
+        return None
+
+    unit = attrs.get("unit_of_measurement") or "kWh"
+    if unit not in {"kWh", "Wh"}:
+        return None
+
+    return state, 1.0 if unit == "kWh" else 1.0 / 1000.0
+
+
+def _get_active_profile_range(cached: dict) -> tuple[datetime | None, datetime | None]:
+    """Resolve the inclusive hourly range of the active main profile."""
+    active_source = cached.get("active_source")
+    profile = cached.get(f"{active_source}_data") if active_source in {"csv", "sensor"} else None
+    if not profile:
+        return None, None
+
+    start = dt_util.parse_datetime(profile.get("available_start") or profile.get("start"))
+    end = dt_util.parse_datetime(profile.get("available_end") or profile.get("end"))
+    if not start or not end:
+        return None, None
+    return dt_util.as_utc(start), dt_util.as_utc(end) + timedelta(hours=1)
+
+
+def _device_analysis_response(
+    entity_id: str,
+    name: str,
+    statistics: list,
+    requested_start: datetime,
+    requested_end: datetime,
+) -> dict:
+    """Build the device-only heatmap response."""
+    expected_hours = max(1, int((requested_end - requested_start).total_seconds() // 3600))
+    seasonal = _build_seasonal_heatmaps(statistics, [])
+    seasonal_consumption = {}
+    for season, values in seasonal.items():
+        months = HEATMAP_SEASONS[season]
+        matched_hours = len(statistics) if months is None else sum(
+            1
+            for stat in statistics
+            if (dt_util.as_local(stat["start"]) + timedelta(hours=1)).month in months
+        )
+        seasonal_consumption[season] = {
+            "consumption_heatmap": values["consumption_heatmap"],
+            "matched_hours": matched_hours,
+        }
+    return {
+        "success": True,
+        "entity_id": entity_id,
+        "name": name,
+        "available_start": statistics[0]["start"].isoformat(),
+        "available_end": statistics[-1]["start"].isoformat(),
+        "analysis_start": requested_start.isoformat(),
+        "analysis_end": requested_end.isoformat(),
+        "matched_hours": len(statistics),
+        "data_completeness_ratio": min(1.0, len(statistics) / expected_hours),
+        "consumption_heatmap": _build_consumption_heatmap(statistics),
+        "seasonal_heatmaps": seasonal_consumption,
+    }
+
+
 def _statistics_from_rows(
     rows: list,
     unit_factor: float = 1.0,
@@ -721,19 +794,11 @@ class SmartEnergyInsightsSensorView(HomeAssistantView):
         if not entity_id:
             return await _error_response(hass, "api.error.sensor_required")
 
-        state = hass.states.get(entity_id)
-        if not state:
+        sensor = _get_energy_sensor(hass, entity_id)
+        if not sensor:
             return await _error_response(hass, "api.error.invalid_sensor")
-
+        state, unit_factor = sensor
         attrs = state.attributes or {}
-        if attrs.get("device_class") != "energy" or attrs.get("state_class") != "total_increasing":
-            return await _error_response(hass, "api.error.invalid_sensor")
-
-        unit = attrs.get("unit_of_measurement") or "kWh"
-        if unit not in {"kWh", "Wh"}:
-            return await _error_response(hass, "api.error.invalid_sensor")
-
-        unit_factor = 1.0 if unit == "kWh" else 1.0 / 1000.0
 
         range_start = payload.get("start")
         range_end = payload.get("end")
@@ -812,4 +877,125 @@ class SmartEnergyInsightsSensorView(HomeAssistantView):
                 },
             )
 
+        return Response(status=200, text=json.dumps(response_data), content_type="application/json")
+
+
+class SmartEnergyInsightsDevicesView(HomeAssistantView):
+    url = DEVICES_API_ENDPOINT
+    name = "api:smart_energy_insights:devices"
+    requires_auth = True
+
+    async def get(self, request: Request) -> Response:
+        hass = request.app["hass"]
+        devices = await async_load_devices(hass)
+        return Response(
+            status=200,
+            text=json.dumps({"success": True, "devices": devices}),
+            content_type="application/json",
+        )
+
+    async def put(self, request: Request) -> Response:
+        hass = request.app["hass"]
+        try:
+            payload = await request.json()
+        except Exception:
+            return await _error_response(hass, "api.error.internal_server", status=400)
+
+        devices = payload.get("devices")
+        if not isinstance(devices, list):
+            return await _error_response(hass, "api.error.invalid_devices")
+
+        entity_ids = set()
+        validated = []
+        for device in devices:
+            if not isinstance(device, dict):
+                return await _error_response(hass, "api.error.invalid_devices")
+            entity_id = str(device.get("entity_id") or "").strip()
+            name = str(device.get("name") or "").strip()
+            if not entity_id or not name:
+                return await _error_response(hass, "api.error.device_name_required")
+            if entity_id in entity_ids:
+                return await _error_response(hass, "api.error.duplicate_device")
+            if not _get_energy_sensor(hass, entity_id):
+                return await _error_response(hass, "api.error.invalid_sensor")
+            entity_ids.add(entity_id)
+            validated.append({"entity_id": entity_id, "name": name})
+
+        saved = await async_save_devices(hass, validated)
+        return Response(
+            status=200,
+            text=json.dumps({"success": True, "devices": saved}),
+            content_type="application/json",
+        )
+
+
+class SmartEnergyInsightsDeviceAnalysisView(HomeAssistantView):
+    url = DEVICE_ANALYSIS_API_ENDPOINT
+    name = "api:smart_energy_insights:device_analysis"
+    requires_auth = True
+
+    async def post(self, request: Request) -> Response:
+        hass = request.app["hass"]
+        try:
+            payload = await request.json()
+        except Exception:
+            return await _error_response(hass, "api.error.internal_server", status=400)
+
+        entity_id = str(payload.get("entity_id") or "").strip()
+        devices = await async_load_devices(hass)
+        device = next((item for item in devices if item["entity_id"] == entity_id), None)
+        if not device:
+            return await _error_response(hass, "api.error.device_not_configured", status=404)
+
+        sensor = _get_energy_sensor(hass, entity_id)
+        if not sensor:
+            return await _error_response(hass, "api.error.invalid_sensor")
+        _, unit_factor = sensor
+
+        profile_start, profile_end = _get_active_profile_range(await async_load_cache(hass))
+        if not profile_start or not profile_end:
+            return await _error_response(hass, "api.error.no_active_profile")
+
+        requested_start, requested_end = _resolve_date_range(
+            payload.get("start"), payload.get("end"), profile_start, profile_end
+        )
+        start_time = max(profile_start, requested_start) if requested_start else profile_start
+        end_time = min(profile_end, requested_end) if requested_end else profile_end
+        if start_time >= end_time:
+            return Response(
+                status=409,
+                text=json.dumps({"error": "No overlapping data range", "code": "no_overlap"}),
+                content_type="application/json",
+            )
+
+        rows_by_id = await async_get_statistics_during_period(
+            hass,
+            start_time - timedelta(hours=1),
+            end_time,
+            {entity_id},
+            period="hour",
+            types={"sum", "state"},
+            units=None,
+        )
+        statistics = _statistics_from_rows(
+            rows_by_id.get(entity_id, []),
+            unit_factor=unit_factor,
+            min_start=start_time,
+        )
+        if not statistics:
+            return Response(
+                status=409,
+                text=json.dumps({"error": "No overlapping data range", "code": "no_overlap"}),
+                content_type="application/json",
+            )
+
+        analysis_start = max(start_time, statistics[0]["start"])
+        analysis_end = min(end_time, statistics[-1]["start"] + timedelta(hours=1))
+        response_data = _device_analysis_response(
+            entity_id,
+            device["name"],
+            statistics,
+            analysis_start,
+            analysis_end,
+        )
         return Response(status=200, text=json.dumps(response_data), content_type="application/json")

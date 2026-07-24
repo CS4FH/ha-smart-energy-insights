@@ -10,6 +10,10 @@ UPLOAD_API_NAME = "api:smart_energy_insights:upload"
 SENSOR_API_ENDPOINT = "/api/smart_energy_insights/sensor"
 SENSOR_API_NAME = "api:smart_energy_insights:sensor"
 
+# Monitored device configuration and analysis
+DEVICES_API_ENDPOINT = "/api/smart_energy_insights/devices"
+DEVICE_ANALYSIS_API_ENDPOINT = "/api/smart_energy_insights/device-analysis"
+
 # CSV Parsing Configuration
 CSV_DELIMITER = "\t"
 TIMESTAMP_FORMAT = "%d.%m.%Y %H:%M"
@@ -32,6 +36,6 @@ PANEL_TITLE = "Smart Energy Insights"
 PANEL_ICON = "mdi:flash"
 PANEL_URL = "smart-energy-insights"
 PANEL_SETUP_KEY = "panel_setup_complete"  # Guard key for one-time setup
-CARD_RESOURCE_URL = f"/{DOMAIN}/smart-energy-insights-card.js?v=20260720f"
+CARD_RESOURCE_URL = f"/{DOMAIN}/smart-energy-insights-card.js?v=20260724a"
 CARD_TYPE = "custom:smart-energy-insights-upload-card"
 CARD_TITLE = "Load Profile Upload"

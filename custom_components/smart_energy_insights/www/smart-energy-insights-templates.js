@@ -62,6 +62,30 @@ export function renderBaseCard(texts) {
           </div>
           <div class="sensor-message" id="sensorMessage" style="display: none;"></div>
         </div>
+
+        <div class="source-section monitored-devices-section" id="monitoredDevicesSection">
+          <div class="source-section-header">
+            <div class="source-section-title">${texts.devicesTitle}</div>
+            <div class="source-section-desc">${texts.devicesDescription}</div>
+          </div>
+          <div id="monitoredDevicesPrerequisite" class="device-prerequisite">${texts.devicesRequiresProfile}</div>
+          <div id="monitoredDevicesContent" hidden>
+            <div id="monitoredDevicesList" class="monitored-devices-list"></div>
+            <div id="deviceEditor" class="device-editor" hidden>
+              <ha-entity-picker id="deviceSensorPicker" class="sensor-select"></ha-entity-picker>
+              <label class="sensor-label" for="deviceNameInput">${texts.deviceNameLabel}</label>
+              <input id="deviceNameInput" class="device-name-input" type="text" maxlength="80" />
+              <div class="section-actions">
+                <button id="cancelDeviceBtn" class="cancel-button" type="button">${texts.cancelButton}</button>
+                <button id="saveDeviceBtn" class="upload-button" type="button">${texts.deviceSave}</button>
+              </div>
+            </div>
+            <div id="deviceMessage" class="sensor-message" hidden></div>
+            <div class="section-actions">
+              <button id="addDeviceBtn" class="upload-button" type="button">${texts.deviceAdd}</button>
+            </div>
+          </div>
+        </div>
         </div>
       </div>
 
