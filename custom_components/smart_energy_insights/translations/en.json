@@ -38,6 +38,7 @@
     "device_name_label": "Display name",
     "device_sensor_label": "Energy sensor",
     "device_sensor_placeholder": "Choose a device sensor",
+    "device_sensor_none_option": "No additional compatible energy sensor available. A sensor already used as the main profile source cannot be added as a device.",
     "device_name_required": "Select a sensor and enter a display name.",
     "device_save_error": "Could not save monitored devices.",
     "upload_title": "Upload new CSV",

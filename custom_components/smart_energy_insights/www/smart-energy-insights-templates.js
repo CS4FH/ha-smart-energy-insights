@@ -73,6 +73,7 @@ export function renderBaseCard(texts) {
             <div id="monitoredDevicesList" class="monitored-devices-list"></div>
             <div id="deviceEditor" class="device-editor" hidden>
               <ha-entity-picker id="deviceSensorPicker" class="sensor-select"></ha-entity-picker>
+              <div class="sensor-message info" id="deviceSensorMessage" style="display: none;"></div>
               <label class="sensor-label" for="deviceNameInput">${texts.deviceNameLabel}</label>
               <input id="deviceNameInput" class="device-name-input" type="text" maxlength="80" />
               <div class="section-actions">

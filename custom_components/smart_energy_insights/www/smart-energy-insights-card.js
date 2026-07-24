@@ -147,6 +147,10 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       deviceNameLabel: this.localize("card.device_name_label", "Display name"),
       deviceSensorLabel: this.localize("card.device_sensor_label", "Energy sensor"),
       deviceSensorPlaceholder: this.localize("card.device_sensor_placeholder", "Choose a device sensor"),
+      deviceSensorNoneOption: this.localize(
+        "card.device_sensor_none_option",
+        "No additional compatible energy sensor available. A sensor already used as the main profile source cannot be added as a device."
+      ),
       deviceNameRequired: this.localize("card.device_name_required", "Enter a display name."),
       deviceSaveError: this.localize("card.device_save_error", "Could not save monitored devices."),
       uploadTitle: this.localize("card.upload_title", "Upload new CSV"),
@@ -842,7 +846,7 @@ syncSensorPicker() {
   }
 
   syncDevicePicker() {
-    const picker = this.querySelector("#deviceSensorPicker");
+    let picker = this.querySelector("#deviceSensorPicker");
     if (!picker || !this._hass) return;
     const texts = this._texts || this.getTexts();
     const excluded = new Set((this._monitoredDevices || []).map((device) => device.entity_id));
@@ -852,15 +856,71 @@ syncSensorPicker() {
     const matches = this.getCompatibleEnergySensors().filter((state) => !excluded.has(state.entity_id));
     const entityIds = matches.map((state) => state.entity_id);
 
-    picker.hass = this._hass;
-    picker.label = texts.deviceSensorLabel;
-    picker.placeholder = texts.deviceSensorPlaceholder;
-    picker.includeDomains = ["sensor"];
-    picker.includeEntities = entityIds;
-    picker.excludeEntities = [...excluded];
-    picker.disabled = entityIds.length === 0;
-    if (picker.value !== (this._deviceEditorEntityId || "")) {
-      picker.value = this._deviceEditorEntityId || "";
+    if (picker.tagName === "HA-ENTITY-PICKER" && !customElements.get("ha-entity-picker")) {
+      const select = document.createElement("select");
+      select.id = "deviceSensorPicker";
+      select.className = "sensor-select";
+      select.addEventListener("change", (e) => {
+        this.selectDeviceSensor(e.target.value || null);
+      });
+      picker.replaceWith(select);
+      picker = select;
+    }
+
+    const targetValue = this._deviceEditorEntityId || "";
+    const isDisabled = entityIds.length === 0;
+
+    if (picker.tagName === "HA-ENTITY-PICKER") {
+      picker.hass = this._hass;
+      picker.label = texts.deviceSensorLabel;
+      picker.placeholder = texts.deviceSensorPlaceholder;
+      picker.includeDomains = ["sensor"];
+      picker.includeEntities = entityIds;
+      picker.excludeEntities = [...excluded];
+      picker.disabled = isDisabled;
+      if (picker.value !== targetValue) {
+        picker.value = targetValue;
+      }
+    } else {
+      const currentSensorsHash = entityIds.slice().sort().join(",");
+      const shouldRebuild = picker.dataset.sensorsHash !== currentSensorsHash;
+      if (shouldRebuild) {
+        picker.dataset.sensorsHash = currentSensorsHash;
+        picker.innerHTML = "";
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = texts.deviceSensorPlaceholder;
+        placeholder.disabled = true;
+        picker.appendChild(placeholder);
+
+        matches
+          .map((state) => ({
+            id: state.entity_id,
+            name: state.attributes?.friendly_name || state.entity_id
+          }))
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .forEach((sensor) => {
+            const option = document.createElement("option");
+            option.value = sensor.id;
+            option.textContent = sensor.name;
+            picker.appendChild(option);
+          });
+      }
+      if (picker.value !== targetValue) {
+        picker.value = targetValue;
+      }
+      picker.disabled = isDisabled;
+    }
+
+    const messageEl = this.querySelector("#deviceSensorMessage");
+    if (messageEl) {
+      if (entityIds.length === 0) {
+        messageEl.style.display = "";
+        messageEl.textContent = texts.deviceSensorNoneOption;
+      } else {
+        messageEl.style.display = "none";
+        messageEl.textContent = "";
+      }
     }
   }
 

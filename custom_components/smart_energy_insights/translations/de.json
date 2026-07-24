@@ -61,6 +61,7 @@
     "device_name_label": "Anzeigename",
     "device_sensor_label": "Energiesensor",
     "device_sensor_placeholder": "Geraetesensor auswaehlen",
+    "device_sensor_none_option": "Kein weiterer kompatibler Energiesensor verfuegbar. Ein Sensor, der bereits als Hauptprofilquelle genutzt wird, kann nicht zusaetzlich als Verbraucher hinzugefuegt werden.",
     "device_name_required": "Waehle einen Sensor und gib einen Anzeigenamen ein.",
     "device_save_error": "Ueberwachte Verbraucher konnten nicht gespeichert werden.",
     "upload_title": "Neue CSV hochladen",
