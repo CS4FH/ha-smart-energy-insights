@@ -2507,7 +2507,6 @@ syncSensorPicker() {
           ${texts.analysisCostProjectionTitle}
           <span class="metric-info-marker" role="img" tabindex="0" aria-label="${this.escapeAttribute(texts.kpiInfoLabel)}" title="${this.escapeAttribute(texts.analysisCostProjectionHelp)}"><ha-icon icon="mdi:information-outline"></ha-icon></span>
         </div>
-        ${hasCostProjection ? `<div class="delta-baseline-caption">${texts.analysisCostProjectionBaselineLabel}</div>` : ``}
         <div class="risk-chart-card projection-chart-card" role="img" aria-label="${this.escapeAttribute(texts.analysisCostProjectionTitle)}">
           ${hasCostProjection ? `
             <div class="delta-axis">
@@ -2525,15 +2524,16 @@ syncSensorPicker() {
               </div>
             </div>
             <div class="delta-label-row">
-              <div class="delta-end left" style="left:${maxSavingsPct.toFixed(2)}%">
+              <div class="delta-end left">
                 <span>${texts.analysisCostProjectionBestLabel}</span>
                 <strong>${maxSavingsDelta <= 0 ? "-" : "+"}${formatNumber(Math.abs(maxSavingsDelta), 2)} €</strong>
               </div>
-              <div class="delta-end right" style="left:${maxRiskPct.toFixed(2)}%">
+              <div class="delta-end right">
                 <span>${texts.analysisCostProjectionWorstLabel}</span>
                 <strong>${maxRiskDelta >= 0 ? "+" : "-"}${formatNumber(Math.abs(maxRiskDelta), 2)} €</strong>
               </div>
             </div>
+            <div class="delta-baseline-caption">${texts.analysisCostProjectionBaselineLabel}</div>
           ` : `
             <div class="risk-empty">${placeholderValue}</div>
           `}
@@ -2605,7 +2605,7 @@ syncSensorPicker() {
       .integration-settings-chip ha-icon { --mdc-icon-size: 20px; }
 
       .source-card { margin: 16px; border-radius: 12px; overflow: clip; background: color-mix(in srgb, var(--card-background-color) 90%, black 10%); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28); }
-      .source-chooser-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 16px; }
+      .source-chooser-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 18px 20px; }
       .source-chooser-title { font-size: 14px; font-weight: 600; color: var(--primary-text-color); }
       .source-chooser-desc { font-size: 12px; color: var(--secondary-text-color); }
       .source-header-actions { display: inline-flex; align-items: center; gap: 10px; }
@@ -2629,15 +2629,15 @@ syncSensorPicker() {
       .source-card-summary:focus-visible { outline: 2px solid var(--primary-color); outline-offset: -2px; }
 
       .upload-card { width: 100%; max-width: 1200px; margin: 0 auto; height: fit-content; }
-      .source-content { padding: 16px; }
-      .source-section { background: rgba(var(--rgb-primary-text-color), 0.02); }
+      .source-content { padding: 20px; display: grid; gap: 16px; }
+      .source-section { background: rgba(var(--rgb-primary-text-color), 0.02); border-radius: 10px; padding: 16px 20px; }
       .source-section-header { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
       .source-section-title { font-size: 14px; font-weight: 600; color: var(--primary-text-color); }
       .source-section-desc { font-size: 12px; color: var(--secondary-text-color); }
-      .monitored-devices-section { margin-top: 12px; border-top: 1px solid var(--divider-color); padding-top: 14px; }
+      .monitored-devices-section { margin-top: 0; }
       .device-prerequisite, .devices-empty { color: var(--secondary-text-color); font-size: 12px; padding: 8px 0; }
       .monitored-devices-list { display: grid; gap: 8px; }
-      .monitored-device-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px; border: 1px solid var(--divider-color); border-radius: 6px; background: var(--card-background-color); }
+      .monitored-device-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 14px; border: 1px solid var(--divider-color); border-radius: 6px; background: var(--card-background-color); }
       .monitored-device-fields { display: grid; gap: 3px; min-width: 0; }
       .monitored-device-entity { overflow: hidden; color: var(--secondary-text-color); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
       .monitored-device-actions { display: flex; gap: 4px; }
@@ -2645,13 +2645,14 @@ syncSensorPicker() {
       .device-icon-button:hover { border-color: var(--primary-color); color: var(--primary-color); }
       .device-icon-button.danger:hover { border-color: var(--error-color); color: var(--error-color); }
       .device-icon-button ha-icon { --mdc-icon-size: 18px; }
-      .device-editor { display: grid; gap: 8px; margin-top: 10px; padding: 10px; border: 1px solid var(--divider-color); border-radius: 6px; }
+      .device-editor { display: grid; gap: 8px; margin-top: 10px; padding: 14px; border: 1px solid var(--divider-color); border-radius: 6px; }
       .device-editor[hidden], #monitoredDevicesContent[hidden], #monitoredDevicesPrerequisite[hidden] { display: none; }
-      .device-name-input { width: 100%; min-width: 0; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--divider-color); border-radius: 6px; background: var(--card-background-color); color: var(--primary-text-color); font-size: 14px; }
+      .device-name-input { width: 100%; min-width: 0; box-sizing: border-box; padding: 10px 14px; border: 1px solid var(--divider-color); border-radius: 6px; background: var(--card-background-color); color: var(--primary-text-color); font-size: 14px; }
       .section-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
       .sensor-picker { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
       .sensor-label { font-size: 13px; color: var(--secondary-text-color); }
-      .sensor-select { width: 100%; padding: 8px 12px; border: 1px solid var(--divider-color); border-radius: 6px; background: var(--card-background-color); color: var(--primary-text-color); font-size: 14px; box-sizing: border-box; }
+      .sensor-select { width: 100%; padding: 10px 14px; border: 1px solid var(--divider-color); border-radius: 6px; background: var(--card-background-color); color: var(--primary-text-color); font-size: 14px; box-sizing: border-box; }
+      ha-entity-picker.sensor-select { --mdc-shape-small: 6px; --text-field-padding: 0 14px; }
       .sensor-select:disabled { opacity: 0.6; cursor: not-allowed; }
       .sensor-message { margin-top: 10px; font-size: 13px; padding: 8px 12px; border-radius: 6px; background: rgba(var(--rgb-primary-text-color), 0.04); }
       .sensor-message.loading { opacity: 0.8; }
@@ -2752,11 +2753,11 @@ syncSensorPicker() {
       .metric-info-marker ha-icon { --mdc-icon-size: 14px; }
       .metric-info-marker:hover, .metric-info-marker:focus-visible { color: var(--primary-color); opacity: 1; outline: none; }
       .technical-tax-section { padding-top: 4px; }
-      .delta-baseline-caption { font-size: 11px; font-weight: 600; letter-spacing: 0.2px; color: var(--secondary-text-color); text-align: center; margin-bottom: 8px; }
       .risk-chart-card { border: 1px solid rgba(var(--rgb-divider-color), 0.45); border-radius: 8px; background: rgba(var(--rgb-primary-text-color), 0.03); padding: 10px; }
       .projection-chart-card { position: relative; padding-top: 56px; padding-bottom: 14px; overflow: visible; }
       .projection-chart-card .delta-axis { margin-top: 0; }
       .projection-chart-card .delta-label-row { margin-top: 8px; }
+      .delta-baseline-caption { font-size: 11px; color: var(--secondary-text-color); text-align: center; margin-top: 8px; }
       .risk-empty { font-size: 16px; color: var(--secondary-text-color); min-height: 42px; display: flex; align-items: center; }
 
       .delta-axis { position: relative; height: 30px; border-radius: 999px; background: rgba(var(--rgb-primary-text-color), 0.08); overflow: visible; margin-top: 2px; }
@@ -2775,11 +2776,11 @@ syncSensorPicker() {
       .delta-marker-callout strong { font-size: 12px; font-weight: 700; white-space: nowrap; }
       .delta-marker.savings .delta-marker-callout strong { color: #74d19a; }
       .delta-marker.risk .delta-marker-callout strong { color: #ea9b7f; }
-      .delta-label-row { position: relative; height: 30px; margin-top: 6px; }
-      .delta-end { position: absolute; top: 0; font-size: 11px; color: var(--secondary-text-color); white-space: nowrap; max-width: 45%; }
+      .delta-label-row { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; }
+      .delta-end { font-size: 11px; color: var(--secondary-text-color); }
       .delta-end strong { display: block; margin-top: 1px; color: var(--primary-text-color); font-size: 12px; }
       .delta-end.left { text-align: left; }
-      .delta-end.right { text-align: right; transform: translateX(-100%); }
+      .delta-end.right { text-align: right; }
 
       .tariff-fit-card { border: 1px solid rgba(var(--rgb-divider-color), 0.45); border-radius: 10px; padding: 14px; background: rgba(var(--rgb-primary-text-color), 0.03); display: grid; gap: 12px; }
       .tariff-fit-verdict { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; }
@@ -2944,6 +2945,8 @@ syncSensorPicker() {
         .technical-grid-range { grid-template-columns: 1fr; }
         .technical-grid-risk { grid-template-columns: 1fr; }
         .technical-grid-main { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .delta-label-row { flex-direction: column; gap: 4px; }
+        .delta-end.right { text-align: left; }
         .delta-marker-callout { transform: translate(-50%, -112%); }
         .projection-chart-card { padding-top: 60px; padding-bottom: 12px; }
         .projection-chart-card .delta-label-row { margin-top: 8px; }

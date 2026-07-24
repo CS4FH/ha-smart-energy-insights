@@ -112,7 +112,6 @@ export function renderDashboardHtml({
     <div class="dashboard-wrapper">
       <div class="dashboard-minimal-header">
         <div class="dashboard-current-profile">${texts.currentProfileLabel} <span>${filename}</span></div>
-        <button id="toggleSourcePanelBtn" class="source-toggle-text-btn" type="button">${texts.switchSourceButton}</button>
       </div>
 
       <div class="top-dashboard-grid">
