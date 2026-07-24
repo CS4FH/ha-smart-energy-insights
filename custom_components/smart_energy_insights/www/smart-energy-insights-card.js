@@ -727,11 +727,11 @@ syncSensorPicker() {
               name: attrs.friendly_name || state.entity_id
             };
           })
-          .sort((a, b) => a.name.localeCompare(b.name))
+          .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
           .forEach((sensor) => {
             const option = document.createElement("option");
             option.value = sensor.id;
-            option.textContent = sensor.name;
+            option.textContent = sensor.name === sensor.id ? sensor.name : `${sensor.name} (${sensor.id})`;
             picker.appendChild(option);
           });
       }
@@ -898,11 +898,11 @@ syncSensorPicker() {
             id: state.entity_id,
             name: state.attributes?.friendly_name || state.entity_id
           }))
-          .sort((a, b) => a.name.localeCompare(b.name))
+          .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
           .forEach((sensor) => {
             const option = document.createElement("option");
             option.value = sensor.id;
-            option.textContent = sensor.name;
+            option.textContent = sensor.name === sensor.id ? sensor.name : `${sensor.name} (${sensor.id})`;
             picker.appendChild(option);
           });
       }
