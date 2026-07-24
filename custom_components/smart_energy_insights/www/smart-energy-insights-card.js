@@ -1999,12 +1999,27 @@ syncSensorPicker() {
         : texts.analysisStatusQuoBalancedLabel;
     const maxExtraSavings = Number(this.latestData.max_extra_savings_eur);
     const maxPenaltyRisk = Number(this.latestData.max_penalty_risk_eur);
-    const maxExtraSavingsHeroValue = Number.isFinite(maxExtraSavings)
-      ? `-${formatNumber(Math.abs(maxExtraSavings), 2)} €`
+    // max_extra_savings_eur / max_penalty_risk_eur are incremental load-shifting
+    // effects on top of the status quo, not standalone totals - combine them with
+    // currentDelta so Best Case is never worse and Worst Case never better than today.
+    const bestCaseTotal = Number.isFinite(currentDelta) && Number.isFinite(maxExtraSavings)
+      ? currentDelta - Math.abs(maxExtraSavings)
+      : null;
+    const worstCaseTotal = Number.isFinite(currentDelta) && Number.isFinite(maxPenaltyRisk)
+      ? currentDelta + Math.abs(maxPenaltyRisk)
+      : null;
+    const bestCaseHeroValue = Number.isFinite(bestCaseTotal)
+      ? `${bestCaseTotal <= 0 ? "-" : "+"}${formatNumber(Math.abs(bestCaseTotal), 2)} €`
       : texts.analysisPlaceholderValue;
-    const maxPenaltyRiskHeroValue = Number.isFinite(maxPenaltyRisk)
-      ? `+${formatNumber(Math.abs(maxPenaltyRisk), 2)} €`
+    const worstCaseHeroValue = Number.isFinite(worstCaseTotal)
+      ? `${worstCaseTotal >= 0 ? "+" : "-"}${formatNumber(Math.abs(worstCaseTotal), 2)} €`
       : texts.analysisPlaceholderValue;
+    const bestCaseDirection = Number.isFinite(bestCaseTotal)
+      ? (bestCaseTotal < 0 ? "positive" : bestCaseTotal > 0 ? "negative" : "neutral")
+      : "neutral";
+    const worstCaseDirection = Number.isFinite(worstCaseTotal)
+      ? (worstCaseTotal > 0 ? "negative" : worstCaseTotal < 0 ? "positive" : "neutral")
+      : "neutral";
     const breakEvenFixed = this.latestData.break_even_fixed_ct_kwh;
     const breakEvenFixedCt = Number(breakEvenFixed);
     const fixedPriceCt = Number(this.latestData.fixed_price_ct);
@@ -2059,7 +2074,7 @@ syncSensorPicker() {
             </div>
             <div class="tariff-hero-card-badge positive">Potential</div>
           </div>
-          <div class="tariff-hero-compact-value positive">${maxExtraSavingsHeroValue}</div>
+          <div class="tariff-hero-compact-value ${bestCaseDirection}">${bestCaseHeroValue}</div>
         </section>
 
         <section class="tariff-hero-card tariff-hero-risk">
@@ -2070,7 +2085,7 @@ syncSensorPicker() {
             </div>
             <div class="tariff-hero-card-badge negative">Risk</div>
           </div>
-          <div class="tariff-hero-compact-value negative">${maxPenaltyRiskHeroValue}</div>
+          <div class="tariff-hero-compact-value ${worstCaseDirection}">${worstCaseHeroValue}</div>
         </section>
       </div>
     `;
@@ -2260,9 +2275,16 @@ syncSensorPicker() {
       && Number.isFinite(spotTariffCost)
       && Number.isFinite(summary.maxExtraSavingsEur)
       && Number.isFinite(summary.maxPenaltyRiskEur);
-    const maxSavingsDelta = hasCostProjection ? -Math.max(0, Number(summary.maxExtraSavingsEur)) : null;
-    const maxRiskDelta = hasCostProjection ? Math.max(0, Number(summary.maxPenaltyRiskEur)) : null;
     const currentDelta = hasCostProjection ? (spotTariffCost - fixedTariffCost) : null;
+    // maxExtraSavingsEur / maxPenaltyRiskEur are incremental load-shifting effects
+    // on top of the status quo, not standalone totals - combine them with
+    // currentDelta so Best Case is never worse and Worst Case never better than today.
+    const maxSavingsDelta = hasCostProjection
+      ? currentDelta - Math.max(0, Number(summary.maxExtraSavingsEur))
+      : null;
+    const maxRiskDelta = hasCostProjection
+      ? currentDelta + Math.max(0, Number(summary.maxPenaltyRiskEur))
+      : null;
     const currentDeltaLabel = Number.isFinite(currentDelta)
       ? `${formatNumber(Math.abs(currentDelta), 2)} €`
       : placeholderValue;
@@ -2435,14 +2457,14 @@ syncSensorPicker() {
               </div>
             </div>
             <div class="delta-label-row">
-              <div class="delta-end left">
+              <div class="delta-end left" style="left:${maxSavingsPct.toFixed(2)}%">
                 <span>${texts.analysisCostProjectionBestLabel}</span>
-                <strong>${formatNumber(maxSavingsDelta, 2)} €</strong>
+                <strong>${maxSavingsDelta <= 0 ? "-" : "+"}${formatNumber(Math.abs(maxSavingsDelta), 2)} €</strong>
               </div>
-              <div class="delta-center">${texts.analysisCostProjectionBaselineLabel}</div>
-              <div class="delta-end right">
+              <div class="delta-center" style="left:50%">${texts.analysisCostProjectionBaselineLabel}</div>
+              <div class="delta-end right" style="left:${maxRiskPct.toFixed(2)}%">
                 <span>${texts.analysisCostProjectionWorstLabel}</span>
-                <strong>+${formatNumber(maxRiskDelta, 2)} €</strong>
+                <strong>${maxRiskDelta >= 0 ? "+" : "-"}${formatNumber(Math.abs(maxRiskDelta), 2)} €</strong>
               </div>
             </div>
           ` : `
@@ -2667,12 +2689,12 @@ syncSensorPicker() {
       .delta-marker-callout strong { font-size: 12px; font-weight: 700; white-space: nowrap; }
       .delta-marker.savings .delta-marker-callout strong { color: #74d19a; }
       .delta-marker.risk .delta-marker-callout strong { color: #ea9b7f; }
-      .delta-label-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; margin-top: 6px; align-items: end; }
-      .delta-end { font-size: 11px; color: var(--secondary-text-color); }
+      .delta-label-row { position: relative; height: 30px; margin-top: 6px; }
+      .delta-end { position: absolute; top: 0; font-size: 11px; color: var(--secondary-text-color); white-space: nowrap; max-width: 45%; }
       .delta-end strong { display: block; margin-top: 1px; color: var(--primary-text-color); font-size: 12px; }
       .delta-end.left { text-align: left; }
-      .delta-end.right { text-align: right; }
-      .delta-center { font-size: 11px; color: var(--secondary-text-color); text-align: center; white-space: nowrap; align-self: end; padding-bottom: 1px; }
+      .delta-end.right { text-align: right; transform: translateX(-100%); }
+      .delta-center { position: absolute; top: 0; font-size: 11px; color: var(--secondary-text-color); text-align: center; white-space: nowrap; transform: translateX(-50%); }
 
       .tariff-fit-card { border: 1px solid rgba(var(--rgb-divider-color), 0.45); border-radius: 10px; padding: 14px; background: rgba(var(--rgb-primary-text-color), 0.03); display: grid; gap: 12px; }
       .tariff-fit-verdict { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; }
@@ -2837,9 +2859,6 @@ syncSensorPicker() {
         .technical-grid-range { grid-template-columns: 1fr; }
         .technical-grid-risk { grid-template-columns: 1fr; }
         .technical-grid-main { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        .delta-label-row { grid-template-columns: 1fr; }
-        .delta-end.right,
-        .delta-center { text-align: left; }
         .delta-marker-callout { transform: translate(-50%, -112%); }
         .projection-chart-card { padding-top: 60px; padding-bottom: 12px; }
         .projection-chart-card .delta-label-row { margin-top: 8px; }
