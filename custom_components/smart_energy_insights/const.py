@@ -36,6 +36,6 @@ PANEL_TITLE = "Smart Energy Insights"
 PANEL_ICON = "mdi:flash"
 PANEL_URL = "smart-energy-insights"
 PANEL_SETUP_KEY = "panel_setup_complete"  # Guard key for one-time setup
-CARD_RESOURCE_URL = f"/{DOMAIN}/smart-energy-insights-card.js?v=20260724c"
+CARD_RESOURCE_URL = f"/{DOMAIN}/smart-energy-insights-card.js?v=20260724d"
 CARD_TYPE = "custom:smart-energy-insights-upload-card"
 CARD_TITLE = "Load Profile Upload"
