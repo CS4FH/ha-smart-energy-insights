@@ -39,11 +39,45 @@ The initial setup requires no input. Tariff parameters can be adjusted afterward
 
 ## 📊 Using the Dashboard
 
-Open **Smart Energy Insights** in the sidebar to access the analysis panel:
+Open **Smart Energy Insights** in the sidebar to access the analysis panel.
 
-1. **Choose a data source** — upload a CSV file or pick an existing energy sensor.
-2. Optionally add **monitored devices** (sub-sensors) to see a per-device breakdown.
-3. Explore the dashboard tabs: **Monthly comparison**, **Usage behavior**, **Risk & optimization**, and **Technical details**, including seasonal heatmaps and the fixed-vs-spot cost projection.
+### 1. Choose a data source
+
+Pick how you want to load your consumption data — either from an existing energy sensor or from a CSV file. You can switch between them at any time.
+
+**Sensor:** Select an energy sensor to import the last 12 months of statistics, and optionally attach **monitored devices** (additional sensors for individual appliances such as a boiler, dishwasher, or washing machine) to later see a per-device breakdown.
+
+![Choose data source - sensor](docs/images/ChooseDataSource.png)
+
+**CSV:** Drag & drop or select a CSV load profile file to upload instead.
+
+![Choose data source - CSV upload](docs/images/CSVUpload.png)
+
+### 2. Review the savings summary
+
+Once a profile is loaded, the hero cards at the top summarize the tariff comparison at a glance: the projected savings (or extra cost) of the dynamic tariff versus the fixed tariff, along with a best-case (with active load shifting) and worst-case (peak-hour heavy usage) projection.
+
+![Savings summary hero cards](docs/images/HeroCard.png)
+
+### 3. Detailed analysis tabs
+
+Below the summary, a **Detailed analysis** panel with four tabs breaks the data down further:
+
+**Monthly comparison** — the cost difference between the dynamic and fixed tariff for each month, including data completeness per month.
+
+![Monthly comparison tab](docs/images/monthly.png)
+
+**Usage behavior** — heatmaps of consumption, spot price, and cost gradient by hour-of-day and weekday, filterable by season, to spot when you consume the most and when energy is cheapest.
+
+![Usage behavior tab](docs/images/UsageBehaviour.png)
+
+**Risk & optimization** — the cost projection range between best and worst case, plus your consumption timing profile (flexibility potential, share of cheap/expensive/average hours).
+
+![Risk and optimization tab](docs/images/RiskAndOptimization.png)
+
+**Technical details** — the underlying figures: measurement window, consumption statistics, spot market analysis, and the tariff parameters used for the calculation.
+
+![Technical details tab](docs/images/TechnicalDetails.png)
 
 ### CSV File Format
 
@@ -51,8 +85,8 @@ The integration supports importing historical load profiles from CSV files with 
 
 | Column Name | Format | Example |
 |---|---|---|
-| `Anlagennummer` | String | 24713092 |
-| `Zählpunkt` | String | AT0082300804600000000000000141519 |
+| `Anlagennummer` | String | 1234567890 |
+| `Zählpunkt` | String | AT001230045670000000000000012345678 |
 | `Tarif` | String | (optional) |
 | `Statistikzeitraum Beginn` | `DD.MM.YYYY HH:MM` | 01.01.2025 00:00 |
 | `Statistikzeitraum Ende` | `DD.MM.YYYY HH:MM` | 01.01.2025 00:15 |
