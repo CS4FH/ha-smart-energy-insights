@@ -2858,10 +2858,10 @@ syncSensorPicker() {
       .heatmap-legend { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 11px; color: var(--secondary-text-color); margin: 10px 0 0; flex-wrap: wrap; text-align: center; }
       .heatmap-legend-bar { width: 120px; height: 8px; border-radius: 999px; background: linear-gradient(90deg, hsl(120, 85%, 55%), hsl(0, 85%, 55%)); }
       .heatmap-legend-value { font-size: 11px; color: var(--secondary-text-color); }
-      .heatmap-grid { display: grid; grid-template-columns: auto repeat(24, 1fr); gap: 2px; font-size: 10px; }
-      .heatmap-header-y { display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; color: var(--secondary-text-color); font-weight: 500; }
-      .heatmap-header-x { text-align: center; color: var(--secondary-text-color); padding-bottom: 4px; }
-      .heatmap-cell { aspect-ratio: 1; border-radius: 2px; cursor: crosshair; transition: transform 0.1s; }
+      .heatmap-grid { display: grid; grid-template-columns: minmax(0, auto) repeat(24, minmax(0, 1fr)); gap: 2px; font-size: 10px; min-width: 0; }
+      .heatmap-header-y { display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; color: var(--secondary-text-color); font-weight: 500; min-width: 0; overflow: hidden; }
+      .heatmap-header-x { min-width: 0; overflow: hidden; text-align: center; color: var(--secondary-text-color); padding-bottom: 4px; }
+      .heatmap-cell { min-width: 0; aspect-ratio: 1; border-radius: 2px; cursor: crosshair; transition: transform 0.1s; }
       .heatmap-cell:hover { transform: scale(1.2); box-shadow: 0 0 4px rgba(0,0,0,0.3); z-index: 2; position: relative; }
       .monthly-tariff-panel { background: linear-gradient(160deg, rgba(var(--rgb-primary-text-color), 0.02), rgba(var(--rgb-primary-text-color), 0.04)); border: 1px solid rgba(var(--rgb-divider-color), 0.6); border-radius: 10px; padding: 14px; }
       .monthly-tariff-title { font-size: 15px; font-weight: 600; color: var(--primary-text-color); margin-bottom: 10px; }
