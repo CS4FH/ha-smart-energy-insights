@@ -2366,10 +2366,6 @@ syncSensorPicker() {
     let currentLabelClass = "savings";
     const axisEdgePaddingPx = 6;
     let currentMarkerPct = 50;
-    // Below this gap (in percentage points from the 50% baseline) the best/worst
-    // case label text visually collides with the "Fixed tariff" center label.
-    const labelCollisionThresholdPct = 14;
-    let isCenterLabelCrowded = false;
 
     if (hasCostProjection) {
       deltaExtent = Math.max(
@@ -2386,8 +2382,6 @@ syncSensorPicker() {
       currentLeftPct = Math.min(50, Math.max(0, currentMarkerPct));
       currentWidthPct = Math.abs(currentMarkerPct - 50);
       currentLabelClass = currentDelta <= 0 ? "savings" : "risk";
-      isCenterLabelCrowded = (50 - maxSavingsPct) < labelCollisionThresholdPct
-        || (maxRiskPct - 50) < labelCollisionThresholdPct;
     }
 
     const hasTimingProfile = Number.isFinite(peakExposure) && Number.isFinite(offPeakShare);
@@ -2506,6 +2500,7 @@ syncSensorPicker() {
           ${texts.analysisCostProjectionTitle}
           <span class="metric-info-marker" role="img" tabindex="0" aria-label="${this.escapeAttribute(texts.kpiInfoLabel)}" title="${this.escapeAttribute(texts.analysisCostProjectionHelp)}"><ha-icon icon="mdi:information-outline"></ha-icon></span>
         </div>
+        ${hasCostProjection ? `<div class="delta-baseline-caption">${texts.analysisCostProjectionBaselineLabel}</div>` : ``}
         <div class="risk-chart-card projection-chart-card" role="img" aria-label="${this.escapeAttribute(texts.analysisCostProjectionTitle)}">
           ${hasCostProjection ? `
             <div class="delta-axis">
@@ -2522,12 +2517,11 @@ syncSensorPicker() {
                 <div class="delta-marker-dot" aria-hidden="true"></div>
               </div>
             </div>
-            <div class="delta-label-row${isCenterLabelCrowded ? " has-stacked-center" : ""}">
+            <div class="delta-label-row">
               <div class="delta-end left" style="left:${maxSavingsPct.toFixed(2)}%">
                 <span>${texts.analysisCostProjectionBestLabel}</span>
                 <strong>${maxSavingsDelta <= 0 ? "-" : "+"}${formatNumber(Math.abs(maxSavingsDelta), 2)} €</strong>
               </div>
-              <div class="delta-center${isCenterLabelCrowded ? " stacked-below" : ""}" style="left:50%">${texts.analysisCostProjectionBaselineLabel}</div>
               <div class="delta-end right" style="left:${maxRiskPct.toFixed(2)}%">
                 <span>${texts.analysisCostProjectionWorstLabel}</span>
                 <strong>${maxRiskDelta >= 0 ? "+" : "-"}${formatNumber(Math.abs(maxRiskDelta), 2)} €</strong>
@@ -2733,6 +2727,7 @@ syncSensorPicker() {
       .metric-info-marker ha-icon { --mdc-icon-size: 14px; }
       .metric-info-marker:hover, .metric-info-marker:focus-visible { color: var(--primary-color); opacity: 1; outline: none; }
       .technical-tax-section { padding-top: 4px; }
+      .delta-baseline-caption { font-size: 11px; font-weight: 600; letter-spacing: 0.2px; color: var(--secondary-text-color); text-align: center; margin-bottom: 8px; }
       .risk-chart-card { border: 1px solid rgba(var(--rgb-divider-color), 0.45); border-radius: 8px; background: rgba(var(--rgb-primary-text-color), 0.03); padding: 10px; }
       .projection-chart-card { position: relative; padding-top: 56px; padding-bottom: 14px; overflow: visible; }
       .projection-chart-card .delta-axis { margin-top: 0; }
@@ -2756,13 +2751,10 @@ syncSensorPicker() {
       .delta-marker.savings .delta-marker-callout strong { color: #74d19a; }
       .delta-marker.risk .delta-marker-callout strong { color: #ea9b7f; }
       .delta-label-row { position: relative; height: 30px; margin-top: 6px; }
-      .delta-label-row.has-stacked-center { height: 48px; }
       .delta-end { position: absolute; top: 0; font-size: 11px; color: var(--secondary-text-color); white-space: nowrap; max-width: 45%; }
       .delta-end strong { display: block; margin-top: 1px; color: var(--primary-text-color); font-size: 12px; }
       .delta-end.left { text-align: left; }
       .delta-end.right { text-align: right; transform: translateX(-100%); }
-      .delta-center { position: absolute; top: 0; font-size: 11px; color: var(--secondary-text-color); text-align: center; white-space: nowrap; transform: translateX(-50%); }
-      .delta-center.stacked-below { top: 20px; }
 
       .tariff-fit-card { border: 1px solid rgba(var(--rgb-divider-color), 0.45); border-radius: 10px; padding: 14px; background: rgba(var(--rgb-primary-text-color), 0.03); display: grid; gap: 12px; }
       .tariff-fit-verdict { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; }
