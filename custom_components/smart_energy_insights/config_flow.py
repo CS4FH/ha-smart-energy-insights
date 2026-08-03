@@ -34,7 +34,6 @@ class SmartEnergyOptionsFlow(config_entries.OptionsFlow):
         current_markup = options.get("spot_markup", data.get("spot_markup", 1.5))
         current_spot_base = options.get("spot_base_fee", data.get("spot_base_fee", 5.99))
         current_tax = options.get("tax_rate", data.get("tax_rate", 20.0))
-        current_inputs_are_net = options.get("inputs_are_net", data.get("inputs_are_net", False))
 
         data_schema = vol.Schema({
             vol.Required("fixed_price", default=current_fixed): vol.Coerce(float),
@@ -42,7 +41,6 @@ class SmartEnergyOptionsFlow(config_entries.OptionsFlow):
             vol.Required("spot_markup", default=current_markup): vol.Coerce(float),
             vol.Required("spot_base_fee", default=current_spot_base): vol.Coerce(float),
             vol.Required("tax_rate", default=current_tax): vol.Coerce(float),
-            vol.Required("inputs_are_net", default=current_inputs_are_net): bool,
         })
 
         return self.async_show_form(step_id="init", data_schema=data_schema)

@@ -7,8 +7,8 @@ from unittest.mock import patch
 from custom_components.smart_energy_insights.services.pricing_service import (
     PricingConfig,
     build_price_heatmap,
+    build_retail_price_heatmap,
     compute_spot_price_matches,
-    get_inputs_are_net,
     get_pricing_config,
 )
 
@@ -90,13 +90,14 @@ def test_get_pricing_config_prefers_options_over_data() -> None:
     )
 
 
-def test_get_inputs_are_net_prefers_options_over_data() -> None:
-    """Verify that the tariff tax mode is read from integration options."""
-    fake_entry = _fake_entry()
-    fake_entry.data["inputs_are_net"] = False
-    fake_entry.options = {"inputs_are_net": True}
+def test_build_retail_price_heatmap_applies_tax_and_markup() -> None:
+    """Verify the net wholesale heatmap is converted to a gross retail heatmap
+    using the fixed convention: gross = net * (1 + tax_rate / 100) + markup."""
+    price_heatmap = [[10.0, 20.0], [0.0, -5.0]]
 
-    assert get_inputs_are_net(FakeHass([fake_entry])) is True
+    result = build_retail_price_heatmap(price_heatmap, tax_rate=20.0, spot_markup=1.5)
+
+    assert result == [[13.5, 25.5], [1.5, -4.5]]
 
 
 def test_build_price_heatmap_averages_values_by_weekday_hour() -> None:

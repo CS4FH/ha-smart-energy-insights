@@ -15,6 +15,12 @@ import { generateHeatmapHTML } from "./smart-energy-insights-heatmap.js?v=202607
 import { renderBaseCard, renderDashboardHtml } from "./smart-energy-insights-templates.js?v=20260724c";
 import { formatNumber } from "./smart-energy-insights-utils.js";
 
+// Below this share of expected hourly slots actually matched to a spot price,
+// the tariff comparison is no longer representative of the full selected
+// period (see docs/refactoring-recommendations.md R1) - surface a warning
+// instead of presenting the headline numbers as a full-period verdict.
+const LOW_DATA_COMPLETENESS_THRESHOLD = 0.9;
+
 class SmartEnergyInsightsUploadCard extends HTMLElement {
   setConfig(config) {
     this.config = config;
@@ -204,6 +210,11 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       analysisHoursHelp: this.localize("card.analysis_hours_help", "Number of matched hourly points used in tariff comparison."),
       analysisDataCompletenessLabel: this.localize("card.analysis_data_completeness_label", "Data completeness"),
       analysisDataCompletenessHelp: this.localize("card.analysis_data_completeness_help", "Share of available measured hours versus expected hourly slots in the selected period."),
+      analysisLowCompletenessWarning: ({ percent }) => this.localize(
+        "card.analysis_low_completeness_warning",
+        "Low data completeness ({percent}%): matched spot-price hours only cover part of the selected period, so this comparison may not be representative of the full period.",
+        { percent }
+      ),
       analysisTotalLabel: this.localize("card.analysis_total_label", "Total consumption"),
       analysisAvgHourLabel: this.localize("card.analysis_avg_hour_label", "Avg per hour"),
       analysisAvgDayLabel: this.localize("card.analysis_avg_day_label", "Avg per day"),
@@ -305,7 +316,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       ),
       heatmapPriceTitle: this.localize(
         "card.heatmap_price_title",
-        "Spot price heatmap (ct/kWh)"
+        "Spot price heatmap (ct/kWh, net wholesale)"
       ),
       heatmapOptimizationSectionLabel: this.localize("card.heatmap_optimization_section_label", "OPTIMIZATION VIEW"),
       heatmapOptimizationTitle: this.localize("card.heatmap_optimization_title", "Load shift potential"),
@@ -319,7 +330,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       ),
       heatmapOptimizationCostGradientInfo: this.localize(
         "card.heatmap_optimization_cost_gradient_info",
-        "Shows direct hourly cost impact (consumption x spot price). Higher values are more expensive."
+        "Shows hourly cost impact (consumption x gross retail spot price, incl. tax and markup). Higher values are more expensive."
       ),
       heatmapLegendShiftAway: this.localize("card.heatmap_legend_shift_away", "Shift load away"),
       heatmapLegendOptimized: this.localize("card.heatmap_legend_optimized", "Already optimized"),
@@ -341,7 +352,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       heatmapSpotModeFixed: this.localize("card.heatmap_spot_mode_fixed", "Relative to fixed"),
       heatmapPriceAbsoluteInfo: this.localize(
         "card.heatmap_price_absolute_info",
-        "Ref: absolute spot price"
+        "Ref: absolute spot price (net, excl. tax and markup)"
       ),
       heatmapPriceRefFixed: (reference) => this.localize(
         "card.heatmap_price_ref_fixed",
@@ -516,7 +527,12 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
   }
 
   getTaxNote(taxRate) {
-    return "All values include 20.0% tax. Volumetric grid fees and static surcharges are excluded, as they cancel out in the tariff comparison.";
+    const rate = Number.isFinite(taxRate) ? taxRate : 20.0;
+    return this.localize(
+      "card.card_tax_note",
+      "All prices shown are gross and include {taxRate}% tax. Volumetric grid fees and static surcharges are excluded, as they cancel out in the tariff comparison.",
+      { taxRate: rate.toFixed(1) }
+    );
   }
 
   render() {
@@ -1316,6 +1332,7 @@ syncSensorPicker() {
       monthlyTariffHtml,
       technicalAnalysisGroups: analysisViews.technical,
       riskOptimizationGroups: analysisViews.risk,
+      taxNote: analysisViews.taxNote,
       texts,
       dashboardTab: this._dashboardTab,
       analysisOpen: this._analysisOpen
@@ -1522,6 +1539,7 @@ syncSensorPicker() {
     const wholeYearHeatmaps = {
       consumption_heatmap: consumptionSource.consumption_heatmap,
       price_heatmap: response.price_heatmap,
+      retail_price_heatmap: response.retail_price_heatmap || response.price_heatmap,
     };
     const fixedPrice = Number(response.fixed_price_ct);
     const hasFixedPrice = Number.isFinite(fixedPrice);
@@ -1537,7 +1555,9 @@ syncSensorPicker() {
             consumption_heatmap: consumptionSeasonalHeatmaps[season.key]?.consumption_heatmap
               || wholeYearHeatmaps.consumption_heatmap,
             price_heatmap: seasonalHeatmaps[season.key]?.price_heatmap
-              || wholeYearHeatmaps.price_heatmap
+              || wholeYearHeatmaps.price_heatmap,
+            retail_price_heatmap: seasonalHeatmaps[season.key]?.retail_price_heatmap
+              || wholeYearHeatmaps.retail_price_heatmap
           }
     ));
 
@@ -1554,7 +1574,7 @@ syncSensorPicker() {
 
     const priceDisplayHeatmaps = seasonHeatmaps.map((heatmaps) =>
       Number.isFinite(priceReference)
-        ? this.computePriceDeltaHeatmap(heatmaps.price_heatmap, priceReference)
+        ? this.computePriceDeltaHeatmap(heatmaps.retail_price_heatmap, priceReference)
         : heatmaps.price_heatmap
     );
     const priceScale = Number.isFinite(priceReference)
@@ -1564,6 +1584,7 @@ syncSensorPicker() {
       this.computeOptimizationDisplayHeatmap(
         heatmaps.consumption_heatmap,
         heatmaps.price_heatmap,
+        heatmaps.retail_price_heatmap,
         selectedOptimizationMode
       )
     );
@@ -1643,7 +1664,7 @@ syncSensorPicker() {
         const seasonIndex = seasons.findIndex((item) => item.key === season.key);
         const data = seasonHeatmaps[seasonIndex] || wholeYearHeatmaps;
         const seasonPriceHeatmap = Number.isFinite(priceReference)
-          ? this.computePriceDeltaHeatmap(data.price_heatmap, priceReference)
+          ? this.computePriceDeltaHeatmap(data.retail_price_heatmap, priceReference)
           : data.price_heatmap;
         const seasonConsumptionHeatmap = this.computeConsumptionDisplayHeatmap(
           data.consumption_heatmap,
@@ -1653,6 +1674,7 @@ syncSensorPicker() {
         const seasonOptimizationHeatmap = this.computeOptimizationDisplayHeatmap(
           data.consumption_heatmap,
           data.price_heatmap,
+          data.retail_price_heatmap,
           selectedOptimizationMode
         );
         let consumptionInfoText = texts.heatmapConsumptionAbsoluteInfo;
@@ -1800,8 +1822,8 @@ syncSensorPicker() {
     return base;
   }
 
-  computeCostImpactHeatmap(consumptionHeatmap, priceHeatmap) {
-    const prices = (priceHeatmap || []).map((row) => (row || []).map((value) => Number(value) || 0));
+  computeCostImpactHeatmap(consumptionHeatmap, retailPriceHeatmap) {
+    const prices = (retailPriceHeatmap || []).map((row) => (row || []).map((value) => Number(value) || 0));
     return (consumptionHeatmap || []).map((row, day) =>
       (row || []).map((value, hour) => {
         const numericValue = Number(value);
@@ -1814,9 +1836,9 @@ syncSensorPicker() {
     );
   }
 
-  computeOptimizationDisplayHeatmap(consumptionHeatmap, priceHeatmap, mode) {
+  computeOptimizationDisplayHeatmap(consumptionHeatmap, priceHeatmap, retailPriceHeatmap, mode) {
     if (mode === "cost_gradient") {
-      return this.computeCostImpactHeatmap(consumptionHeatmap, priceHeatmap);
+      return this.computeCostImpactHeatmap(consumptionHeatmap, retailPriceHeatmap || priceHeatmap);
     }
     return this.computeLoadShiftPotentialHeatmap(consumptionHeatmap, priceHeatmap);
   }
@@ -2066,9 +2088,19 @@ syncSensorPicker() {
     });
     const breakEvenHelpText = `${texts.kpiBreakEvenHelp} ${breakEvenCompareText}`;
 
+    const completenessRatio = Number(this.latestData.data_completeness_ratio);
+    const showLowCompletenessWarning = Number.isFinite(completenessRatio)
+      && completenessRatio < LOW_DATA_COMPLETENESS_THRESHOLD;
+    const lowCompletenessWarningHtml = showLowCompletenessWarning
+      ? `<div class="hero-low-completeness-warning">${texts.analysisLowCompletenessWarning({
+          percent: formatNumber(completenessRatio * 100, 0),
+        })}</div>`
+      : "";
+
     const bannerContainer = this.querySelector("#dynamicSavingsBanner");
 
     bannerContainer.innerHTML = `
+      ${lowCompletenessWarningHtml}
       <div class="tariff-hero-grid" role="group" aria-label="${this.escapeAttribute(texts.analysisCurrentTariffBalanceTitle)}">
         <section class="tariff-hero-card tariff-hero-anchor ${currentDeltaDirection}" aria-label="${this.escapeAttribute(texts.analysisCurrentTariffBalanceTitle)}">
           <div class="tariff-hero-card-topline">
@@ -2460,10 +2492,6 @@ syncSensorPicker() {
         <div class="technical-section-title">${texts.analysisSectionParametersTitle}</div>
         ${buildGrid("technical-grid-main", parameterItems)}
       </section>
-
-      <section class="technical-section technical-tax-section">
-        <div class="card-tax-note">${taxNote}</div>
-      </section>
     `,
       risk: `
       <section class="technical-section risk-visual-section">
@@ -2509,6 +2537,7 @@ syncSensorPicker() {
         ${buildGrid("technical-grid-risk", profileItems)}
       </section>
     `,
+      taxNote,
     };
   }
 
@@ -2715,7 +2744,6 @@ syncSensorPicker() {
       .metric-info-marker { width: 16px; height: 16px; min-width: 16px; border-radius: 50%; color: var(--secondary-text-color); display: inline-flex; align-items: center; justify-content: center; cursor: help; opacity: 0.82; }
       .metric-info-marker ha-icon { --mdc-icon-size: 14px; }
       .metric-info-marker:hover, .metric-info-marker:focus-visible { color: var(--primary-color); opacity: 1; outline: none; }
-      .technical-tax-section { padding-top: 4px; }
       .risk-chart-card { border: 1px solid rgba(var(--rgb-divider-color), 0.45); border-radius: 8px; background: rgba(var(--rgb-primary-text-color), 0.03); padding: 10px; }
       .projection-chart-card { position: relative; padding-top: 56px; padding-bottom: 14px; overflow: visible; }
       .projection-chart-card .delta-axis { margin-top: 0; }
@@ -2788,6 +2816,7 @@ syncSensorPicker() {
       .heatmap-context-meta { display: grid; gap: 6px; }
       .heatmap-context-line { font-size: 12px; color: var(--secondary-text-color); line-height: 1.4; }
       .heatmap-coverage-warning { font-size: 12px; line-height: 1.4; color: #8f4a00; background: rgba(255, 171, 64, 0.16); border: 1px solid rgba(255, 171, 64, 0.32); border-radius: 8px; padding: 6px 8px; }
+      .hero-low-completeness-warning { font-size: 13px; line-height: 1.4; color: #8f4a00; background: rgba(255, 171, 64, 0.16); border: 1px solid rgba(255, 171, 64, 0.32); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; }
       .heatmap-season-navigation { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
       .consumption-profile-control { display: grid; grid-template-columns: auto minmax(180px, 320px); justify-content: end; align-items: center; gap: 10px; margin-bottom: 12px; }
       .consumption-profile-control label { color: var(--secondary-text-color); font-size: 12px; font-weight: 600; }
@@ -2854,7 +2883,7 @@ syncSensorPicker() {
       .monthly-cell-card.neutral .monthly-cell-center { color: #8f7a26; }
       .monthly-cell-card.extra .monthly-cell-center { color: #9b3b3b; }
       .monthly-cell-card.nodata .monthly-cell-center { color: #8f7a26; }
-      .card-tax-note { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--divider-color); color: var(--secondary-text-color); text-align: center; font-size: 12px; opacity: 0.9; }
+      .card-tax-note { margin: 0 0 20px; padding: 12px 4px 0; border-top: 1px solid var(--divider-color); color: var(--secondary-text-color); text-align: center; font-size: 12px; opacity: 0.9; }
 
       /* Upload Formular wenn Daten geladen sind */
       #uploadContent.data-loaded { padding: 24px; background: rgba(var(--rgb-primary-text-color), 0.02); border-top: 1px solid var(--divider-color); margin-top: 24px; }

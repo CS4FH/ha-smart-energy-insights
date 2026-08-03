@@ -37,3 +37,24 @@ def test_build_seasonal_heatmaps_uses_northern_hemisphere_months() -> None:
     assert heatmap_total("autumn", "consumption_heatmap") == 4.0
     assert heatmap_total("winter", "consumption_heatmap") == 6.0
     assert heatmap_total("winter", "price_heatmap") == 60.0
+
+
+def test_seasonal_heatmaps_does_not_shift_month_boundary() -> None:
+    """R2 regression: an interval starting at 23:00 on the last day of a month
+    must be attributed to that month, not shifted into the next month by an
+    incorrect +1h adjustment (start already represents the interval-begin)."""
+    statistics = [
+        {"start": datetime(2026, 2, 28, 23, tzinfo=timezone.utc), "state": 7.0},
+    ]
+
+    with patch(
+        "custom_components.smart_energy_insights.insights_view.dt_util.as_local",
+        side_effect=lambda dt: dt,
+    ):
+        heatmaps = _build_seasonal_heatmaps(statistics, [])
+
+    def heatmap_total(season: str) -> float:
+        return sum(sum(row) for row in heatmaps[season]["consumption_heatmap"])
+
+    assert heatmap_total("winter") == 7.0
+    assert heatmap_total("spring") == 0.0

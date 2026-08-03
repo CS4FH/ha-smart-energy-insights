@@ -10,7 +10,7 @@ Smart Energy Insights is being developed as part of an ongoing Master's Thesis a
 ## 🛠 Features
 * **Data import:** Load historical consumption either by uploading a 15-minute CSV load profile, or by selecting an existing Home Assistant energy sensor (imports up to the last 12 months of long-term statistics).
 * **Day-ahead spot prices:** Automatically fetches and stores Austrian EPEX day-ahead spot prices (via the aWATTar API) as long-term statistics and exposes them as a sensor entity.
-* **Tariff comparison:** Compares your real consumption against a configurable fixed tariff and a configurable dynamic/spot tariff (markup, base fees, tax rate, net/gross), and projects potential savings or additional cost.
+* **Tariff comparison:** Compares your real consumption against a configurable fixed tariff and a configurable dynamic/spot tariff (markup, base fees, tax rate), and projects potential savings or additional cost.
 * **Analysis dashboard:** A dedicated sidebar panel with a multi-tab dashboard — monthly comparison, usage behavior, risk & optimization, and technical details.
 * **Seasonal heatmaps:** Consumption and price visualized by hour-of-day and weekday, split by season.
 * **Monitored devices:** Attach additional per-device energy sensors to break down consumption and cost by individual appliance.
@@ -30,12 +30,13 @@ The initial setup requires no input. Tariff parameters can be adjusted afterward
 
 | Option | Description | Default |
 |---|---|---|
-| Fixed price | Fixed tariff energy price | 15.0 ct/kWh |
-| Fixed base fee | Fixed tariff monthly base fee | 4.90 € |
-| Spot markup | Supplier markup added on top of the spot price | 1.5 ct/kWh |
-| Spot base fee | Dynamic tariff monthly base fee | 5.99 € |
-| Tax rate | Tax applied to net prices | 20 % |
-| Inputs are net | Whether the values above are entered net (tax added on top) | off |
+| Fixed price | Fixed tariff energy price, **gross** (tax-included) | 15.0 ct/kWh |
+| Fixed base fee | Fixed tariff monthly base fee, **gross** | 4.90 € |
+| Spot markup | Supplier markup added on top of the spot price, **gross** | 1.5 ct/kWh |
+| Spot base fee | Dynamic tariff monthly base fee, **gross** | 5.99 € |
+| Tax rate | Used only to convert the net/wholesale day-ahead spot market price into a gross retail price; not applied to the fields above, which are already gross | 20 % |
+
+All prices are entered gross (tax-included), matching what's shown on a typical utility bill or tariff sheet. If you only know your net price (excl. tax), convert it first: `gross = net × (1 + tax rate / 100)` — e.g. a net price of 12.5 ct/kWh at 20% tax becomes `12.5 × 1.20 = 15.0` ct/kWh gross.
 
 ## 📊 Using the Dashboard
 
@@ -95,7 +96,7 @@ The integration supports importing historical load profiles from CSV files with 
 | `Messart` | String (optional) | VAL |
 
 **Requirements:**
-* Delimiter: **Tab** (`\t`)
+* Delimiter: **Semicolon** (`;`)
 * Time intervals: **15 minutes** exactly
 * Unit: **kWh** (case-insensitive)
 * Timestamps: **Local timezone** (converted to UTC on import)

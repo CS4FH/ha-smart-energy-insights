@@ -17,10 +17,20 @@ def _get_cache(hass, entry_id):
 
 
 class SpotPriceSensor(SensorEntity):
+    """Handle entity used only to obtain a stable entity_id for statistics import.
+
+    This entity intentionally never sets a live state (see async_update below).
+    Spot prices are written directly as long-term statistics against this
+    entity's entity_id (see services/spot_price_service.py); the entity itself
+    is not meant to expose a "current price" reading and should not be added to
+    dashboards expecting live/polled values. See R6 in
+    docs/refactoring-recommendations.md.
+    """
+
     def __init__(self, entry):
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_sei_spot_price"
-        self._attr_name = "Spot Price"
+        self._attr_name = "Spot Price (statistics only, no live state)"
         self._attr_native_unit_of_measurement = "ct/kWh"
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_should_poll = False
@@ -30,4 +40,6 @@ class SpotPriceSensor(SensorEntity):
         cache["spot_price_stat_id"] = self.entity_id
 
     async def async_update(self):
+        # No-op by design: this entity has no live state, only long-term
+        # statistics written externally. See class docstring.
         return

@@ -103,6 +103,7 @@ export function renderDashboardHtml({
   monthlyTariffHtml,
   technicalAnalysisGroups,
   riskOptimizationGroups,
+  taxNote,
   texts,
   dashboardTab,
   analysisOpen
@@ -112,6 +113,8 @@ export function renderDashboardHtml({
       <div class="top-dashboard-grid">
         <div class="banner-column" id="dynamicSavingsBanner"></div>
       </div>
+
+      <div class="card-tax-note">${taxNote}</div>
 
       <details class="analysis-island"${analysisOpen ? " open" : ""}>
         <summary class="analysis-island-summary" aria-label="${texts.detailedAnalysisTitle}">

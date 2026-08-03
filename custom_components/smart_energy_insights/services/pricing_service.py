@@ -6,6 +6,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from ..const import DOMAIN
+from .tariff_analysis_service import AVERAGE_HOURS_PER_MONTH
 
 
 @dataclass(frozen=True)
@@ -44,13 +45,20 @@ def get_pricing_config(hass: HomeAssistant) -> PricingConfig:
     )
 
 
-def get_inputs_are_net(hass: HomeAssistant) -> bool:
-    entries = hass.config_entries.async_entries(DOMAIN)
-    if not entries:
-        return False
+def build_retail_price_heatmap(price_heatmap: list, tax_rate: float, spot_markup: float) -> list:
+    """Convert a net/wholesale spot-price heatmap into a gross retail-price heatmap.
 
-    entry = entries[0]
-    return bool(entry.options.get("inputs_are_net", entry.data.get("inputs_are_net", False)))
+    Applies the same fixed net->gross conversion used in analyze_tariffs
+    (tax_rate converts the net wholesale price to gross, spot_markup is
+    already gross and added on top), so cost/comparison views that need a
+    retail-equivalent price never re-derive this formula independently.
+    See R9/R11 in docs/refactoring-recommendations.md.
+    """
+    tax_multiplier = 1.0 + tax_rate / 100.0
+    return [
+        [round(value * tax_multiplier + spot_markup, 3) for value in row]
+        for row in (price_heatmap or [])
+    ]
 
 
 def build_price_heatmap(price_series: list) -> list:
@@ -102,7 +110,7 @@ def compute_spot_price_matches(statistics: list, price_series: list) -> dict:
             matched_consumption += cons
             base_spot_cost_cents += cons * spot_price
 
-    duration_months = matched_hours / 730.5 if matched_hours > 0 else 0.0
+    duration_months = matched_hours / AVERAGE_HOURS_PER_MONTH if matched_hours > 0 else 0.0
 
     return {
         "matched_hours": matched_hours,

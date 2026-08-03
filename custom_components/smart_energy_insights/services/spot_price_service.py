@@ -115,6 +115,10 @@ async def _write_price_statistics(hass, stat_id, series, last_written):
         has_sum=False,
         mean_type=StatisticMeanType.ARITHMETIC,
         name="Spot Price",
+        # Internal statistics tied to a real entity_id must use source="recorder"
+        # (HA rejects any other value here). This differs from the load-profile
+        # import, which uses external statistics (statistic_id="domain:object_id")
+        # and therefore sets source=<domain>. See R8 in refactoring-recommendations.md.
         source="recorder",
         statistic_id=stat_id,
         unit_class=None,

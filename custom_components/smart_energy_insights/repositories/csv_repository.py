@@ -4,18 +4,17 @@ import csv
 import io
 import logging
 from datetime import datetime
-from datetime import timedelta
 
 from homeassistant.util import dt as dt_util
 
-from ..const import ALLOWED_UNITS, CSV_COLUMNS_REQUIRED
+from ..const import ALLOWED_UNITS, CSV_COLUMNS_REQUIRED, CSV_DELIMITER
 
 _LOGGER = logging.getLogger(__name__)
 
 
 def parse_and_validate_csv(csv_content: str) -> dict:
     try:
-        csv_reader = csv.DictReader(io.StringIO(csv_content), delimiter=";")
+        csv_reader = csv.DictReader(io.StringIO(csv_content), delimiter=CSV_DELIMITER)
         if not csv_reader.fieldnames:
             return {"error_key": "api.error.empty_csv"}
 
@@ -26,7 +25,7 @@ def parse_and_validate_csv(csv_content: str) -> dict:
                 "error_placeholders": {"columns": ", ".join(sorted(missing_cols))},
             }
 
-        allowed_units = {u.lower() for u in ALLOWED_UNITS} | {"kwh"}
+        allowed_units = {u.lower() for u in ALLOWED_UNITS}
         hourly_data = {}
         row_count = 0
 
@@ -88,9 +87,9 @@ def parse_and_validate_csv(csv_content: str) -> dict:
         heatmap_sums = {d: {h: 0.0 for h in range(24)} for d in range(7)}
         heatmap_counts = {d: {h: 0 for h in range(24)} for d in range(7)}
         for hour_local, val in hourly_data.items():
-            bucket_dt = hour_local + timedelta(hours=1)
-            d = bucket_dt.weekday()
-            h = bucket_dt.hour
+            # hour_local is already the interval-begin hour; attribute directly.
+            d = hour_local.weekday()
+            h = hour_local.hour
             heatmap_sums[d][h] += val
             heatmap_counts[d][h] += 1
 

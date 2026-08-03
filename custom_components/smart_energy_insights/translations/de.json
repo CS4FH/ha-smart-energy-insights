@@ -11,13 +11,18 @@
     "step": {
       "init": {
         "title": "Smart Energy Insights Optionen",
+        "description": "Alle Preise unten sind brutto (inkl. Steuer), wie ueblicherweise auf Rechnung/Tarifblatt angegeben. Falls Sie nur den Nettopreis (exkl. Steuer) kennen, rechnen Sie zuerst um: brutto = netto x (1 + Steuersatz / 100).",
         "data": {
-          "fixed_price": "Festpreis (ct/kWh)",
-          "fixed_base_fee": "Grundgebuehr Fix (EUR)",
-          "spot_markup": "Spot-Aufschlag (ct/kWh)",
-          "spot_base_fee": "Grundgebuehr Spot (EUR)",
-          "tax_rate": "Steuersatz (%)",
-          "inputs_are_net": "Tarifwerte sind netto"
+          "fixed_price": "Festpreis (ct/kWh, brutto)",
+          "fixed_base_fee": "Grundgebuehr Fix (EUR, brutto)",
+          "spot_markup": "Spot-Aufschlag (ct/kWh, brutto)",
+          "spot_base_fee": "Grundgebuehr Spot (EUR, brutto)",
+          "tax_rate": "Steuersatz (%)"
+        },
+        "data_description": {
+          "fixed_price": "Bruttopreis Ihres Fixtarifs, inkl. Steuer. Beispiel: Nettopreis 12,5 ct/kWh bei 20% Steuer -> 12,5 x 1,20 = 15,0 eingeben.",
+          "spot_markup": "Brutto-Aufschlag des Lieferanten auf den Spotmarktpreis, inkl. Steuer.",
+          "tax_rate": "Wird nur verwendet, um den netto/Grosshandels-Spotmarktpreis in einen Brutto-Endkundenpreis umzurechnen; alle anderen Felder oben sind bereits brutto."
         }
       }
     }
@@ -99,6 +104,7 @@
     "analysis_hours_help": "Anzahl zugeordneter Stundenpunkte, die fuer den Tarifvergleich verwendet wurden.",
     "analysis_data_completeness_label": "Datenvollstaendigkeit",
     "analysis_data_completeness_help": "Anteil verfuegbarer gemessener Stunden im Vergleich zu den erwarteten Stunden-Slots im gewaehlten Zeitraum.",
+    "analysis_low_completeness_warning": "Niedrige Datenvollstaendigkeit ({percent}%): Die zugeordneten Spotpreis-Stunden decken nur einen Teil des gewaehlten Zeitraums ab, dieser Vergleich ist daher moeglicherweise nicht repraesentativ fuer den gesamten Zeitraum.",
     "analysis_hours_label": "Stunden",
     "analysis_total_label": "Gesamtverbrauch",
     "analysis_avg_hour_label": "Durchschnitt pro Stunde",
@@ -135,8 +141,8 @@
     "analysis_max_penalty_risk_label": "Max. Mehrkostenrisiko",
     "analysis_max_penalty_risk_help": "Die maximalen zusaetzlichen Kosten, wenn der gesamte flexible Verbrauch in die teuersten 6 Stunden pro Tag faellt.",
     "analysis_current_tariff_balance_title": "Prognostizierte Ersparnis",
-    "analysis_best_case_potential_title": "Best Case (Potenzial)",
-    "analysis_best_case_potential_subtitle": "Erreichbar durch aktives Lastverschieben.",
+    "analysis_best_case_potential_title": "Best Case (Theoretisches Max.)",
+    "analysis_best_case_potential_subtitle": "Theoretisches Maximum, wenn der gesamte verschiebbare Verbrauch in die guenstigsten Stunden verlagert wuerde - kein garantiertes Ergebnis.",
     "analysis_worst_case_risk_title": "Worst Case (Risiko)",
     "analysis_worst_case_risk_subtitle": "Risiko bei hoher Nutzung in Spitzenstunden.",
     "analysis_status_quo_fixed_projection_label": "Fix-Projektion",
@@ -238,12 +244,12 @@
     "heatmap_consumption_ref_mean": "Ref: {reference} kWh (Mittelwert)",
     "heatmap_consumption_ref_cost_impact": "Ref: Verbrauch x Spotpreis pro Slot",
     "heatmap_consumption_cost_impact_title": "Kostenwirkungs-Heatmap (ct/h)",
-    "heatmap_price_title": "Spotpreis-Heatmap (ct/kWh)",
+    "heatmap_price_title": "Spotpreis-Heatmap (ct/kWh, netto Grosshandel)",
     "heatmap_spot_mode_label": "Spotansicht",
     "heatmap_spot_mode_absolute": "Absolut",
     "heatmap_spot_mode_fixed": "Relativ zu Fixpreis",
     "heatmap_spot_mode_break_even": "Relativ zu Break-even",
-    "heatmap_price_absolute_info": "Ref: absoluter Spotpreis",
+    "heatmap_price_absolute_info": "Ref: absoluter Spotpreis (netto, exkl. Steuer und Aufschlag)",
     "heatmap_price_ref_fixed": "Ref: {reference} ct/kWh (Fixpreis)",
     "heatmap_price_ref_break_even": "Ref: {reference} ct/kWh (Break-even)",
     "heatmap_season_whole_year": "Ganzes Jahr",
@@ -314,7 +320,7 @@
     "savings_daily_help": "Ersparnis pro Tag basierend auf dem gewaehlten Zeitraum.",
     "savings_monthly_help": "Ersparnis pro 30-Tage-Monat, hochgerechnet aus dem Zeitraum.",
     "savings_yearly_help": "Ersparnis pro 365-Tage-Jahr, hochgerechnet aus dem Zeitraum.",
-    "card_tax_note": "Alle Werte enthalten {taxRate}% Steuer."
+    "card_tax_note": "Alle angezeigten Preise sind brutto und enthalten {taxRate}% Steuer. Verbrauchsabhängige Netzgebühren und pauschale Aufschläge sind ausgenommen, da sie sich im Tarifvergleich aufheben."
   },
   "api": {
     "default_filename": "Unbekannt.csv",

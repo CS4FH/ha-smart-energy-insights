@@ -30,7 +30,7 @@ def test_analyze_tariffs_is_consistent_for_monthly_and_total() -> None:
         "custom_components.smart_energy_insights.services.tariff_analysis_service.dt_util.as_local",
         side_effect=lambda dt: dt,
     ):
-        result = analyze_tariffs(statistics, price_series, pricing, inputs_are_net=False)
+        result = analyze_tariffs(statistics, price_series, pricing)
 
     assert result["matched_hours"] == 2
     assert result["consumption_hours"] == 2
@@ -78,7 +78,7 @@ def test_analyze_tariffs_handles_no_matches() -> None:
         "custom_components.smart_energy_insights.services.tariff_analysis_service.dt_util.as_local",
         side_effect=lambda dt: dt,
     ):
-        result = analyze_tariffs(statistics, price_series, pricing, inputs_are_net=True)
+        result = analyze_tariffs(statistics, price_series, pricing)
 
     assert result["matched_hours"] == 0
     assert result["consumption_hours"] == 1
@@ -121,7 +121,7 @@ def test_analyze_tariffs_reports_negative_price_stats_and_completeness_gap() -> 
         "custom_components.smart_energy_insights.services.tariff_analysis_service.dt_util.as_local",
         side_effect=lambda dt: dt,
     ):
-        result = analyze_tariffs(statistics, price_series, pricing, inputs_are_net=False)
+        result = analyze_tariffs(statistics, price_series, pricing)
 
     assert result["matched_hours"] == 2
     assert result["consumption_hours"] == 2
@@ -164,7 +164,7 @@ def test_analyze_tariffs_risk_and_optimization_metrics_daily_6h() -> None:
         "custom_components.smart_energy_insights.services.tariff_analysis_service.dt_util.as_local",
         side_effect=lambda dt: dt,
     ):
-        result = analyze_tariffs(statistics, price_series, pricing, inputs_are_net=False)
+        result = analyze_tariffs(statistics, price_series, pricing)
 
     # total = 8 kWh, P05 = 1.0 kWh/h, base volume = 8 -> flexible volume = 0
     assert abs(result["flexibility_potential_percent"] - 0.0) < 0.0001
@@ -234,7 +234,7 @@ def test_analyze_tariffs_peak_and_off_peak_exposure_daily_6h_weighted() -> None:
         "custom_components.smart_energy_insights.services.tariff_analysis_service.dt_util.as_local",
         side_effect=lambda dt: dt,
     ):
-        result = analyze_tariffs(statistics, price_series, pricing, inputs_are_net=False)
+        result = analyze_tariffs(statistics, price_series, pricing)
 
     # Daily cheapest 6h are the first six points -> 30 kWh of total 36 kWh.
     assert abs(result["off_peak_share_percent"] - ((30.0 / 36.0) * 100.0)) < 0.0001

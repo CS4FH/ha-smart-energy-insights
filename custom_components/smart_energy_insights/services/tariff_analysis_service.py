@@ -7,11 +7,30 @@ from datetime import timedelta
 
 from homeassistant.util import dt as dt_util
 
+# Average number of hours in a calendar month (365.25 days / 12), used to
+# convert a count of matched hours into a fractional month duration for
+# base-fee proration. See R10 in docs/refactoring-recommendations.md.
+AVERAGE_HOURS_PER_MONTH = 730.5
 
-def analyze_tariffs(statistics: list, price_series: list, pricing_config, inputs_are_net: bool) -> dict:
+# Size of the daily "cheapest"/"most expensive" price window (in hours) used
+# for the load-shifting potential estimate. See R10 in
+# docs/refactoring-recommendations.md.
+DAILY_SHIFT_WINDOW_HOURS = 6
+
+
+def analyze_tariffs(statistics: list, price_series: list, pricing_config) -> dict:
     """Compute canonical tariff totals, monthly deltas, and derived metrics.
 
     This function is the single source of truth for tariff comparisons.
+
+    Fixed convention (no user-configurable net/gross toggle, see R11 in
+    docs/refactoring-recommendations.md): fixed_price, fixed_base_fee,
+    spot_markup and spot_base_fee are always entered and treated as gross
+    (tax-included) prices, matching how retail tariffs are normally quoted.
+    The day-ahead spot market price in price_series is always a net/wholesale
+    price (that's what the aWATTar exchange data is), so tax_rate is always
+    applied to convert it to a gross retail price before it is combined with
+    the (already gross) markup/base fee.
     """
     months = {
         month: {
@@ -40,7 +59,7 @@ def analyze_tariffs(statistics: list, price_series: list, pricing_config, inputs
     consumption_hours = sum(1 for stat in (statistics or []) if stat.get("start") is not None)
     matched_consumption = sum(consumption for _, consumption, _ in matched_points)
     base_spot_cost_cents = sum(consumption * spot_price for _, consumption, spot_price in matched_points)
-    duration_months = matched_hours / 730.5 if matched_hours else 0.0
+    duration_months = matched_hours / AVERAGE_HOURS_PER_MONTH if matched_hours else 0.0
     total_consumption_kwh = sum(max(0.0, float(stat.get("state", 0.0) or 0.0)) for stat in (statistics or []))
 
     expected_hours = 0
@@ -58,19 +77,14 @@ def analyze_tariffs(statistics: list, price_series: list, pricing_config, inputs
         else None
     )
 
-    tax_multiplier = 1.0 + pricing_config.tax_rate / 100.0 if inputs_are_net else 1.0
-    gross_fix_price = pricing_config.fixed_price * tax_multiplier if inputs_are_net else pricing_config.fixed_price
-    gross_fix_base = (
-        pricing_config.fixed_base_fee * tax_multiplier
-        if inputs_are_net
-        else pricing_config.fixed_base_fee
-    )
-    gross_spot_markup = pricing_config.spot_markup * tax_multiplier if inputs_are_net else pricing_config.spot_markup
-    gross_spot_base = (
-        pricing_config.spot_base_fee * tax_multiplier
-        if inputs_are_net
-        else pricing_config.spot_base_fee
-    )
+    # tax_multiplier converts the net wholesale spot price to a gross retail
+    # price. fixed_price/fixed_base_fee/spot_markup/spot_base_fee are already
+    # gross (fixed convention, see docstring above), so they are used as-is.
+    tax_multiplier = 1.0 + pricing_config.tax_rate / 100.0
+    gross_fix_price = pricing_config.fixed_price
+    gross_fix_base = pricing_config.fixed_base_fee
+    gross_spot_markup = pricing_config.spot_markup
+    gross_spot_base = pricing_config.spot_base_fee
 
     fix_base_per_hour = (duration_months * gross_fix_base) / matched_hours if matched_hours else 0.0
     spot_base_per_hour = (duration_months * gross_spot_base) / matched_hours if matched_hours else 0.0
@@ -86,8 +100,9 @@ def analyze_tariffs(statistics: list, price_series: list, pricing_config, inputs
     min_spot_price_at = None
 
     for start, consumption, spot_price in matched_points:
-        # Align monthly bucketing with heatmap semantics (interval end).
-        bucket_dt = dt_util.as_local(start) + timedelta(hours=1)
+        # 'start' is the interval-begin hour (see csv_repository ingestion),
+        # so the interval covers [start, start+1h); attribute it to 'start'.
+        bucket_dt = dt_util.as_local(start)
         month = bucket_dt.month
 
         fixed_cost_hour = (consumption * gross_fix_price) / 100.0 + fix_base_per_hour
@@ -131,11 +146,7 @@ def analyze_tariffs(statistics: list, price_series: list, pricing_config, inputs
     break_even_fixed = None
     if matched_consumption > 0:
         base_spot_cost_eur = base_spot_cost_cents / 100.0
-        base_spot_cost_eur_adjusted = (
-            base_spot_cost_eur
-            if inputs_are_net
-            else base_spot_cost_eur * (1.0 + pricing_config.tax_rate / 100.0)
-        )
+        base_spot_cost_eur_adjusted = base_spot_cost_eur * tax_multiplier
         avg_spot_price = (base_spot_cost_eur_adjusted * 100.0 / matched_consumption)
         break_even_fixed = avg_spot_price + gross_spot_markup + (
             duration_months * (gross_spot_base - gross_fix_base) * 100.0 / matched_consumption
@@ -195,7 +206,7 @@ def analyze_tariffs(statistics: list, price_series: list, pricing_config, inputs
         if not prices:
             continue
         sorted_prices = sorted(prices)
-        take = min(6, len(sorted_prices))
+        take = min(DAILY_SHIFT_WINDOW_HOURS, len(sorted_prices))
         cheapest_daily_averages.append(sum(sorted_prices[:take]) / take)
         expensive_daily_averages.append(sum(sorted_prices[-take:]) / take)
 
@@ -238,7 +249,7 @@ def analyze_tariffs(statistics: list, price_series: list, pricing_config, inputs
             if not day_points:
                 continue
             sorted_day_points = sorted(day_points, key=lambda entry: entry[1])
-            take = min(6, len(sorted_day_points))
+            take = min(DAILY_SHIFT_WINDOW_HOURS, len(sorted_day_points))
             off_peak_kwh += sum(consumption for consumption, _ in sorted_day_points[:take])
             peak_exposure_kwh += sum(consumption for consumption, _ in sorted_day_points[-take:])
 

@@ -25,7 +25,7 @@ from .repositories.statistics_repository import async_add_external_stats
 from .repositories.statistics_repository import async_get_statistics_during_period
 from .services.pricing_service import (
     build_price_heatmap,
-    get_inputs_are_net,
+    build_retail_price_heatmap,
     get_pricing_config,
 )
 from .services.spot_price_service import async_import_spot_prices_for_range
@@ -112,7 +112,6 @@ class SmartEnergyInsightsUploadView(HomeAssistantView):
                 if not statistics:
                     return await _error_response(hass, "api.error.no_data_in_range")
 
-                inputs_are_net = get_inputs_are_net(hass)
                 available_start = csv_data.get("available_start") or csv_data.get("start")
                 available_end = csv_data.get("available_end") or csv_data.get("end")
                 response_data = await _build_analysis_response(
@@ -123,7 +122,6 @@ class SmartEnergyInsightsUploadView(HomeAssistantView):
                     csv_data.get("filename") or "",
                     csv_available,
                     sensor_available,
-                    inputs_are_net,
                     csv_data.get("upload_date") or dt_util.now().isoformat(),
                     available_start=available_start,
                     available_end=available_end,
@@ -249,8 +247,6 @@ class SmartEnergyInsightsUploadView(HomeAssistantView):
             )
             await async_add_external_stats(hass, metadata, statistics)
 
-            inputs_are_net = get_inputs_are_net(hass)
-
             # NEU: Zeitstempel des Uploads sichern
             upload_date_iso = dt_util.now().isoformat()
 
@@ -263,7 +259,6 @@ class SmartEnergyInsightsUploadView(HomeAssistantView):
                 filename,
                 True,
                 bool(cached.get("sensor_data")),
-                inputs_are_net,
                 upload_date_iso,
                 available_start=statistics[0]["start"].isoformat(),
                 available_end=statistics[-1]["start"].isoformat(),
@@ -291,8 +286,9 @@ def _build_consumption_heatmap(statistics: list) -> list:
         start = stat.get("start")
         if not start:
             continue
-        # Hourly statistics represent the interval ending at +1h in HA history.
-        bucket_dt = dt_util.as_local(start) + timedelta(hours=1)
+        # 'start' is the interval-begin hour (see csv_repository ingestion),
+        # so the interval covers [start, start+1h); attribute it to 'start'.
+        bucket_dt = dt_util.as_local(start)
         d = bucket_dt.weekday()
         h = bucket_dt.hour
         sums[d][h] += stat.get("state", 0.0)
@@ -320,7 +316,7 @@ def _build_seasonal_heatmaps(statistics: list, price_series: list) -> dict:
             seasonal_statistics = [
                 stat
                 for stat in statistics
-                if (dt_util.as_local(stat["start"]) + timedelta(hours=1)).month in months
+                if dt_util.as_local(stat["start"]).month in months
             ]
             seasonal_prices = [
                 point
@@ -564,7 +560,7 @@ def _device_analysis_response(
         matched_hours = len(statistics) if months is None else sum(
             1
             for stat in statistics
-            if (dt_util.as_local(stat["start"]) + timedelta(hours=1)).month in months
+            if dt_util.as_local(stat["start"]).month in months
         )
         seasonal_consumption[season] = {
             "consumption_heatmap": values["consumption_heatmap"],
@@ -660,7 +656,6 @@ async def _build_analysis_response(
     filename: str,
     csv_available: bool,
     sensor_available: bool,
-    inputs_are_net: bool,
     upload_date_iso: str,
     available_start: str | None = None,
     available_end: str | None = None,
@@ -682,8 +677,15 @@ async def _build_analysis_response(
     price_series = price_result.get("series", [])
     pricing_config = get_pricing_config(hass)
     price_heatmap = build_price_heatmap(price_series)
+    retail_price_heatmap = build_retail_price_heatmap(
+        price_heatmap, pricing_config.tax_rate, pricing_config.spot_markup
+    )
     consumption_heatmap = _build_consumption_heatmap(statistics)
     seasonal_heatmaps = _build_seasonal_heatmaps(statistics, price_series)
+    for season_data in seasonal_heatmaps.values():
+        season_data["retail_price_heatmap"] = build_retail_price_heatmap(
+            season_data["price_heatmap"], pricing_config.tax_rate, pricing_config.spot_markup
+        )
     summary = _calculate_summary(statistics)
     consumption_metrics = _derive_consumption_metrics(statistics)
     price_metrics = _derive_price_metrics(price_series)
@@ -692,7 +694,6 @@ async def _build_analysis_response(
         statistics,
         price_series,
         pricing_config,
-        inputs_are_net,
     )
     break_even_fixed = tariff_analysis.get("break_even_fixed_ct_kwh")
     spot_cheaper_share = tariff_analysis.get("spot_cheaper_share")
@@ -744,6 +745,7 @@ async def _build_analysis_response(
         "price_series_count": price_result.get("series_count"),
         "consumption_heatmap": consumption_heatmap,
         "price_heatmap": price_heatmap,
+        "retail_price_heatmap": retail_price_heatmap,
         "seasonal_heatmaps": seasonal_heatmaps,
         "matched_hours": tariff_analysis["matched_hours"],
         "duration_months": tariff_analysis["duration_months"],
@@ -764,7 +766,6 @@ async def _build_analysis_response(
         "spot_markup_ct": pricing_config.spot_markup,
         "spot_base_fee_eur": pricing_config.spot_base_fee,
         "tax_rate": pricing_config.tax_rate,
-        "inputs_are_net": inputs_are_net,
         "filename": filename,
         "upload_date": upload_date_iso,
     }
@@ -838,7 +839,6 @@ class SmartEnergyInsightsSensorView(HomeAssistantView):
         if not statistics:
             return await _error_response(hass, "api.error.no_sensor_data")
 
-        inputs_are_net = get_inputs_are_net(hass)
         upload_date_iso = dt_util.now().isoformat()
         sensor_name = attrs.get("friendly_name") or entity_id
 
@@ -860,7 +860,6 @@ class SmartEnergyInsightsSensorView(HomeAssistantView):
             sensor_name,
             bool(cached.get("csv_data")),
             True,
-            inputs_are_net,
             upload_date_iso,
             available_start=available_start,
             available_end=available_end,

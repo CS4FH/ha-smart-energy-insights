@@ -15,9 +15,9 @@ DEVICES_API_ENDPOINT = "/api/smart_energy_insights/devices"
 DEVICE_ANALYSIS_API_ENDPOINT = "/api/smart_energy_insights/device-analysis"
 
 # CSV Parsing Configuration
-CSV_DELIMITER = "\t"
+CSV_DELIMITER = ";"
 TIMESTAMP_FORMAT = "%d.%m.%Y %H:%M"
-ALLOWED_UNITS = ["KWH", "kWh", "kWH", "KWh"]  # Case-insensitive handling
+ALLOWED_UNITS = ["kWh"]  # Compared case-insensitively, see csv_repository.py
 
 # CSV Column Names (exact matching)
 CSV_COLUMNS_REQUIRED = [

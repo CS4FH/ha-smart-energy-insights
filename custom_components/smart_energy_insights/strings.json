@@ -11,13 +11,18 @@
     "step": {
       "init": {
         "title": "Smart Energy Insights Options",
+        "description": "All prices below are gross (tax-included), as usually shown on your utility bill/tariff sheet. If you only know your net price (excl. tax), convert it first: gross = net x (1 + tax rate / 100).",
         "data": {
-          "fixed_price": "Fixed price (ct/kWh)",
-          "fixed_base_fee": "Fixed base fee (EUR)",
-          "spot_markup": "Spot markup (ct/kWh)",
-          "spot_base_fee": "Spot base fee (EUR)",
-          "tax_rate": "Tax rate (%)",
-          "inputs_are_net": "Tariff values are net"
+          "fixed_price": "Fixed price (ct/kWh, gross)",
+          "fixed_base_fee": "Fixed base fee (EUR, gross)",
+          "spot_markup": "Spot markup (ct/kWh, gross)",
+          "spot_base_fee": "Spot base fee (EUR, gross)",
+          "tax_rate": "Tax rate (%)"
+        },
+        "data_description": {
+          "fixed_price": "Gross energy price of your fixed tariff, incl. tax. Example: net price 12.5 ct/kWh at 20% tax -> enter 12.5 x 1.20 = 15.0.",
+          "spot_markup": "Gross supplier surcharge added on top of the market spot price, incl. tax.",
+          "tax_rate": "Used only to convert the net/wholesale day-ahead spot market price to a gross retail price; all other fields above are already gross."
         }
       }
     }
@@ -99,6 +104,7 @@
     "analysis_hours_help": "Number of matched hourly points used in tariff comparison.",
     "analysis_data_completeness_label": "Data completeness",
     "analysis_data_completeness_help": "Share of available measured hours versus expected hourly slots in the selected period.",
+    "analysis_low_completeness_warning": "Low data completeness ({percent}%): matched spot-price hours only cover part of the selected period, so this comparison may not be representative of the full period.",
     "analysis_total_label": "Total consumption",
     "analysis_avg_hour_label": "Avg per hour",
     "analysis_avg_day_label": "Avg per day",
@@ -132,8 +138,8 @@
     "analysis_max_penalty_risk_label": "Max. penalty risk",
     "analysis_max_penalty_risk_help": "The maximum additional cost if all your flexible consumption occurred during the most expensive 6 hours of each day.",
     "analysis_current_tariff_balance_title": "Projected Savings",
-    "analysis_best_case_potential_title": "Best Case (Potential)",
-    "analysis_best_case_potential_subtitle": "Achievable through active load shifting.",
+    "analysis_best_case_potential_title": "Best Case (Theoretical Max.)",
+    "analysis_best_case_potential_subtitle": "Theoretical maximum if all shiftable load moved to the cheapest hours - not a guaranteed outcome.",
     "analysis_worst_case_risk_title": "Worst Case (Risk)",
     "analysis_worst_case_risk_subtitle": "Risk upon high peak-hour usage.",
     "analysis_status_quo_fixed_projection_label": "Fixed projection",
@@ -228,12 +234,12 @@
     "heatmap_consumption_ref_mean": "Ref: {reference} kWh (Average)",
     "heatmap_consumption_ref_cost_impact": "Ref: consumption x spot price per slot",
     "heatmap_consumption_cost_impact_title": "Cost impact heatmap (ct/h)",
-    "heatmap_price_title": "Spot price heatmap (ct/kWh)",
+    "heatmap_price_title": "Spot price heatmap (ct/kWh, net wholesale)",
     "heatmap_spot_mode_label": "Spot view",
     "heatmap_spot_mode_absolute": "Absolute",
     "heatmap_spot_mode_fixed": "Relative to fixed",
     "heatmap_spot_mode_break_even": "Relative to break-even",
-    "heatmap_price_absolute_info": "Ref: absolute spot price",
+    "heatmap_price_absolute_info": "Ref: absolute spot price (net, excl. tax and markup)",
     "heatmap_price_ref_fixed": "Ref: {reference} ct/kWh (Fixed)",
     "heatmap_price_ref_break_even": "Ref: {reference} ct/kWh (Break-even)",
     "heatmap_optimization_info": "Shift score compares each hour with the selected period average. Hours where consumption and price are both above average get negative values because they are expensive and hard to shift. Hours where both are below average get positive values because they are good shift opportunities. Values around 0 are neutral.",
@@ -288,7 +294,7 @@
     "savings_yearly_help": "Savings per 365-day year extrapolated from the selected period.",
     "cost_fixed_label": "Fixed tariff cost:",
     "cost_spot_label": "Spot tariff cost:",
-    "card_tax_note": "All values include {taxRate}% tax."
+    "card_tax_note": "All prices shown are gross and include {taxRate}% tax. Volumetric grid fees and static surcharges are excluded, as they cancel out in the tariff comparison."
   },
   "api": {
     "default_filename": "Unknown.csv",
