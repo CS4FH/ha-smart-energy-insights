@@ -6,6 +6,7 @@ from unittest.mock import patch
 from custom_components.smart_energy_insights.services.pricing_service import PricingConfig
 from custom_components.smart_energy_insights.services.tariff_analysis_service import (
     analyze_tariffs,
+    compute_price_exposure,
 )
 
 
@@ -98,6 +99,72 @@ def test_analyze_tariffs_handles_no_matches() -> None:
     assert result["max_extra_savings_eur"] is None
     assert result["max_penalty_risk_eur"] is None
     assert result["monthly_tariff_comparison"]["matched_hours"] == 0
+
+
+def test_analyze_tariffs_handles_empty_cost_relevant_statistics() -> None:
+    # A household with zero cost-relevant consumption sources (e.g. only PV
+    # self-consumption/battery configured, no grid draw) must not crash
+    # analyze_tariffs; every derived metric should degrade to 0/None.
+    price_series = [
+        {"start": datetime(2026, 1, 1, 0, tzinfo=timezone.utc), "value": 10.0},
+    ]
+    pricing = PricingConfig(
+        fixed_price=15.0,
+        fixed_base_fee=4.9,
+        spot_markup=1.5,
+        spot_base_fee=5.99,
+        tax_rate=20.0,
+    )
+
+    with patch(
+        "custom_components.smart_energy_insights.services.tariff_analysis_service.dt_util.as_local",
+        side_effect=lambda dt: dt,
+    ):
+        result = analyze_tariffs([], price_series, pricing)
+
+    assert result["matched_hours"] == 0
+    assert result["consumption_hours"] == 0
+    assert result["matched_consumption"] == 0.0
+    assert result["delta_total_eur"] == 0.0
+    assert result["break_even_fixed_ct_kwh"] is None
+    assert result["effective_spot_price_ct_kwh"] is None
+    assert result["peak_exposure_percent"] is None
+    assert result["off_peak_share_percent"] is None
+    assert result["monthly_tariff_comparison"]["matched_hours"] == 0
+
+
+def test_compute_price_exposure_ranks_daily_cheapest_and_most_expensive_hours() -> None:
+    statistics = [
+        {"start": datetime(2026, 1, 1, 0, tzinfo=timezone.utc), "state": 1.0},
+        {"start": datetime(2026, 1, 1, 1, tzinfo=timezone.utc), "state": 2.0},
+    ]
+    price_series = [
+        {"start": datetime(2026, 1, 1, 0, tzinfo=timezone.utc), "value": 5.0},
+        {"start": datetime(2026, 1, 1, 1, tzinfo=timezone.utc), "value": 50.0},
+    ]
+
+    with patch(
+        "custom_components.smart_energy_insights.services.tariff_analysis_service.dt_util.as_local",
+        side_effect=lambda dt: dt,
+    ):
+        result = compute_price_exposure(statistics, price_series)
+
+    assert result["matched_consumption"] == 3.0
+    # Both hours fall within the (max) 6h cheapest and most-expensive windows
+    # for their single day, so all consumption counts toward both shares.
+    assert result["peak_exposure_percent"] == 100.0
+    assert result["off_peak_share_percent"] == 100.0
+
+
+def test_compute_price_exposure_handles_no_matches() -> None:
+    result = compute_price_exposure(
+        [{"start": datetime(2026, 1, 1, 0, tzinfo=timezone.utc), "state": 1.0}],
+        [],
+    )
+
+    assert result["matched_consumption"] == 0.0
+    assert result["peak_exposure_percent"] is None
+    assert result["off_peak_share_percent"] is None
 
 
 def test_analyze_tariffs_reports_negative_price_stats_and_completeness_gap() -> None:

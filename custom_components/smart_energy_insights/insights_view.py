@@ -11,6 +11,8 @@ from homeassistant.components.recorder.statistics import StatisticMetaData
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONSUMPTION_SOURCE_ANALYSIS_API_ENDPOINT,
+    CONSUMPTION_SOURCES_API_ENDPOINT,
     DEVICE_ANALYSIS_API_ENDPOINT,
     DEVICES_API_ENDPOINT,
     DOMAIN,
@@ -19,6 +21,10 @@ from .const import (
     UPLOAD_API_ENDPOINT,
 )
 from .repositories.cache_repository import async_load_cache, async_update_cache
+from .repositories.consumption_sources_repository import (
+    async_load_sources,
+    async_save_sources,
+)
 from .repositories.csv_repository import parse_and_validate_csv
 from .repositories.device_repository import async_load_devices, async_save_devices
 from .repositories.statistics_repository import async_add_external_stats
@@ -29,7 +35,7 @@ from .services.pricing_service import (
     get_pricing_config,
 )
 from .services.spot_price_service import async_import_spot_prices_for_range
-from .services.tariff_analysis_service import analyze_tariffs
+from .services.tariff_analysis_service import analyze_tariffs, compute_price_exposure
 from .utils.translation import async_translate
 
 _LOGGER = logging.getLogger(__name__)
@@ -116,6 +122,7 @@ class SmartEnergyInsightsUploadView(HomeAssistantView):
                 available_end = csv_data.get("available_end") or csv_data.get("end")
                 response_data = await _build_analysis_response(
                     hass,
+                    statistics,
                     statistics,
                     "csv",
                     stat_id,
@@ -253,6 +260,7 @@ class SmartEnergyInsightsUploadView(HomeAssistantView):
             cached = await async_load_cache(hass)
             response_data = await _build_analysis_response(
                 hass,
+                statistics,
                 statistics,
                 "csv",
                 stat_id,
@@ -648,9 +656,40 @@ def _statistics_from_rows(
     return statistics
 
 
+def _merge_hourly_statistics(statistics_lists: list[list[dict]]) -> list[dict]:
+    """Sum multiple per-hour statistics series into a single series.
+
+    Used to combine several consumption sources ("Bezugsquellen", e.g. a
+    second smart meter, PV self-consumption, battery discharge) into one
+    household total. The result covers the *union* of hours present in any
+    input series; a source with no data point for a given hour is treated as
+    having contributed 0 for that hour (not as a gap), matching how a
+    household would interpret "no data from this source" as "no consumption
+    from this source" at that time. The cumulative `sum` field is
+    recomputed chronologically over the merged series.
+    """
+    totals: dict[datetime, float] = {}
+    for statistics in statistics_lists:
+        for stat in statistics or []:
+            start = stat.get("start")
+            if start is None:
+                continue
+            totals[start] = totals.get(start, 0.0) + float(stat.get("state", 0.0) or 0.0)
+
+    merged = []
+    running_sum = 0.0
+    for start in sorted(totals):
+        state = totals[start]
+        running_sum += state
+        merged.append({"start": start, "state": state, "sum": running_sum})
+
+    return merged
+
+
 async def _build_analysis_response(
     hass,
-    statistics: list,
+    consumption_statistics: list,
+    cost_statistics: list,
     source: str,
     statistic_id: str,
     filename: str,
@@ -659,17 +698,28 @@ async def _build_analysis_response(
     upload_date_iso: str,
     available_start: str | None = None,
     available_end: str | None = None,
-    sensor_entity_id: str | None = None,
+    sensor_entity_ids: list[str] | None = None,
 ) -> dict:
-    start_iso = statistics[0]["start"].isoformat()
-    end_iso = statistics[-1]["start"].isoformat()
-    avg_consumption = sum(item["state"] for item in statistics) / len(statistics)
+    """Build the analysis response.
+
+    `consumption_statistics` is the household's total consumption
+    ("Gesamtbezug": every configured consumption source, cost-relevant or
+    not) and drives usage/timing figures (heatmaps, summary, general
+    consumption metrics). `cost_statistics` is the subset of consumption that
+    is actually billed (only cost-relevant sources) and is the only series
+    fed into `analyze_tariffs`, so non-cost-relevant sources (e.g. PV,
+    battery) never influence tariff/cost calculations. For CSV uploads (and
+    any other single-series caller), both arguments are the same list.
+    """
+    start_iso = consumption_statistics[0]["start"].isoformat()
+    end_iso = consumption_statistics[-1]["start"].isoformat()
+    avg_consumption = sum(item["state"] for item in consumption_statistics) / len(consumption_statistics)
 
     price_result = {"imported_count": 0, "average_price": None, "series_count": 0}
     try:
-        price_end = statistics[-1]["start"] + timedelta(hours=1)
+        price_end = consumption_statistics[-1]["start"] + timedelta(hours=1)
         price_result = await async_import_spot_prices_for_range(
-            hass, statistics[0]["start"], price_end, missing_only=True
+            hass, consumption_statistics[0]["start"], price_end, missing_only=True
         )
     except Exception as err:
         _LOGGER.warning("Spot price import failed: %s", err, exc_info=True)
@@ -680,18 +730,19 @@ async def _build_analysis_response(
     retail_price_heatmap = build_retail_price_heatmap(
         price_heatmap, pricing_config.tax_rate, pricing_config.spot_markup
     )
-    consumption_heatmap = _build_consumption_heatmap(statistics)
-    seasonal_heatmaps = _build_seasonal_heatmaps(statistics, price_series)
+    consumption_heatmap = _build_consumption_heatmap(consumption_statistics)
+    seasonal_heatmaps = _build_seasonal_heatmaps(consumption_statistics, price_series)
     for season_data in seasonal_heatmaps.values():
         season_data["retail_price_heatmap"] = build_retail_price_heatmap(
             season_data["price_heatmap"], pricing_config.tax_rate, pricing_config.spot_markup
         )
-    summary = _calculate_summary(statistics)
-    consumption_metrics = _derive_consumption_metrics(statistics)
+    summary = _calculate_summary(consumption_statistics)
+    consumption_metrics = _derive_consumption_metrics(consumption_statistics)
     price_metrics = _derive_price_metrics(price_series)
+    total_price_exposure = compute_price_exposure(consumption_statistics, price_series)
 
     tariff_analysis = analyze_tariffs(
-        statistics,
+        cost_statistics,
         price_series,
         pricing_config,
     )
@@ -707,7 +758,7 @@ async def _build_analysis_response(
         "csv_available": csv_available,
         "sensor_available": sensor_available,
         "success": True,
-        "count": len(statistics),
+        "count": len(consumption_statistics),
         "statistic_id": statistic_id,
         "start": start_iso,
         "end": end_iso,
@@ -741,6 +792,8 @@ async def _build_analysis_response(
         "max_penalty_risk_eur": tariff_analysis.get("max_penalty_risk_eur"),
         "peak_exposure_percent": tariff_analysis.get("peak_exposure_percent"),
         "off_peak_share_percent": tariff_analysis.get("off_peak_share_percent"),
+        "total_peak_exposure_percent": total_price_exposure.get("peak_exposure_percent"),
+        "total_off_peak_share_percent": total_price_exposure.get("off_peak_share_percent"),
         "price_imported_count": price_result.get("imported_count"),
         "price_series_count": price_result.get("series_count"),
         "consumption_heatmap": consumption_heatmap,
@@ -770,8 +823,8 @@ async def _build_analysis_response(
         "upload_date": upload_date_iso,
     }
 
-    if sensor_entity_id:
-        response_data["sensor_entity_id"] = sensor_entity_id
+    if sensor_entity_ids:
+        response_data["sensor_entity_ids"] = sensor_entity_ids
 
     return response_data
 
@@ -791,15 +844,9 @@ class SmartEnergyInsightsSensorView(HomeAssistantView):
         except Exception:
             return await _error_response(hass, "api.error.internal_server", status=500)
 
-        entity_id = payload.get("entity_id")
-        if not entity_id:
-            return await _error_response(hass, "api.error.sensor_required")
-
-        sensor = _get_energy_sensor(hass, entity_id)
-        if not sensor:
-            return await _error_response(hass, "api.error.invalid_sensor")
-        state, unit_factor = sensor
-        attrs = state.attributes or {}
+        sources = await async_load_sources(hass)
+        if not sources:
+            return await _error_response(hass, "api.error.no_consumption_sources")
 
         range_start = payload.get("start")
         range_end = payload.get("end")
@@ -819,28 +866,64 @@ class SmartEnergyInsightsSensorView(HomeAssistantView):
             start_time = range_start_time
             end_time = range_end_time
 
+        # Skip (and log) sources whose sensor is no longer a valid/available
+        # energy sensor rather than failing the whole analysis - a household
+        # may have removed or renamed a device without cleaning up the list.
+        valid_sources = []
+        for source in sources:
+            sensor = _get_energy_sensor(hass, source["entity_id"])
+            if not sensor:
+                _LOGGER.warning(
+                    "Consumption source %s is no longer a valid energy sensor; skipping",
+                    source["entity_id"],
+                )
+                continue
+            _, unit_factor = sensor
+            valid_sources.append({**source, "unit_factor": unit_factor})
+
+        if not valid_sources:
+            return await _error_response(hass, "api.error.no_sensor_data")
+
         fetch_start = start_time - timedelta(hours=1)
-        stats = await async_get_statistics_during_period(
+        stats_by_id = await async_get_statistics_during_period(
             hass,
             fetch_start,
             end_time,
-            {entity_id},
+            {source["entity_id"] for source in valid_sources},
             period="hour",
             types={"sum", "state"},
             units=None,
         )
 
-        rows = stats.get(entity_id, [])
-        if not rows:
+        # Two merged series: `total_series`/`total_statistics` is the
+        # household's Gesamtbezug (every configured source); `cost_series`/
+        # `cost_statistics` only includes sources flagged cost-relevant and
+        # is the only one fed into tariff/cost calculations
+        # (see _build_analysis_response).
+        total_series = []
+        cost_series = []
+        for source in valid_sources:
+            rows = stats_by_id.get(source["entity_id"], [])
+            if not rows:
+                continue
+            source_statistics = _statistics_from_rows(
+                rows, unit_factor=source["unit_factor"], min_start=start_time
+            )
+            if not source_statistics:
+                continue
+            total_series.append(source_statistics)
+            if source["cost_relevant"]:
+                cost_series.append(source_statistics)
+
+        total_statistics = _merge_hourly_statistics(total_series)
+        if not total_statistics:
             return await _error_response(hass, "api.error.no_sensor_data")
 
-        statistics = _statistics_from_rows(rows, unit_factor=unit_factor, min_start=start_time)
-
-        if not statistics:
-            return await _error_response(hass, "api.error.no_sensor_data")
+        cost_statistics = _merge_hourly_statistics(cost_series)
 
         upload_date_iso = dt_util.now().isoformat()
-        sensor_name = attrs.get("friendly_name") or entity_id
+        sensor_entity_ids = [source["entity_id"] for source in valid_sources]
+        display_name = ", ".join(source["name"] for source in valid_sources)
 
         cached = await async_load_cache(hass)
         cached_sensor = cached.get("sensor_data") if cached else None
@@ -850,20 +933,21 @@ class SmartEnergyInsightsSensorView(HomeAssistantView):
             available_start = cached_sensor.get("available_start") or cached_sensor.get("start")
             available_end = cached_sensor.get("available_end") or cached_sensor.get("end")
         if not available_start or not available_end:
-            available_start = statistics[0]["start"].isoformat()
-            available_end = statistics[-1]["start"].isoformat()
+            available_start = total_statistics[0]["start"].isoformat()
+            available_end = total_statistics[-1]["start"].isoformat()
         response_data = await _build_analysis_response(
             hass,
-            statistics,
+            total_statistics,
+            cost_statistics,
             "sensor",
-            entity_id,
-            sensor_name,
+            "|".join(sensor_entity_ids),
+            display_name,
             bool(cached.get("csv_data")),
             True,
             upload_date_iso,
             available_start=available_start,
             available_end=available_end,
-            sensor_entity_id=entity_id,
+            sensor_entity_ids=sensor_entity_ids,
         )
 
         if not (range_start or range_end):
@@ -872,7 +956,7 @@ class SmartEnergyInsightsSensorView(HomeAssistantView):
                 {
                     "sensor_data": response_data,
                     "active_source": "sensor",
-                    "sensor_entity_id": entity_id,
+                    "sensor_entity_ids": sensor_entity_ids,
                 },
             )
 
@@ -993,6 +1077,150 @@ class SmartEnergyInsightsDeviceAnalysisView(HomeAssistantView):
         response_data = _device_analysis_response(
             entity_id,
             device["name"],
+            statistics,
+            analysis_start,
+            analysis_end,
+        )
+        return Response(status=200, text=json.dumps(response_data), content_type="application/json")
+
+
+class SmartEnergyInsightsConsumptionSourcesView(HomeAssistantView):
+    """GET/PUT persistence for consumption sources ("Bezugsquellen").
+
+    Each entry additionally carries a `cost_relevant` flag: every configured
+    source is summed into the household's total consumption ("Gesamtbezug"),
+    but only `cost_relevant=true` sources are included in tariff/cost
+    calculations (see `_merge_hourly_statistics` and
+    `SmartEnergyInsightsSensorView`).
+    """
+
+    url = CONSUMPTION_SOURCES_API_ENDPOINT
+    name = "api:smart_energy_insights:consumption_sources"
+    requires_auth = True
+
+    async def get(self, request: Request) -> Response:
+        hass = request.app["hass"]
+        sources = await async_load_sources(hass)
+        return Response(
+            status=200,
+            text=json.dumps({"success": True, "sources": sources}),
+            content_type="application/json",
+        )
+
+    async def put(self, request: Request) -> Response:
+        hass = request.app["hass"]
+        try:
+            payload = await request.json()
+        except Exception:
+            return await _error_response(hass, "api.error.internal_server", status=400)
+
+        sources = payload.get("sources")
+        if not isinstance(sources, list):
+            return await _error_response(hass, "api.error.invalid_consumption_sources")
+
+        entity_ids = set()
+        validated = []
+        for source in sources:
+            if not isinstance(source, dict):
+                return await _error_response(hass, "api.error.invalid_consumption_sources")
+            entity_id = str(source.get("entity_id") or "").strip()
+            name = str(source.get("name") or "").strip()
+            if not entity_id or not name:
+                return await _error_response(hass, "api.error.consumption_source_name_required")
+            if entity_id in entity_ids:
+                return await _error_response(hass, "api.error.duplicate_consumption_source")
+            if not _get_energy_sensor(hass, entity_id):
+                return await _error_response(hass, "api.error.invalid_sensor")
+            entity_ids.add(entity_id)
+            validated.append(
+                {
+                    "entity_id": entity_id,
+                    "name": name,
+                    "cost_relevant": bool(source.get("cost_relevant", False)),
+                }
+            )
+
+        saved = await async_save_sources(hass, validated)
+        return Response(
+            status=200,
+            text=json.dumps({"success": True, "sources": saved}),
+            content_type="application/json",
+        )
+
+
+class SmartEnergyInsightsConsumptionSourceAnalysisView(HomeAssistantView):
+    """Per-source heatmap view for an individual consumption source.
+
+    Mirrors `SmartEnergyInsightsDeviceAnalysisView` but looks entities up in
+    the consumption-sources list, so each Bezugsquelle can be inspected
+    individually (e.g. via the Usage tab's consumption-profile picker)
+    without affecting the combined Gesamtbezug/cost analysis.
+    """
+
+    url = CONSUMPTION_SOURCE_ANALYSIS_API_ENDPOINT
+    name = "api:smart_energy_insights:consumption_source_analysis"
+    requires_auth = True
+
+    async def post(self, request: Request) -> Response:
+        hass = request.app["hass"]
+        try:
+            payload = await request.json()
+        except Exception:
+            return await _error_response(hass, "api.error.internal_server", status=400)
+
+        entity_id = str(payload.get("entity_id") or "").strip()
+        sources = await async_load_sources(hass)
+        source = next((item for item in sources if item["entity_id"] == entity_id), None)
+        if not source:
+            return await _error_response(hass, "api.error.consumption_source_not_configured", status=404)
+
+        sensor = _get_energy_sensor(hass, entity_id)
+        if not sensor:
+            return await _error_response(hass, "api.error.invalid_sensor")
+        _, unit_factor = sensor
+
+        profile_start, profile_end = _get_active_profile_range(await async_load_cache(hass))
+        if not profile_start or not profile_end:
+            return await _error_response(hass, "api.error.no_active_profile")
+
+        requested_start, requested_end = _resolve_date_range(
+            payload.get("start"), payload.get("end"), profile_start, profile_end
+        )
+        start_time = max(profile_start, requested_start) if requested_start else profile_start
+        end_time = min(profile_end, requested_end) if requested_end else profile_end
+        if start_time >= end_time:
+            return Response(
+                status=409,
+                text=json.dumps({"error": "No overlapping data range", "code": "no_overlap"}),
+                content_type="application/json",
+            )
+
+        rows_by_id = await async_get_statistics_during_period(
+            hass,
+            start_time - timedelta(hours=1),
+            end_time,
+            {entity_id},
+            period="hour",
+            types={"sum", "state"},
+            units=None,
+        )
+        statistics = _statistics_from_rows(
+            rows_by_id.get(entity_id, []),
+            unit_factor=unit_factor,
+            min_start=start_time,
+        )
+        if not statistics:
+            return Response(
+                status=409,
+                text=json.dumps({"error": "No overlapping data range", "code": "no_overlap"}),
+                content_type="application/json",
+            )
+
+        analysis_start = max(start_time, statistics[0]["start"])
+        analysis_end = min(end_time, statistics[-1]["start"] + timedelta(hours=1))
+        response_data = _device_analysis_response(
+            entity_id,
+            source["name"],
             statistics,
             analysis_start,
             analysis_end,

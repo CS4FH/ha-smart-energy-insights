@@ -3,10 +3,13 @@
  */
 
 import {
+  loadConsumptionSourceAnalysis,
+  loadConsumptionSources,
   loadDeviceAnalysis,
   loadHeatmaps,
   loadMonitoredDevices,
   loadSensorData,
+  saveConsumptionSources,
   saveMonitoredDevices,
   setActiveSource,
   uploadCsv
@@ -39,9 +42,10 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     if (isFirstLoad) {
       this.loadHeatmapsFromBackend();
       this.loadMonitoredDevicesFromBackend();
+      this.loadConsumptionSourcesFromBackend();
     }
     if (this.contentAdded) {
-      this.syncSensorPicker();
+      this.syncConsumptionSourcePicker();
       this.syncDevicePicker();
     }
   }
@@ -113,30 +117,9 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
         "card.source_csv_description",
         "Upload a load profile CSV to analyze past consumption."
       ),
-      sourceSensorTitle: this.localize("card.source_sensor_title", "Use a sensor"),
-      sourceSensorDescription: this.localize(
-        "card.source_sensor_description",
-        "Select an energy sensor and load the last 12 months."
-      ),
-      sensorCardTitle: this.localize("card.sensor_card_title", "Choose a sensor"),
-      sensorPickerLabel: this.localize("card.sensor_picker_label", "Select energy sensor"),
-      sensorPickerPlaceholder: this.localize("card.sensor_picker_placeholder", "Choose a sensor"),
-      sensorHint: this.localize(
-        "card.sensor_hint",
-        "Uses up to the last 12 months of statistics."
-      ),
-      sensorNoneOption: this.localize(
-        "card.sensor_none_option",
-        "No compatible sensor available"
-      ),
       sensorLoading: this.localize("card.sensor_loading", "Loading sensor data..."),
       sensorNoData: this.localize("card.sensor_no_data", "No statistics found for this sensor."),
-      sensorInvalid: this.localize(
-        "card.sensor_invalid",
-        "Selected entity is not a supported energy sensor."
-      ),
       sensorLoaded: this.localize("card.sensor_loaded", "Sensor data loaded."),
-      sensorLoadButton: this.localize("card.sensor_load_button", "Load profile"),
       devicesTitle: this.localize("card.devices_title", "Monitored devices"),
       devicesDescription: this.localize(
         "card.devices_description",
@@ -159,6 +142,30 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       ),
       deviceNameRequired: this.localize("card.device_name_required", "Enter a display name."),
       deviceSaveError: this.localize("card.device_save_error", "Could not save monitored devices."),
+      consumptionSourcesTitle: this.localize("card.consumption_sources_title", "Consumption sources"),
+      consumptionSourcesDescription: this.localize(
+        "card.consumption_sources_description",
+        "Add every energy sensor that contributes to your household's total consumption (e.g. a smart meter, PV self-consumption or battery discharge)."
+      ),
+      consumptionSourcesEmpty: this.localize("card.consumption_sources_empty", "No consumption sources configured."),
+      consumptionSourcesRefresh: this.localize("card.consumption_sources_refresh", "Refresh analysis"),
+      consumptionSourceAdd: this.localize("card.consumption_source_add", "Add source"),
+      consumptionSourceSave: this.localize("card.consumption_source_save", "Save"),
+      consumptionSourceRemove: this.localize("card.consumption_source_remove", "Remove source"),
+      consumptionSourceNameLabel: this.localize("card.consumption_source_name_label", "Display name"),
+      consumptionSourceSensorLabel: this.localize("card.consumption_source_sensor_label", "Energy sensor"),
+      consumptionSourceSensorPlaceholder: this.localize("card.consumption_source_sensor_placeholder", "Choose an energy sensor"),
+      consumptionSourceSensorNoneOption: this.localize(
+        "card.consumption_source_sensor_none_option",
+        "No additional compatible energy sensor available. A sensor already used as a monitored device cannot be added as a consumption source."
+      ),
+      consumptionSourceCostRelevantLabel: this.localize("card.consumption_source_cost_relevant_label", "Cost-relevant"),
+      consumptionSourceCostRelevantHelp: this.localize(
+        "card.consumption_source_cost_relevant_help",
+        "Only cost-relevant sources are billed and used for tariff comparisons. Choose a sensor that measures delivered/self-consumed/discharged energy, not gross production or charging."
+      ),
+      consumptionSourceNameRequired: this.localize("card.consumption_source_name_required", "Enter a display name."),
+      consumptionSourceSaveError: this.localize("card.consumption_source_save_error", "Could not save consumption sources."),
       uploadTitle: this.localize("card.upload_title", "Upload new CSV"),
       uploadPrompt: this.localize("card.upload_prompt", "Drag & Drop or"),
       uploadFileSelect: this.localize("card.upload_file_select", "Choose file"),
@@ -548,9 +555,10 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     this.innerHTML = renderBaseCard(texts);
 
     this.attachEventListeners();
-    this.syncSensorPicker();
+    this.syncConsumptionSourcePicker();
     this.syncDevicePicker();
     this.renderMonitoredDevices();
+    this.renderConsumptionSources();
     this.updateSourceUI();
     this.updateLayoutVisibility();
     this.applyStyles();
@@ -564,14 +572,18 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     const cancelBtn = this.querySelector("#cancelBtn");
     const sourceCsvSwitch = this.querySelector("#sourceCsvSwitch");
     const sourceSensorSwitch = this.querySelector("#sourceSensorSwitch");
-    const sensorPicker = this.querySelector("#sensorPicker");
-    const sensorLoadBtn = this.querySelector("#sensorLoadBtn");
     const integrationSettingsBtn = this.querySelector("#integrationSettingsBtn");
     const addDeviceBtn = this.querySelector("#addDeviceBtn");
     const cancelDeviceBtn = this.querySelector("#cancelDeviceBtn");
     const saveDeviceBtn = this.querySelector("#saveDeviceBtn");
     const deviceSensorPicker = this.querySelector("#deviceSensorPicker");
     const monitoredDevicesList = this.querySelector("#monitoredDevicesList");
+    const addConsumptionSourceBtn = this.querySelector("#addConsumptionSourceBtn");
+    const cancelConsumptionSourceBtn = this.querySelector("#cancelConsumptionSourceBtn");
+    const saveConsumptionSourceBtn = this.querySelector("#saveConsumptionSourceBtn");
+    const consumptionSourcesRefreshBtn = this.querySelector("#consumptionSourcesRefreshBtn");
+    const consumptionSourceSensorPicker = this.querySelector("#consumptionSourceSensorPicker");
+    const consumptionSourcesList = this.querySelector("#consumptionSourcesList");
 
     filePickerBtn.addEventListener("click", () => fileInput.click());
     fileInput.addEventListener("change", (e) => {
@@ -626,107 +638,86 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       });
     }
 
-    if (sensorLoadBtn) {
-      sensorLoadBtn.addEventListener("click", () => {
-        if (this._selectedSensor) {
-          this.loadSensorProfile(this._selectedSensor);
-        }
+    if (addConsumptionSourceBtn) addConsumptionSourceBtn.addEventListener("click", () => this.openConsumptionSourceEditor());
+    if (cancelConsumptionSourceBtn) cancelConsumptionSourceBtn.addEventListener("click", () => this.closeConsumptionSourceEditor());
+    if (saveConsumptionSourceBtn) saveConsumptionSourceBtn.addEventListener("click", () => this.addConsumptionSource());
+    if (consumptionSourcesRefreshBtn) {
+      consumptionSourcesRefreshBtn.addEventListener("click", () => this.loadSensorProfile());
+    }
+    if (consumptionSourceSensorPicker) {
+      consumptionSourceSensorPicker.addEventListener("value-changed", (event) => {
+        this.selectConsumptionSourceSensor(event.detail?.value || null);
+      });
+      consumptionSourceSensorPicker.addEventListener("change", (event) => {
+        this.selectConsumptionSourceSensor(event.target?.value || null);
       });
     }
-
-    if (sensorPicker) {
-      if (sensorPicker.tagName === "HA-ENTITY-PICKER") {
-        sensorPicker.addEventListener("value-changed", (event) => {
-          const value = event.detail && event.detail.value ? event.detail.value : null;
-          this._selectedSensor = value;
-          this.saveUiState();
-          const sensorLoadBtn = this.querySelector("#sensorLoadBtn");
-          if (sensorLoadBtn) sensorLoadBtn.disabled = !value;
-        });
-      } else {
-        sensorPicker.addEventListener("change", (event) => {
-          const value = event.target && event.target.value ? event.target.value : null;
-          this._selectedSensor = value;
-          this.saveUiState();
-          const sensorLoadBtn = this.querySelector("#sensorLoadBtn");
-          if (sensorLoadBtn) sensorLoadBtn.disabled = !value;
-        });
-      }
+    if (consumptionSourcesList) {
+      consumptionSourcesList.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-source-action]");
+        if (!button) return;
+        const entityId = button.dataset.entityId;
+        if (button.dataset.sourceAction === "remove") this.removeConsumptionSource(entityId);
+      });
+      consumptionSourcesList.addEventListener("change", (event) => {
+        const checkbox = event.target.closest("input[data-source-cost-relevant]");
+        if (!checkbox) return;
+        this.toggleConsumptionSourceCostRelevant(checkbox.dataset.sourceCostRelevant, checkbox.checked);
+      });
     }
   }
 
-syncSensorPicker() {
-    let picker = this.querySelector("#sensorPicker");
+  syncConsumptionSourcePicker() {
+    let picker = this.querySelector("#consumptionSourceSensorPicker");
     if (!picker || !this._hass) return;
-
     const texts = this._texts || this.getTexts();
-    const matches = Object.values(this._hass.states || {}).filter((state) => {
-      const attrs = state.attributes || {};
-      return attrs.device_class === "energy" && (attrs.state_class === "total_increasing" || attrs.state_class === "total");
-    });
+    const excluded = new Set((this._consumptionSources || []).map((source) => source.entity_id));
+    (this._monitoredDevices || []).forEach((device) => excluded.add(device.entity_id));
+    const matches = this.getCompatibleEnergySensors().filter((state) => !excluded.has(state.entity_id));
+    const entityIds = matches.map((state) => state.entity_id);
 
     if (picker.tagName === "HA-ENTITY-PICKER" && !customElements.get("ha-entity-picker")) {
       const select = document.createElement("select");
-      select.id = "sensorPicker";
+      select.id = "consumptionSourceSensorPicker";
       select.className = "sensor-select";
       select.addEventListener("change", (e) => {
-        this._selectedSensor = e.target.value || null;
-        this.saveUiState();
-        const sensorLoadBtn = this.querySelector("#sensorLoadBtn");
-        if (sensorLoadBtn) sensorLoadBtn.disabled = !this._selectedSensor;
+        this.selectConsumptionSourceSensor(e.target.value || null);
       });
       picker.replaceWith(select);
       picker = select;
     }
 
-    const currentSensorsHash = matches.map(m => m.entity_id).sort().join(",");
-    const shouldRebuild = picker.dataset.sensorsHash !== currentSensorsHash;
-
-    if (shouldRebuild) {
-      picker.dataset.sensorsHash = currentSensorsHash;
-    }
-
-    const targetValue = this._selectedSensor || "";
-    const isDisabled = matches.length === 0;
+    const targetValue = this._consumptionSourceEditorEntityId || "";
+    const isDisabled = entityIds.length === 0;
 
     if (picker.tagName === "HA-ENTITY-PICKER") {
-      if (picker.hass !== this._hass) {
-        picker.hass = this._hass;
-      }
-      if (picker.label !== texts.sensorPickerLabel) {
-        picker.label = texts.sensorPickerLabel;
-      }
-      if (picker.placeholder !== texts.sensorPickerPlaceholder) {
-        picker.placeholder = texts.sensorPickerPlaceholder;
-      }
-      
-      if (!picker.includeDomains || picker.includeDomains.length === 0 || picker.includeDomains[0] !== "sensor") {
-        picker.includeDomains = ["sensor"];
-      }
-
+      picker.hass = this._hass;
+      picker.label = texts.consumptionSourceSensorLabel;
+      picker.placeholder = texts.consumptionSourceSensorPlaceholder;
+      picker.includeDomains = ["sensor"];
+      picker.includeEntities = entityIds;
+      picker.excludeEntities = [...excluded];
+      picker.disabled = isDisabled;
       if (picker.value !== targetValue) {
         picker.value = targetValue;
       }
-      if (picker.disabled !== isDisabled) {
-        picker.disabled = isDisabled;
-      }
     } else {
+      const currentSensorsHash = entityIds.slice().sort().join(",");
+      const shouldRebuild = picker.dataset.sensorsHash !== currentSensorsHash;
       if (shouldRebuild) {
+        picker.dataset.sensorsHash = currentSensorsHash;
         picker.innerHTML = "";
         const placeholder = document.createElement("option");
         placeholder.value = "";
-        placeholder.textContent = texts.sensorPickerPlaceholder;
+        placeholder.textContent = texts.consumptionSourceSensorPlaceholder;
         placeholder.disabled = true;
         picker.appendChild(placeholder);
 
         matches
-          .map((state) => {
-            const attrs = state.attributes || {};
-            return {
-              id: state.entity_id,
-              name: attrs.friendly_name || state.entity_id
-            };
-          })
+          .map((state) => ({
+            id: state.entity_id,
+            name: state.attributes?.friendly_name || state.entity_id
+          }))
           .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
           .forEach((sensor) => {
             const option = document.createElement("option");
@@ -735,35 +726,20 @@ syncSensorPicker() {
             picker.appendChild(option);
           });
       }
-
       if (picker.value !== targetValue) {
         picker.value = targetValue;
       }
-      if (picker.disabled !== isDisabled) {
-        picker.disabled = isDisabled;
-      }
+      picker.disabled = isDisabled;
     }
 
-    this.updateSensorMessageAndButton(matches.length, texts);
-  }
-
-  updateSensorMessageAndButton(matchesCount, texts) {
-    const infoMessage = texts.sensorNoneOption;
-    const messageEl = this.querySelector("#sensorMessage");
-    
-    if (!this._selectedSensor && matchesCount === 0) {
-      this.showSensorMessage(infoMessage, "info");
-    } else if (messageEl && messageEl.classList.contains("info")) {
-      messageEl.style.display = "none";
-      messageEl.textContent = "";
-      messageEl.className = "sensor-message";
-    }
-
-    const sensorLoadBtn = this.querySelector("#sensorLoadBtn");
-    if (sensorLoadBtn) {
-      const targetDisabled = !this._selectedSensor;
-      if (sensorLoadBtn.disabled !== targetDisabled) {
-        sensorLoadBtn.disabled = targetDisabled;
+    const messageEl = this.querySelector("#consumptionSourceSensorMessage");
+    if (messageEl) {
+      if (entityIds.length === 0) {
+        messageEl.style.display = "";
+        messageEl.textContent = texts.consumptionSourceSensorNoneOption;
+      } else {
+        messageEl.style.display = "none";
+        messageEl.textContent = "";
       }
     }
   }
@@ -849,9 +825,7 @@ syncSensorPicker() {
     if (!picker || !this._hass) return;
     const texts = this._texts || this.getTexts();
     const excluded = new Set((this._monitoredDevices || []).map((device) => device.entity_id));
-    if (this._activeSource === "sensor" && this._loadedSensorEntityId) {
-      excluded.add(this._loadedSensorEntityId);
-    }
+    (this._consumptionSources || []).forEach((source) => excluded.add(source.entity_id));
     const matches = this.getCompatibleEnergySensors().filter((state) => !excluded.has(state.entity_id));
     const entityIds = matches.map((state) => state.entity_id);
 
@@ -979,6 +953,133 @@ syncSensorPicker() {
     );
   }
 
+  async loadConsumptionSourcesFromBackend() {
+    try {
+      this._consumptionSources = await loadConsumptionSources(this._hass);
+    } catch (error) {
+      console.error("Failed to load consumption sources", error);
+      this._consumptionSources = [];
+    }
+    this.renderConsumptionSources();
+    this.syncConsumptionSourcePicker();
+    this.syncDevicePicker();
+  }
+
+  renderConsumptionSources() {
+    const list = this.querySelector("#consumptionSourcesList");
+    if (!list) return;
+
+    const texts = this._texts || this.getTexts();
+    const sources = Array.isArray(this._consumptionSources) ? this._consumptionSources : [];
+    if (sources.length === 0) {
+      list.innerHTML = `<div class="devices-empty">${texts.consumptionSourcesEmpty}</div>`;
+      return;
+    }
+
+    list.innerHTML = sources.map((source) => `
+      <div class="monitored-device-row">
+        <div class="monitored-device-fields">
+          <input class="device-name-input" data-source-name="${this.escapeAttribute(source.entity_id)}" value="${this.escapeAttribute(source.name)}" maxlength="80" aria-label="${texts.consumptionSourceNameLabel}" />
+          <span class="monitored-device-entity">${this.escapeAttribute(source.entity_id)}</span>
+          <label class="consumption-source-cost-relevant">
+            <input type="checkbox" data-source-cost-relevant="${this.escapeAttribute(source.entity_id)}" ${source.cost_relevant ? "checked" : ""} />
+            ${texts.consumptionSourceCostRelevantLabel}
+          </label>
+        </div>
+        <div class="monitored-device-actions">
+          <button class="device-icon-button danger" type="button" data-source-action="remove" data-entity-id="${this.escapeAttribute(source.entity_id)}" title="${texts.consumptionSourceRemove}" aria-label="${texts.consumptionSourceRemove}"><ha-icon icon="mdi:delete-outline"></ha-icon></button>
+        </div>
+      </div>
+    `).join("");
+  }
+
+  openConsumptionSourceEditor() {
+    const editor = this.querySelector("#consumptionSourceEditor");
+    if (editor) editor.hidden = false;
+    this._consumptionSourceEditorEntityId = null;
+    const nameInput = this.querySelector("#consumptionSourceNameInput");
+    if (nameInput) nameInput.value = "";
+    const costCheckbox = this.querySelector("#consumptionSourceCostRelevantInput");
+    if (costCheckbox) costCheckbox.checked = false;
+    this.syncConsumptionSourcePicker();
+  }
+
+  closeConsumptionSourceEditor() {
+    const editor = this.querySelector("#consumptionSourceEditor");
+    if (editor) editor.hidden = true;
+    this._consumptionSourceEditorEntityId = null;
+  }
+
+  selectConsumptionSourceSensor(entityId) {
+    this._consumptionSourceEditorEntityId = entityId;
+    const state = entityId ? this._hass?.states?.[entityId] : null;
+    const nameInput = this.querySelector("#consumptionSourceNameInput");
+    if (nameInput && state && !nameInput.value.trim()) {
+      nameInput.value = state.attributes?.friendly_name || entityId;
+    }
+  }
+
+  async persistConsumptionSources(sources) {
+    const texts = this._texts || this.getTexts();
+    try {
+      this._consumptionSources = await saveConsumptionSources(this._hass, sources);
+      this._deviceAnalysisProfileKey = null;
+      this.closeConsumptionSourceEditor();
+      this.renderConsumptionSources();
+      this.syncConsumptionSourcePicker();
+      this.syncDevicePicker();
+      if (this._consumptionSources.length > 0) {
+        await this.loadSensorProfile();
+      } else if (this._activeSource === "sensor") {
+        this.clearDashboardForSourceSwitch();
+      }
+    } catch (error) {
+      const message = this.querySelector("#consumptionSourceMessage");
+      if (message) {
+        message.hidden = false;
+        message.className = "sensor-message error";
+        message.textContent = error.message || texts.consumptionSourceSaveError;
+      }
+    }
+  }
+
+  addConsumptionSource() {
+    const texts = this._texts || this.getTexts();
+    const name = this.querySelector("#consumptionSourceNameInput")?.value.trim() || "";
+    const costRelevant = this.querySelector("#consumptionSourceCostRelevantInput")?.checked || false;
+    if (!this._consumptionSourceEditorEntityId || !name) {
+      const message = this.querySelector("#consumptionSourceMessage");
+      if (message) {
+        message.hidden = false;
+        message.className = "sensor-message error";
+        message.textContent = texts.consumptionSourceNameRequired;
+      }
+      return;
+    }
+    this.persistConsumptionSources([
+      ...(this._consumptionSources || []),
+      { entity_id: this._consumptionSourceEditorEntityId, name, cost_relevant: costRelevant }
+    ]);
+  }
+
+  toggleConsumptionSourceCostRelevant(entityId, costRelevant) {
+    this.persistConsumptionSources(
+      (this._consumptionSources || []).map((source) => (
+        source.entity_id === entityId ? { ...source, cost_relevant: costRelevant } : source
+      ))
+    );
+  }
+
+  removeConsumptionSource(entityId) {
+    if (this._selectedConsumptionProfile === entityId) {
+      this._selectedConsumptionProfile = "total";
+      this._selectedDeviceAnalysis = null;
+    }
+    this.persistConsumptionSources(
+      (this._consumptionSources || []).filter((source) => source.entity_id !== entityId)
+    );
+  }
+
   updateSourceUI() {
     const isSensor = this._activeSource === "sensor";
     const sourceCsvSwitch = this.querySelector("#sourceCsvSwitch");
@@ -1101,6 +1202,9 @@ syncSensorPicker() {
     if (source === "sensor") {
       if (this._lastSensorData) {
         this.renderDashboard(this._lastSensorData, { collapseSourcePanel: false });
+      } else if ((this._consumptionSources || []).length > 0) {
+        this.clearDashboardForSourceSwitch();
+        this.loadSensorProfile();
       } else {
         this.clearDashboardForSourceSwitch();
         this.showSensorMessage("", "");
@@ -1122,11 +1226,11 @@ syncSensorPicker() {
     el.textContent = message;
   }
 
-  async loadSensorProfile(entityId) {
+  async loadSensorProfile() {
     const texts = this._texts || this.getTexts();
     this.showSensorMessage(texts.sensorLoading, "loading");
     try {
-      const data = await loadSensorData(this._hass, entityId);
+      const data = await loadSensorData(this._hass);
       if (!data) {
         this.showSensorMessage(texts.sensorNoData, "error");
         return;
@@ -1141,7 +1245,6 @@ syncSensorPicker() {
       this.updateSourceUI();
       this.showSensorMessage(texts.sensorLoaded, "success");
       this._lastSensorData = data;
-      this._loadedSensorEntityId = data.sensor_entity_id || entityId;
       this.renderDashboard(data, { collapseSourcePanel: true });
     } catch (error) {
       this.showSensorMessage(error.message || texts.sensorNoData, "error");
@@ -1193,10 +1296,8 @@ syncSensorPicker() {
       let data = await loadHeatmaps(this._hass);
       if (data) {
         if (data.source && !this._storedSource) this._activeSource = data.source;
-        if (data.sensor_entity_id) this._selectedSensor = data.sensor_entity_id;
-        if (data.source === "sensor" && data.sensor_entity_id) {
-          data = await loadSensorData(this._hass, data.sensor_entity_id);
-          this._loadedSensorEntityId = data.sensor_entity_id;
+        if (data.source === "sensor") {
+          data = await loadSensorData(this._hass);
         }
         if (data.csv_available !== undefined) {
           this._csvAvailable = data.csv_available;
@@ -1205,7 +1306,7 @@ syncSensorPicker() {
         if (data.source === "csv") this._lastCsvData = data;
         if (data.source === "sensor") this._lastSensorData = data;
         this.updateSourceUI();
-        this.syncSensorPicker();
+        this.syncConsumptionSourcePicker();
         if (this._activeSource === data.source) {
           this.renderDashboard(data, { collapseSourcePanel: true });
         }
@@ -1266,9 +1367,6 @@ syncSensorPicker() {
 
     this.latestData = response;
     this.updateLayoutVisibility();
-    if (response.source === "sensor" && response.sensor_entity_id) {
-      this._loadedSensorEntityId = response.sensor_entity_id;
-    }
 
     if (this._activeSource !== "sensor") {
       this.querySelector("#uploadContent").classList.add("data-loaded");
@@ -1308,8 +1406,8 @@ syncSensorPicker() {
       maxPenaltyRiskEur: response.max_penalty_risk_eur,
       fixedTariffCostEur: response.tariff_totals?.fixed_cost_eur,
       spotTariffCostEur: response.tariff_totals?.spot_cost_eur,
-      peakExposurePercent: response.peak_exposure_percent,
-      offPeakSharePercent: response.off_peak_share_percent,
+      peakExposurePercent: response.total_peak_exposure_percent,
+      offPeakSharePercent: response.total_off_peak_share_percent,
       spotCheaperShare: response.spot_cheaper_share,
       negativePriceHours: response.negative_price_hours,
       negativePriceShare: response.negative_price_share,
@@ -1421,29 +1519,36 @@ syncSensorPicker() {
 
   getDeviceAnalysisKey(response) {
     const devices = (this._monitoredDevices || []).map((device) => device.entity_id).join(",");
-    return `${response.source || ""}|${response.available_start || response.start || ""}|${response.available_end || response.end || ""}|${devices}`;
+    const sources = (this._consumptionSources || []).map((source) => source.entity_id).join(",");
+    return `${response.source || ""}|${response.available_start || response.start || ""}|${response.available_end || response.end || ""}|${devices}|${sources}`;
   }
 
   async refreshDeviceAnalyses(response) {
     const devices = this._monitoredDevices || [];
+    const sources = this._consumptionSources || [];
     const key = this.getDeviceAnalysisKey(response);
     if (this._deviceAnalysisProfileKey === key) return;
     this._deviceAnalysisProfileKey = key;
     this._deviceAnalysisCache = new Map();
     this._unavailableDevices = new Set();
-    if (devices.length === 0) return;
+    if (devices.length === 0 && sources.length === 0) return;
 
-    await Promise.all(devices.map(async (device) => {
+    const analysisEntries = [
+      ...devices.map((device) => ({ entityId: device.entity_id, loadAnalysis: loadDeviceAnalysis })),
+      ...sources.map((source) => ({ entityId: source.entity_id, loadAnalysis: loadConsumptionSourceAnalysis }))
+    ];
+
+    await Promise.all(analysisEntries.map(async ({ entityId, loadAnalysis }) => {
       try {
-        const analysis = await loadDeviceAnalysis(this._hass, device.entity_id);
+        const analysis = await loadAnalysis(this._hass, entityId);
         if (this._deviceAnalysisProfileKey === key) {
-          this._deviceAnalysisCache.set(device.entity_id, analysis);
+          this._deviceAnalysisCache.set(entityId, analysis);
         }
       } catch (error) {
         if (this._deviceAnalysisProfileKey === key && error.code === "no_overlap") {
-          this._unavailableDevices.add(device.entity_id);
+          this._unavailableDevices.add(entityId);
         } else {
-          console.error(`Failed to load device analysis for ${device.entity_id}`, error);
+          console.error(`Failed to load consumption analysis for ${entityId}`, error);
         }
       }
     }));
@@ -1796,12 +1901,22 @@ syncSensorPicker() {
             <label for="consumptionProfileSelect">${texts.consumptionProfileLabel}</label>
             <select id="consumptionProfileSelect" class="consumption-profile-select">
               <option value="total"${!isDeviceProfile ? " selected" : ""}>${texts.consumptionProfileTotal}</option>
-              ${(this._monitoredDevices || []).map((device) => {
-                const unavailable = this._unavailableDevices?.has(device.entity_id);
-                const selected = isDeviceProfile && device.entity_id === selectedProfile;
-                const label = unavailable ? texts.consumptionProfileUnavailable(device.name) : device.name;
-                return `<option value="${this.escapeAttribute(device.entity_id)}"${selected ? " selected" : ""}${unavailable ? " disabled" : ""}>${this.escapeAttribute(label)}</option>`;
-              }).join("")}
+              ${(this._consumptionSources || []).length ? `<optgroup label="${this.escapeAttribute(texts.consumptionSourcesTitle)}">
+                ${(this._consumptionSources || []).map((source) => {
+                  const unavailable = this._unavailableDevices?.has(source.entity_id);
+                  const selected = isDeviceProfile && source.entity_id === selectedProfile;
+                  const label = unavailable ? texts.consumptionProfileUnavailable(source.name) : source.name;
+                  return `<option value="${this.escapeAttribute(source.entity_id)}"${selected ? " selected" : ""}${unavailable ? " disabled" : ""}>${this.escapeAttribute(label)}</option>`;
+                }).join("")}
+              </optgroup>` : ""}
+              ${(this._monitoredDevices || []).length ? `<optgroup label="${this.escapeAttribute(texts.devicesTitle)}">
+                ${(this._monitoredDevices || []).map((device) => {
+                  const unavailable = this._unavailableDevices?.has(device.entity_id);
+                  const selected = isDeviceProfile && device.entity_id === selectedProfile;
+                  const label = unavailable ? texts.consumptionProfileUnavailable(device.name) : device.name;
+                  return `<option value="${this.escapeAttribute(device.entity_id)}"${selected ? " selected" : ""}${unavailable ? " disabled" : ""}>${this.escapeAttribute(label)}</option>`;
+                }).join("")}
+              </optgroup>` : ""}
             </select>
           </div>
           <div class="heatmap-season-navigation" role="group" aria-label="Heatmap season">
@@ -2634,6 +2749,7 @@ syncSensorPicker() {
       .monitored-device-fields { display: grid; gap: 3px; min-width: 0; }
       .monitored-device-entity { overflow: hidden; color: var(--secondary-text-color); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
       .monitored-device-actions { display: flex; gap: 4px; }
+      .consumption-source-cost-relevant { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--secondary-text-color); }
       .device-icon-button { width: 44px; height: 44px; padding: 10px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--divider-color); border-radius: 8px; background: transparent; color: var(--primary-text-color); cursor: pointer; box-sizing: border-box; transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease; }
       .device-icon-button:hover { border-color: var(--primary-color); color: var(--primary-color); }
       .device-icon-button.danger:hover, .device-icon-button.danger:focus-visible { border-color: var(--error-color); color: var(--error-color); background: rgba(244, 67, 54, 0.12); }

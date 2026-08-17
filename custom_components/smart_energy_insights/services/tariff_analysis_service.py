@@ -18,6 +18,61 @@ AVERAGE_HOURS_PER_MONTH = 730.5
 DAILY_SHIFT_WINDOW_HOURS = 6
 
 
+def compute_price_exposure(statistics: list, price_series: list) -> dict:
+    """Compute per-day price-ranked consumption exposure shares.
+
+    Ranks each day's matched consumption by the raw (net wholesale) spot
+    price and reports the share of consumption occurring in that day's
+    cheapest / most expensive `DAILY_SHIFT_WINDOW_HOURS`-hour windows.
+    Tariff-parameter independent (no tax/markup applied), so it can be run on
+    any consumption series against the same price series - e.g. once for the
+    cost-relevant consumption (mirrors the exposure numbers embedded in
+    `analyze_tariffs`) and once for the household's total consumption
+    (Gesamtbezug, including non-cost-relevant sources such as PV/battery) to
+    describe *when* energy is actually used, independent of who pays for it.
+    """
+    price_dict = {point["start"]: float(point["value"]) for point in (price_series or [])}
+    matched_points = []
+    for stat in statistics or []:
+        start = stat.get("start")
+        if not start:
+            continue
+        spot_price = price_dict.get(start)
+        if spot_price is None:
+            continue
+        consumption = max(0.0, float(stat.get("state", 0.0) or 0.0))
+        matched_points.append((start, consumption, spot_price))
+
+    matched_consumption = sum(consumption for _, consumption, _ in matched_points)
+
+    peak_exposure_percent = None
+    off_peak_share_percent = None
+    if matched_consumption > 0:
+        matched_points_by_day: dict = defaultdict(list)
+        for start, consumption, spot_price in matched_points:
+            day_key = dt_util.as_local(start).date()
+            matched_points_by_day[day_key].append((consumption, spot_price))
+
+        peak_exposure_kwh = 0.0
+        off_peak_kwh = 0.0
+        for day_points in matched_points_by_day.values():
+            if not day_points:
+                continue
+            sorted_day_points = sorted(day_points, key=lambda entry: entry[1])
+            take = min(DAILY_SHIFT_WINDOW_HOURS, len(sorted_day_points))
+            off_peak_kwh += sum(consumption for consumption, _ in sorted_day_points[:take])
+            peak_exposure_kwh += sum(consumption for consumption, _ in sorted_day_points[-take:])
+
+        peak_exposure_percent = (peak_exposure_kwh / matched_consumption) * 100.0
+        off_peak_share_percent = (off_peak_kwh / matched_consumption) * 100.0
+
+    return {
+        "matched_consumption": matched_consumption,
+        "peak_exposure_percent": peak_exposure_percent,
+        "off_peak_share_percent": off_peak_share_percent,
+    }
+
+
 def analyze_tariffs(statistics: list, price_series: list, pricing_config) -> dict:
     """Compute canonical tariff totals, monthly deltas, and derived metrics.
 

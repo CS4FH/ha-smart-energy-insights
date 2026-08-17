@@ -14,6 +14,13 @@ SENSOR_API_NAME = "api:smart_energy_insights:sensor"
 DEVICES_API_ENDPOINT = "/api/smart_energy_insights/devices"
 DEVICE_ANALYSIS_API_ENDPOINT = "/api/smart_energy_insights/device-analysis"
 
+# Consumption source configuration and analysis (Bezugsquellen: additional
+# whole-home energy sources such as a second smart meter, PV self-consumption
+# or battery discharge, summed into total consumption; independently flagged
+# as cost-relevant or not)
+CONSUMPTION_SOURCES_API_ENDPOINT = "/api/smart_energy_insights/consumption-sources"
+CONSUMPTION_SOURCE_ANALYSIS_API_ENDPOINT = "/api/smart_energy_insights/consumption-source-analysis"
+
 # CSV Parsing Configuration
 CSV_DELIMITER = ";"
 TIMESTAMP_FORMAT = "%d.%m.%Y %H:%M"

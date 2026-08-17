@@ -53,15 +53,29 @@ export function renderBaseCard(texts) {
 
         <div class="source-section" id="sensorSection" role="tabpanel" aria-labelledby="sourceSensorSwitch">
           <div class="source-section-header">
-            <div class="source-section-title">${texts.sourceSensorTitle}</div>
-            <div class="source-section-desc">${texts.sourceSensorDescription}</div>
+            <div class="source-section-title">${texts.consumptionSourcesTitle}</div>
+            <div class="source-section-desc">${texts.consumptionSourcesDescription}</div>
           </div>
-          <div class="sensor-picker">
-            <label class="sensor-label" for="sensorPicker">${texts.sensorPickerLabel}</label>
-            <ha-entity-picker id="sensorPicker" class="sensor-select"></ha-entity-picker>
+          <div id="consumptionSourcesList" class="monitored-devices-list"></div>
+          <div id="consumptionSourceEditor" class="device-editor" hidden>
+            <ha-entity-picker id="consumptionSourceSensorPicker" class="sensor-select"></ha-entity-picker>
+            <div class="sensor-message info" id="consumptionSourceSensorMessage" style="display: none;"></div>
+            <label class="sensor-label" for="consumptionSourceNameInput">${texts.consumptionSourceNameLabel}</label>
+            <input id="consumptionSourceNameInput" class="device-name-input" type="text" maxlength="80" />
+            <label class="consumption-source-cost-relevant" for="consumptionSourceCostRelevantInput">
+              <input type="checkbox" id="consumptionSourceCostRelevantInput" />
+              ${texts.consumptionSourceCostRelevantLabel}
+            </label>
+            <div class="sensor-hint">${texts.consumptionSourceCostRelevantHelp}</div>
+            <div class="section-actions">
+              <button id="cancelConsumptionSourceBtn" class="cancel-button" type="button">${texts.cancelButton}</button>
+              <button id="saveConsumptionSourceBtn" class="upload-button" type="button">${texts.consumptionSourceSave}</button>
+            </div>
           </div>
+          <div id="consumptionSourceMessage" class="sensor-message" hidden></div>
           <div class="section-actions">
-            <button id="sensorLoadBtn" class="upload-button">${texts.sensorLoadButton}</button>
+            <button id="addConsumptionSourceBtn" class="upload-button" type="button">${texts.consumptionSourceAdd}</button>
+            <button id="consumptionSourcesRefreshBtn" class="cancel-button" type="button">${texts.consumptionSourcesRefresh}</button>
           </div>
           <div class="sensor-message" id="sensorMessage" style="display: none;"></div>
         </div>

@@ -55,13 +55,12 @@ export async function loadHeatmaps(hass, startDate, endDate, options = {}) {
   return data;
 }
 
-export async function loadSensorData(hass, entityId, startDate, endDate, options = {}) {
+export async function loadSensorData(hass, startDate, endDate, options = {}) {
   if (!hass) return null;
   const response = await hass.fetchWithAuth("/api/smart_energy_insights/sensor", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      entity_id: entityId,
       start: startDate || null,
       end: endDate || null
     })
@@ -113,6 +112,40 @@ export async function saveMonitoredDevices(hass, devices) {
 export async function loadDeviceAnalysis(hass, entityId, startDate, endDate) {
   if (!hass) throw new Error("Home Assistant instance not found");
   const response = await hass.fetchWithAuth("/api/smart_energy_insights/device-analysis", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      entity_id: entityId,
+      start: startDate || null,
+      end: endDate || null
+    })
+  });
+  return parseApiResponse(response);
+}
+
+export async function loadConsumptionSources(hass) {
+  if (!hass) return [];
+  const response = await hass.fetchWithAuth("/api/smart_energy_insights/consumption-sources", {
+    method: "GET"
+  });
+  const data = await parseApiResponse(response);
+  return Array.isArray(data.sources) ? data.sources : [];
+}
+
+export async function saveConsumptionSources(hass, sources) {
+  if (!hass) throw new Error("Home Assistant instance not found");
+  const response = await hass.fetchWithAuth("/api/smart_energy_insights/consumption-sources", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sources })
+  });
+  const data = await parseApiResponse(response);
+  return Array.isArray(data.sources) ? data.sources : [];
+}
+
+export async function loadConsumptionSourceAnalysis(hass, entityId, startDate, endDate) {
+  if (!hass) throw new Error("Home Assistant instance not found");
+  const response = await hass.fetchWithAuth("/api/smart_energy_insights/consumption-source-analysis", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
