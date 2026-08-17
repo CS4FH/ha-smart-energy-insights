@@ -3,7 +3,19 @@
     "step": {
       "user": {
         "title": "Smart Energy Insights Setup",
-        "description": "Spot prices are loaded and stored as long-term statistics. Configure tariff values in the integration options."
+        "description": "Enter your tariff values to complete setup. You can change these values anytime later in the integration options.",
+        "data": {
+          "fixed_price": "Fixed price (ct/kWh, gross)",
+          "fixed_base_fee": "Fixed base fee (EUR, gross)",
+          "spot_markup": "Spot markup (ct/kWh, gross)",
+          "spot_base_fee": "Spot base fee (EUR, gross)",
+          "tax_rate": "Tax rate (%)"
+        },
+        "data_description": {
+          "fixed_price": "Gross energy price of your fixed tariff, incl. tax. Example: net price 12.5 ct/kWh at 20% tax -> enter 12.5 x 1.20 = 15.0.",
+          "spot_markup": "Gross supplier surcharge added on top of the market spot price, incl. tax.",
+          "tax_rate": "Used only to convert the net/wholesale day-ahead spot market price to a gross retail price; all other fields above are already gross."
+        }
       }
     }
   },

@@ -3,7 +3,19 @@
     "step": {
       "user": {
         "title": "Smart Energy Insights Einrichtung",
-        "description": "Spotpreise werden geladen und als Langzeitstatistik gespeichert. Tarifwerte werden in den Integrationsoptionen konfiguriert."
+        "description": "Bitte geben Sie Ihre Tarifwerte ein, um die Einrichtung abzuschliessen. Diese Werte koennen Sie spaeter jederzeit in den Integrationsoptionen aendern.",
+        "data": {
+          "fixed_price": "Festpreis (ct/kWh, brutto)",
+          "fixed_base_fee": "Grundgebuehr Fix (EUR, brutto)",
+          "spot_markup": "Spot-Aufschlag (ct/kWh, brutto)",
+          "spot_base_fee": "Grundgebuehr Spot (EUR, brutto)",
+          "tax_rate": "Steuersatz (%)"
+        },
+        "data_description": {
+          "fixed_price": "Bruttopreis Ihres Fixtarifs, inkl. Steuer. Beispiel: Nettopreis 12,5 ct/kWh bei 20% Steuer -> 12,5 x 1,20 = 15,0 eingeben.",
+          "spot_markup": "Brutto-Aufschlag des Lieferanten auf den Spotmarktpreis, inkl. Steuer.",
+          "tax_rate": "Wird nur verwendet, um den netto/Grosshandels-Spotmarktpreis in einen Brutto-Endkundenpreis umzurechnen; alle anderen Felder oben sind bereits brutto."
+        }
       }
     }
   },

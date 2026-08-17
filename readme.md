@@ -26,14 +26,14 @@ Smart Energy Insights is being developed as part of an ongoing Master's Thesis a
 After adding the integration, a **Smart Energy Insights** entry appears in the sidebar, and a `Spot Price` sensor entity is created that tracks the current day-ahead spot price.
 
 ## ⚙️ Configuration
-The initial setup requires no input. Tariff parameters can be adjusted afterwards via the integration's **Options** (Settings → Devices & Services → Smart Energy Insights → Configure):
+During initial setup, tariff parameters must be entered once. They can be adjusted at any time afterwards via the integration's **Options** (Settings → Devices & Services → Smart Energy Insights → Configure):
 
 | Option | Description | Default |
 |---|---|---|
 | Fixed price | Fixed tariff energy price, **gross** (tax-included) | 15.0 ct/kWh |
-| Fixed base fee | Fixed tariff monthly base fee, **gross** | 4.90 € |
+| Fixed base fee | Fixed tariff monthly base fee, **gross** | 5.00 € |
 | Spot markup | Supplier markup added on top of the spot price, **gross** | 1.5 ct/kWh |
-| Spot base fee | Dynamic tariff monthly base fee, **gross** | 5.99 € |
+| Spot base fee | Dynamic tariff monthly base fee, **gross** | 2.50 € |
 | Tax rate | Used only to convert the net/wholesale day-ahead spot market price into a gross retail price; not applied to the fields above, which are already gross | 20 % |
 
 All prices are entered gross (tax-included), matching what's shown on a typical utility bill or tariff sheet. If you only know your net price (excl. tax), convert it first: `gross = net × (1 + tax rate / 100)` — e.g. a net price of 12.5 ct/kWh at 20% tax becomes `12.5 × 1.20 = 15.0` ct/kWh gross.

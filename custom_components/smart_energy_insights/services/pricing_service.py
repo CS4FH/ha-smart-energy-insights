@@ -21,9 +21,9 @@ class PricingConfig:
 def get_pricing_config(hass: HomeAssistant) -> PricingConfig:
     defaults = {
         "fixed_price": 15.0,
-        "fixed_base_fee": 4.90,
+        "fixed_base_fee": 5.0,
         "spot_markup": 1.5,
-        "spot_base_fee": 5.99,
+        "spot_base_fee": 2.5,
         "tax_rate": 20.0,
     }
 
