@@ -1398,6 +1398,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       weekdayAvg: response.weekday_avg_kwh_per_hour,
       weekendAvg: response.weekend_avg_kwh_per_hour,
       maxPeak: response.max_peak_kwh,
+      maxPeakAt: response.max_peak_at,
       baseLoadP05: response.base_load_p05_kwh,
       dailyPriceSpread: response.avg_daily_price_spread_ct_kwh,
       spotPriceStdDev: response.spot_price_stddev_ct_kwh,
@@ -2373,6 +2374,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     const placeholderValue = texts.analysisPlaceholderValue;
     const maxPeakValue = summary.maxPeak !== null && summary.maxPeak !== undefined
       ? metricValue(formatNumber(summary.maxPeak, 3), "kWh")
+        + (summary.maxPeakAt ? ` <span class="technical-metric-unit">(${this.formatDateTimeEuropean(summary.maxPeakAt)})</span>` : "")
       : metricValue(placeholderValue, "");
     const baseLoadValue = summary.baseLoadP05 !== null && summary.baseLoadP05 !== undefined
       ? metricValue(formatNumber(summary.baseLoadP05, 3), "kWh")

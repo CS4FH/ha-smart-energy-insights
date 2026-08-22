@@ -416,19 +416,24 @@ def _percentile(values: list[float], p: float) -> float | None:
 
 
 def _derive_consumption_metrics(statistics: list) -> dict:
-    values = [float(item.get("state", 0.0) or 0.0) for item in (statistics or [])]
-    if not values:
+    if not statistics:
         return {
             "max_peak_kwh": None,
+            "max_peak_at": None,
             "base_load_p05_kwh": None,
         }
+
+    values = [float(item.get("state", 0.0) or 0.0) for item in statistics]
+    peak_index = max(range(len(values)), key=values.__getitem__)
+    peak_start = statistics[peak_index].get("start")
 
     # Base load should represent the lower operating band, not idle/empty hours.
     positive_values = [value for value in values if value > 0.0]
     percentile_source = positive_values if positive_values else values
 
     return {
-        "max_peak_kwh": max(values),
+        "max_peak_kwh": values[peak_index],
+        "max_peak_at": peak_start.isoformat() if peak_start else None,
         "base_load_p05_kwh": _percentile(percentile_source, 0.05),
     }
 
@@ -772,6 +777,7 @@ async def _build_analysis_response(
         "weekday_avg_kwh_per_hour": summary["weekday_avg_kwh_per_hour"],
         "weekend_avg_kwh_per_hour": summary["weekend_avg_kwh_per_hour"],
         "max_peak_kwh": consumption_metrics["max_peak_kwh"],
+        "max_peak_at": consumption_metrics["max_peak_at"],
         "base_load_p05_kwh": consumption_metrics["base_load_p05_kwh"],
         "avg_price_ct_kwh": price_result.get("average_price"),
         "avg_daily_price_spread_ct_kwh": price_metrics["avg_daily_price_spread_ct_kwh"],
