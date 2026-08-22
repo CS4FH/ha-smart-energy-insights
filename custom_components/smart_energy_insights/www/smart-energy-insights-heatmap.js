@@ -115,7 +115,11 @@ export function generateHeatmapHTML(data, title, unit, reverseColors, formatNumb
       if (typeof heatmapOptions.tooltipFormatter === "function") {
         tooltip = heatmapOptions.tooltipFormatter(val, days[d], h);
       } else {
-        tooltip = `${days[d]} ${h}:00 Uhr\n${formatNumber(val, 2)} ${unit}`;
+        const absoluteValue = Math.abs(val);
+        const formattedValue = absoluteValue > 0 && absoluteValue < 0.01
+          ? (val > 0 ? "<0,01" : ">-0,01")
+          : formatNumber(val, 2);
+        tooltip = `${days[d]} ${h}:00 Uhr\n${formattedValue} ${unit}`;
       }
 
       html += `<div class="heatmap-cell" style="background-color: ${bgColor}" title="${escapeHtml(tooltip)}"></div>`;
