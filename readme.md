@@ -108,16 +108,9 @@ The integration supports importing historical load profiles from CSV files with 
 Imported load profiles are stored as Home Assistant Long-Term Statistics and can be inspected in **Developer Tools → Statistics**, alongside the standard `Spot Price` sensor.
 
 ## 🏗 Requirements
-* Home Assistant **2024.1.0** or newer.
+* Home Assistant **2026.3.0** or newer.
 * The `recorder` integration (enabled by default via `default_config` in a standard Home Assistant setup) for long-term statistics.
 * An internet connection to fetch day-ahead spot prices from the aWATTar API (Austrian market).
-
-## 🧪 Development
-Tests live in [tests/](tests) and run with `pytest` (see [pytest.ini](pytest.ini) and [requirements-dev.txt](requirements-dev.txt)):
-
-```bash
-pytest
-```
 
 ---
 *Created by Christoph Seidlinger as part of the Master's Program Software and Digital Experience Engineering at FH JOANNEUM, supervised by [FH-Prof. DI Dr. Alexander Nischelwitzer](https://www.fh-joanneum.at/hochschule/person/alexander-nischelwitzer/).*
