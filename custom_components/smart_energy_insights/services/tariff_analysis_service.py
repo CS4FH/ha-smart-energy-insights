@@ -79,6 +79,7 @@ def analyze_tariffs(
     pricing_config,
     range_start=None,
     range_end=None,
+    grid_shiftable_by_start: dict | None = None,
 ) -> dict:
     """Compute canonical tariff totals, monthly deltas, and derived metrics.
 
@@ -123,8 +124,6 @@ def analyze_tariffs(
     matched_consumption = sum(consumption for _, consumption, _ in matched_points)
     base_spot_cost_cents = sum(consumption * spot_price for _, consumption, spot_price in matched_points)
     duration_months = matched_hours / AVERAGE_HOURS_PER_MONTH if matched_hours else 0.0
-    total_consumption_kwh = sum(max(0.0, float(stat.get("state", 0.0) or 0.0)) for stat in (statistics or []))
-
     expected_hours = 0
     expected_dates_by_month = {month: set() for month in range(1, 13)}
     expectation_start = range_start
@@ -240,25 +239,6 @@ def analyze_tariffs(
         )
         effective_spot_price_ct_kwh = weighted_spot_energy_price_sum / matched_consumption
 
-    # Flexibility potential: share of consumption above baseline (P05 * total hours).
-    values = [max(0.0, float(stat.get("state", 0.0) or 0.0)) for stat in (statistics or [])]
-    base_load_p05_kwh = None
-    if values:
-        positive_values = [value for value in values if value > 0.0]
-        percentile_source = sorted(positive_values if positive_values else values)
-        if percentile_source:
-            idx = int((len(percentile_source) - 1) * 0.05)
-            base_load_p05_kwh = percentile_source[idx]
-
-    absolute_base_load_kwh = None
-    flexible_volume_kwh = None
-    flexibility_potential_percent = None
-    if base_load_p05_kwh is not None:
-        absolute_base_load_kwh = base_load_p05_kwh * consumption_hours
-        flexible_volume_kwh = max(0.0, total_consumption_kwh - absolute_base_load_kwh)
-        if total_consumption_kwh > 0:
-            flexibility_potential_percent = (flexible_volume_kwh / total_consumption_kwh) * 100.0
-
     price_sensitivity_percent = None
     if (
         break_even_fixed is not None
@@ -303,15 +283,28 @@ def analyze_tariffs(
     max_penalty_risk_eur = None
     peak_exposure_percent = None
     off_peak_share_percent = None
-    if flexible_volume_kwh is not None and effective_spot_price_ct_kwh is not None:
+    matched_grid_shiftable_upper_bound_kwh = None
+    if grid_shiftable_by_start is not None:
+        matched_grid_shiftable_upper_bound_kwh = sum(
+            max(0.0, float(grid_shiftable_by_start.get(start, 0.0) or 0.0))
+            for start, _, _ in matched_points
+        )
+    if (
+        matched_grid_shiftable_upper_bound_kwh is not None
+        and effective_spot_price_ct_kwh is not None
+    ):
         savings_per_kwh_ct = 0.0
         if avg_cheapest_daily_price_ct_kwh is not None:
             savings_per_kwh_ct = max(0.0, effective_spot_price_ct_kwh - avg_cheapest_daily_price_ct_kwh)
         penalty_per_kwh_ct = 0.0
         if avg_most_expensive_daily_price_ct_kwh is not None:
             penalty_per_kwh_ct = max(0.0, avg_most_expensive_daily_price_ct_kwh - effective_spot_price_ct_kwh)
-        max_extra_savings_eur = (flexible_volume_kwh * savings_per_kwh_ct) / 100.0
-        max_penalty_risk_eur = (flexible_volume_kwh * penalty_per_kwh_ct) / 100.0
+        max_extra_savings_eur = (
+            matched_grid_shiftable_upper_bound_kwh * savings_per_kwh_ct
+        ) / 100.0
+        max_penalty_risk_eur = (
+            matched_grid_shiftable_upper_bound_kwh * penalty_per_kwh_ct
+        ) / 100.0
 
     # Exposure metrics: share of matched consumption that occurs in each day's
     # cheapest / most expensive 6-hour windows.
@@ -340,11 +333,7 @@ def analyze_tariffs(
         "expected_hours": expected_hours,
         "data_completeness_ratio": data_completeness_ratio,
         "matched_consumption": matched_consumption,
-        "total_consumption_kwh": total_consumption_kwh,
-        "base_load_p05_kwh": base_load_p05_kwh,
-        "absolute_base_load_kwh": absolute_base_load_kwh,
-        "flexible_volume_kwh": flexible_volume_kwh,
-        "flexibility_potential_percent": flexibility_potential_percent,
+        "matched_grid_shiftable_upper_bound_kwh": matched_grid_shiftable_upper_bound_kwh,
         "base_spot_cost_cents": base_spot_cost_cents,
         "duration_months": duration_months,
         "spot_cheaper_share": spot_cheaper_share,

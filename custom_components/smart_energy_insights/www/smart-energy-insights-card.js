@@ -276,8 +276,8 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       analysisMinSpotPriceHelp: this.localize("card.analysis_min_spot_price_help", "Lowest market spot price (ct/kWh) observed in the selected period."),
       analysisOccurredOnLabel: this.localize("card.analysis_occurred_on_label", "Occurred on"),
       analysisSectionRiskTitle: this.localize("card.analysis_section_risk_title", "RISK AND OPTIMIZATION"),
-      analysisFlexibilityPotentialLabel: this.localize("card.analysis_flexibility_potential_label", "Flexibility potential"),
-      analysisFlexibilityPotentialHelp: this.localize("card.analysis_flexibility_potential_help", "Percentage of your total consumption that is above your baseline and could theoretically be shifted to other hours."),
+      analysisVariableConsumptionLabel: this.localize("card.analysis_variable_consumption_label", "Variable consumption share"),
+      analysisVariableConsumptionHelp: this.localize("card.analysis_variable_consumption_help", "Share of total consumption above the estimated base load. This is a theoretical upper bound, not automatically technically shiftable consumption."),
       analysisRecommendationTitle: this.localize("card.analysis_recommendation_title", "Recommendation"),
       analysisRecommendationComparisonTitle: this.localize("card.analysis_recommendation_comparison_title", "Tariff comparison"),
       analysisRecommendationStatusSavings: this.localize("card.analysis_recommendation_status_savings", "Spot tariff is currently cheaper"),
@@ -320,7 +320,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       analysisDynamicBaseFeeLabel: this.localize("card.analysis_dynamic_base_fee_label", "Dynamic base fee"),
       analysisDynamicBaseFeeHelp: this.localize("card.analysis_dynamic_base_fee_help", "Configured monthly base fee for the dynamic tariff."),
       analysisMaxPeakLabel: this.localize("card.analysis_max_peak_label", "Max peak"),
-      analysisBaseLoadLabel: this.localize("card.analysis_base_load_label", "Base load (P05)"),
+      analysisBaseLoadLabel: this.localize("card.analysis_base_load_label", "Base load"),
       analysisDailySpreadLabel: this.localize("card.analysis_daily_spread_label", "Avg daily price spread"),
       analysisSpotStdDevLabel: this.localize("card.analysis_spot_std_dev_label", "Break-even fixed"),
       analysisSpotCheaperLabel: this.localize("card.analysis_spot_cheaper_label", "Spot cheaper hours"),
@@ -329,7 +329,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
         "Share of hours in which spot (incl. markup) was cheaper than the currently configured fixed price."
       ),
       analysisMaxPeakHelp: this.localize("card.analysis_max_peak_help", "Highest single-hour consumption value in the selected period."),
-      analysisBaseLoadHelp: this.localize("card.analysis_base_load_help", "Estimated base load as the 5th percentile (P05) of positive hourly consumption values."),
+      analysisBaseLoadHelp: this.localize("card.analysis_base_load_help", "Base-load estimate derived from the median nighttime consumption per valid night and smoothed with a centered 28-day median. At least seven valid nights are required."),
       analysisDailySpreadHelp: this.localize("card.analysis_daily_spread_help", "Average daily difference between highest and lowest spot price."),
       analysisSpotStdDevHelp: this.localize("card.analysis_spot_std_dev_help", "Fixed price at which costs equal the spot tariff, based on current tariffs and market prices."),
       analysisPlaceholderValue: this.localize("card.analysis_placeholder_value", "-"),
@@ -1026,7 +1026,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     const nameInput = this.querySelector("#consumptionSourceNameInput");
     if (nameInput) nameInput.value = "";
     const costCheckbox = this.querySelector("#consumptionSourceCostRelevantInput");
-    if (costCheckbox) costCheckbox.checked = false;
+    if (costCheckbox) costCheckbox.checked = true;
     this.syncConsumptionSourcePicker();
   }
 
@@ -1565,11 +1565,11 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       weekendAvg: response.weekend_avg_kwh_per_hour,
       maxPeak: response.max_peak_kwh,
       maxPeakAt: response.max_peak_at,
-      baseLoadP05: response.base_load_p05_kwh,
+      baseLoad: response.base_load_kwh_per_hour,
       dailyPriceSpread: response.avg_daily_price_spread_ct_kwh,
       spotPriceStdDev: response.spot_price_stddev_ct_kwh,
       effectiveSpotPrice: response.effective_spot_price_ct_kwh,
-      flexibilityPotentialPercent: response.flexibility_potential_percent,
+      variableConsumptionPercent: response.variable_consumption_percent,
       priceSensitivityPercent: response.price_sensitivity_percent,
       maxExtraSavingsEur: response.max_extra_savings_eur,
       maxPenaltyRiskEur: response.max_penalty_risk_eur,
@@ -2561,8 +2561,8 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       ? metricValue(formatNumber(summary.maxPeak, 3), "kWh")
         + (summary.maxPeakAt ? ` <span class="technical-metric-unit">(${this.formatDateTimeEuropean(summary.maxPeakAt)})</span>` : "")
       : metricValue(placeholderValue, "");
-    const baseLoadValue = summary.baseLoadP05 !== null && summary.baseLoadP05 !== undefined
-      ? metricValue(formatNumber(summary.baseLoadP05, 3), "kWh")
+    const baseLoadValue = summary.baseLoad !== null && summary.baseLoad !== undefined
+      ? metricValue(formatNumber(summary.baseLoad, 3), "kWh")
       : metricValue(placeholderValue, "");
     const dailySpreadValue = summary.dailyPriceSpread !== null && summary.dailyPriceSpread !== undefined
       ? metricValue(formatNumber(summary.dailyPriceSpread, 2), "ct/kWh")
@@ -2598,15 +2598,23 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     const minSpotHelp = summary.minSpotPriceAt
       ? `${texts.analysisMinSpotPriceHelp} ${texts.analysisOccurredOnLabel}: ${this.formatDateTimeEuropean(summary.minSpotPriceAt)}`
       : texts.analysisMinSpotPriceHelp;
-    const flexibilityPotential = Number(summary.flexibilityPotentialPercent);
+    const variableConsumptionPercent = summary.variableConsumptionPercent !== null
+      && summary.variableConsumptionPercent !== undefined
+      ? Number(summary.variableConsumptionPercent)
+      : Number.NaN;
     const peakExposure = Number(summary.peakExposurePercent);
     const offPeakShare = Number(summary.offPeakSharePercent);
-    const flexibilityPotentialValue = Number.isFinite(flexibilityPotential)
-      ? metricValue(formatNumber(flexibilityPotential, 1), "%")
+    const variableConsumptionValue = Number.isFinite(variableConsumptionPercent)
+      ? metricValue(formatNumber(variableConsumptionPercent, 1), "%")
       : metricValue(placeholderValue, "");
     const fixedTariffCost = Number(summary.fixedTariffCostEur);
     const spotTariffCost = Number(summary.spotTariffCostEur);
-    const hasCostProjection = Number.isFinite(fixedTariffCost)
+    const hasProjectionBounds = summary.maxExtraSavingsEur !== null
+      && summary.maxExtraSavingsEur !== undefined
+      && summary.maxPenaltyRiskEur !== null
+      && summary.maxPenaltyRiskEur !== undefined;
+    const hasCostProjection = hasProjectionBounds
+      && Number.isFinite(fixedTariffCost)
       && Number.isFinite(spotTariffCost)
       && Number.isFinite(summary.maxExtraSavingsEur)
       && Number.isFinite(summary.maxPenaltyRiskEur);
@@ -2737,7 +2745,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     ];
 
     const profileItems = [
-      { label: texts.analysisFlexibilityPotentialLabel, value: flexibilityPotentialValue, help: texts.analysisFlexibilityPotentialHelp },
+      { label: texts.analysisVariableConsumptionLabel, value: variableConsumptionValue, help: texts.analysisVariableConsumptionHelp },
       { label: texts.analysisTimingCheapLabel, value: cheapShareValue, help: texts.analysisTimingProfileHelp },
       { label: texts.analysisTimingExpensiveLabel, value: expensiveShareValue, help: texts.analysisTimingProfileHelp },
       { label: texts.analysisTimingAverageLabel, value: averageShareValue, help: texts.analysisTimingProfileHelp }

@@ -32,7 +32,12 @@ def test_analyze_tariffs_is_consistent_for_monthly_and_total() -> None:
         "custom_components.smart_energy_insights.services.tariff_analysis_service.dt_util.as_local",
         side_effect=lambda dt: dt,
     ):
-        result = analyze_tariffs(statistics, price_series, pricing)
+        result = analyze_tariffs(
+            statistics,
+            price_series,
+            pricing,
+            grid_shiftable_by_start={item["start"]: 0.5 for item in statistics},
+        )
 
     assert result["matched_hours"] == 2
     assert result["consumption_hours"] == 2
@@ -42,7 +47,6 @@ def test_analyze_tariffs_is_consistent_for_monthly_and_total() -> None:
     assert result["break_even_fixed_ct_kwh"] is not None
     assert result["spot_cheaper_share"] is not None
     assert result["effective_spot_price_ct_kwh"] is not None
-    assert result["flexibility_potential_percent"] is not None
     assert result["price_sensitivity_percent"] is not None
     assert result["negative_price_hours"] == 0
     assert result["negative_price_share"] == 0.0
@@ -147,7 +151,6 @@ def test_analyze_tariffs_handles_no_matches() -> None:
     assert result["delta_total_eur"] == 0.0
     assert result["break_even_fixed_ct_kwh"] is None
     assert result["effective_spot_price_ct_kwh"] is None
-    assert result["flexibility_potential_percent"] is not None
     assert result["price_sensitivity_percent"] is None
     assert result["negative_price_hours"] == 0
     assert result["negative_price_share"] is None
@@ -328,11 +331,14 @@ def test_analyze_tariffs_risk_and_optimization_metrics_daily_6h() -> None:
         "custom_components.smart_energy_insights.services.tariff_analysis_service.dt_util.as_local",
         side_effect=lambda dt: dt,
     ):
-        result = analyze_tariffs(statistics, price_series, pricing)
+        result = analyze_tariffs(
+            statistics,
+            price_series,
+            pricing,
+            grid_shiftable_by_start={item["start"]: 0.0 for item in statistics},
+        )
 
-    # total = 8 kWh, P05 = 1.0 kWh/h, base volume = 8 -> flexible volume = 0
-    assert abs(result["flexibility_potential_percent"] - 0.0) < 0.0001
-    assert abs(result["flexible_volume_kwh"] - 0.0) < 0.0001
+    assert result["matched_grid_shiftable_upper_bound_kwh"] == 0.0
 
     # Effective weighted spot price (uniform consumption) = arithmetic mean of all 8 prices = 19.375
     assert abs(result["effective_spot_price_ct_kwh"] - 19.375) < 0.0001
@@ -346,6 +352,38 @@ def test_analyze_tariffs_risk_and_optimization_metrics_daily_6h() -> None:
     # Flexible volume is zero in this synthetic profile, so both EUR effects must be zero.
     assert abs(result["max_extra_savings_eur"] - 0.0) < 0.0001
     assert abs(result["max_penalty_risk_eur"] - 0.0) < 0.0001
+
+
+def test_analyze_tariffs_uses_only_price_matched_grid_shiftable_volume() -> None:
+    matched_start = datetime(2026, 1, 1, 0, tzinfo=timezone.utc)
+    unmatched_start = datetime(2026, 1, 1, 1, tzinfo=timezone.utc)
+    statistics = [
+        {"start": matched_start, "state": 2.0},
+        {"start": unmatched_start, "state": 2.0},
+    ]
+    price_series = [{"start": matched_start, "value": 10.0}]
+    pricing = PricingConfig(
+        fixed_price=20.0,
+        fixed_base_fee=0.0,
+        spot_markup=0.0,
+        spot_base_fee=0.0,
+        tax_rate=0.0,
+    )
+
+    with patch(
+        "custom_components.smart_energy_insights.services.tariff_analysis_service.dt_util.as_local",
+        side_effect=lambda value: value,
+    ):
+        result = analyze_tariffs(
+            statistics,
+            price_series,
+            pricing,
+            grid_shiftable_by_start={matched_start: 0.4, unmatched_start: 1.5},
+        )
+
+    assert result["matched_grid_shiftable_upper_bound_kwh"] == 0.4
+    assert result["max_extra_savings_eur"] == 0.0
+    assert result["max_penalty_risk_eur"] == 0.0
 
 
 def test_analyze_tariffs_peak_and_off_peak_exposure_daily_6h_weighted() -> None:

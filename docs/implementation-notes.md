@@ -219,8 +219,15 @@ tariff parameters echoed back: `fixed_price_ct`, `fixed_base_fee_eur`, `spot_mar
 
 ### 6.3 Derived metrics (helpers in `insights_view.py`)
 - `_calculate_summary` (L339–410): total/avg per hour/day, `peak_hour`, weekday vs weekend averages.
-- `_derive_consumption_metrics` (L413–429): `max_peak_kwh = max(values)`; `base_load_p05_kwh` = 5th
-  percentile of **positive** hourly values (idle hours excluded).
+- `_derive_consumption_metrics`: peak value and first peak timestamp only.
+- `analyze_variable_consumption` in `consumption_metrics_service.py` estimates physical base load from
+  the reconstructed total household profile. For each local day, it takes the median of the positive
+  values between 00:00 and 05:59 when at least three such values exist. At least seven valid nights
+  are required. Daily candidates are smoothed with a centered 28-day median; sparse edge windows
+  fall back to the median of all valid nightly candidates in the selected period.
+- Hourly baseline energy is `min(total_load, daily_baseline)` and variable energy is
+  `max(0, total_load - daily_baseline)`. `variable_consumption_percent` is therefore a theoretical
+  upper bound for the variable share, not a classification of technically shiftable devices.
 - `_derive_price_metrics` (L432–468): spot-price stddev; `avg_daily_price_spread_ct_kwh` = mean of
   daily (max−min) spot price.
 - `_build_consumption_heatmap` (L286–306): 7×24 average, **[UPDATED]** interval-begin bucketing
@@ -230,7 +237,8 @@ tariff parameters echoed back: `fixed_price_ct`, `fixed_base_fee_eur`, `spot_mar
 
 ### 6.4 `analyze_tariffs` — the cost model (Section 5.3 / Ch. 4.2 maths). File: `tariff_analysis_service.py`
 Docstring: *"single source of truth for tariff comparisons."* Signature: **[UPDATED]**
-`analyze_tariffs(statistics, price_series, pricing_config, range_start=None, range_end=None) -> dict`
+`analyze_tariffs(statistics, price_series, pricing_config, range_start=None, range_end=None,
+grid_shiftable_by_start=None) -> dict`
 (no `inputs_are_net`).
 
 Key mechanics (line ranges authoritative):
@@ -260,16 +268,16 @@ Key mechanics (line ranges authoritative):
   base-fee-difference term spread over consumption ⇒ the fixed ct/kWh at which both tariffs cost the
   same. `spot_cheaper_share = cheaper_hours/matched_hours`.
 - **Effective spot price (L144–150):** consumption-weighted `Σ consumption*(spot*tax+markup)/matched_consumption`.
-- **Flexibility potential (L150–176):** `base_load_p05` (P05 of positive hourly values);
-  `absolute_base_load = P05*consumption_hours`; `flexible_volume = max(0, total−absolute_base_load)`;
-  `flexibility_potential_percent = flexible_volume/total*100`. `price_sensitivity_percent =
-  (break_even/effective_spot − 1)*100`. **[UPDATED]** This figure is a **theoretical upper bound**
-  (perfect shifting of all non-base-load energy), not an achievable target; frame it as such and note
-  the frontend labels the corresponding value "Best Case (Theoretical Max.)".
+- **Variable consumption and projection input:** physical variable consumption is calculated before
+  tariff analysis from the total household profile. Per timestamp it is capped by cost-relevant grid
+  draw: `grid_shiftable = min(grid_draw, variable_consumption)`. `analyze_tariffs` uses only capped
+  timestamps that also have a matching spot price. Without at least seven valid nights, this input and
+  the derived best-/worst-case projection remain unavailable. `price_sensitivity_percent =
+  (break_even/effective_spot − 1)*100` is independent of this estimate.
 - **Daily 6-hour windows (L176–226):** per day, adjusted prices (`price*tax+markup`); cheapest and
   most expensive **6 hours** averaged → `avg_cheapest_daily_price_ct_kwh` /
-  `avg_most_expensive_daily_price_ct_kwh`. `max_extra_savings_eur = flexible_volume*(effective−cheapest)/100`;
-  `max_penalty_risk_eur = flexible_volume*(expensive−effective)/100`.
+  `avg_most_expensive_daily_price_ct_kwh`. `max_extra_savings_eur = matched_grid_shiftable*(effective−cheapest)/100`;
+  `max_penalty_risk_eur = matched_grid_shiftable*(expensive−effective)/100`.
 - **Exposure (L227–246):** per day, sort matched points by price, take min(6,n): `off_peak_kwh` =
   cheapest 6h consumption, `peak_exposure_kwh` = most-expensive 6h; shares over `matched_consumption`.
 - **Return dict (L246–286):** all of the above incl. `monthly`, `monthly_tariff_comparison`,

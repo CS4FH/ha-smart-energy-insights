@@ -35,6 +35,7 @@ from .services.pricing_service import (
     get_pricing_config,
 )
 from .services.spot_price_service import async_import_spot_prices_for_range
+from .services.consumption_metrics_service import analyze_variable_consumption
 from .services.tariff_analysis_service import analyze_tariffs, compute_price_exposure
 from .utils.translation import async_translate
 
@@ -429,34 +430,20 @@ def _calculate_summary(statistics: list) -> dict:
     }
 
 
-def _percentile(values: list[float], p: float) -> float | None:
-    finite = sorted(float(v) for v in values if v is not None)
-    if not finite:
-        return None
-    idx = int((len(finite) - 1) * max(0.0, min(1.0, p)))
-    return finite[idx]
-
-
 def _derive_consumption_metrics(statistics: list) -> dict:
     if not statistics:
         return {
             "max_peak_kwh": None,
             "max_peak_at": None,
-            "base_load_p05_kwh": None,
         }
 
     values = [float(item.get("state", 0.0) or 0.0) for item in statistics]
     peak_index = max(range(len(values)), key=values.__getitem__)
     peak_start = statistics[peak_index].get("start")
 
-    # Base load should represent the lower operating band, not idle/empty hours.
-    positive_values = [value for value in values if value > 0.0]
-    percentile_source = positive_values if positive_values else values
-
     return {
         "max_peak_kwh": values[peak_index],
         "max_peak_at": peak_start.isoformat() if peak_start else None,
-        "base_load_p05_kwh": _percentile(percentile_source, 0.05),
     }
 
 
@@ -798,6 +785,10 @@ async def _build_analysis_response(
         )
     summary = _calculate_summary(consumption_statistics)
     consumption_metrics = _derive_consumption_metrics(consumption_statistics)
+    variable_consumption = analyze_variable_consumption(
+        consumption_statistics,
+        cost_statistics,
+    )
     price_metrics = _derive_price_metrics(price_series)
     total_price_exposure = compute_price_exposure(consumption_statistics, price_series)
 
@@ -807,6 +798,11 @@ async def _build_analysis_response(
         pricing_config,
         range_start=resolved_analysis_start,
         range_end=resolved_analysis_end,
+        grid_shiftable_by_start=(
+            variable_consumption["grid_shiftable_by_start"]
+            if variable_consumption["base_load_status"] == "available"
+            else None
+        ),
     )
     break_even_fixed = tariff_analysis.get("break_even_fixed_ct_kwh")
     spot_cheaper_share = tariff_analysis.get("spot_cheaper_share")
@@ -853,7 +849,17 @@ async def _build_analysis_response(
         "weekend_avg_kwh_per_hour": summary["weekend_avg_kwh_per_hour"],
         "max_peak_kwh": consumption_metrics["max_peak_kwh"],
         "max_peak_at": consumption_metrics["max_peak_at"],
-        "base_load_p05_kwh": consumption_metrics["base_load_p05_kwh"],
+        "base_load_kwh_per_hour": variable_consumption["base_load_kwh_per_hour"],
+        "base_load_method": variable_consumption["base_load_method"],
+        "base_load_status": variable_consumption["base_load_status"],
+        "base_load_valid_nights": variable_consumption["base_load_valid_nights"],
+        "baseline_consumption_kwh": variable_consumption["baseline_consumption_kwh"],
+        "variable_consumption_kwh": variable_consumption["variable_consumption_kwh"],
+        "variable_consumption_percent": variable_consumption["variable_consumption_percent"],
+        "grid_shiftable_upper_bound_kwh": variable_consumption["grid_shiftable_upper_bound_kwh"],
+        "matched_grid_shiftable_upper_bound_kwh": tariff_analysis.get(
+            "matched_grid_shiftable_upper_bound_kwh"
+        ),
         "avg_price_ct_kwh": price_result.get("average_price"),
         "avg_daily_price_spread_ct_kwh": price_metrics["avg_daily_price_spread_ct_kwh"],
         "spot_price_stddev_ct_kwh": price_metrics["spot_price_stddev_ct_kwh"],
@@ -868,7 +874,6 @@ async def _build_analysis_response(
         "min_spot_price_ct_kwh": tariff_analysis.get("min_spot_price_ct_kwh"),
         "max_spot_price_at": tariff_analysis.get("max_spot_price_at"),
         "min_spot_price_at": tariff_analysis.get("min_spot_price_at"),
-        "flexibility_potential_percent": tariff_analysis.get("flexibility_potential_percent"),
         "max_extra_savings_eur": tariff_analysis.get("max_extra_savings_eur"),
         "max_penalty_risk_eur": tariff_analysis.get("max_penalty_risk_eur"),
         "peak_exposure_percent": tariff_analysis.get("peak_exposure_percent"),
