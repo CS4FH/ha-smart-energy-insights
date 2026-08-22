@@ -1900,6 +1900,9 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     return `
       <section class="seasonal-heatmaps">
         <div class="seasonal-heatmaps-card">
+          <div class="heatmap-season-navigation" role="group" aria-label="Heatmap season">
+            ${buttons}
+          </div>
           <div class="consumption-profile-control">
             <label for="consumptionProfileSelect">${texts.consumptionProfileLabel}</label>
             <select id="consumptionProfileSelect" class="consumption-profile-select">
@@ -1921,9 +1924,6 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
                 }).join("")}
               </optgroup>` : ""}
             </select>
-          </div>
-          <div class="heatmap-season-navigation" role="group" aria-label="Heatmap season">
-            ${buttons}
           </div>
           ${panels}
         </div>
