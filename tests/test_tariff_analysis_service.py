@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 from custom_components.smart_energy_insights.services.pricing_service import PricingConfig
 from custom_components.smart_energy_insights.services.tariff_analysis_service import (
@@ -57,9 +58,67 @@ def test_analyze_tariffs_is_consistent_for_monthly_and_total() -> None:
 
     monthly_delta_sum = sum(item["delta_eur"] for item in monthly)
     assert abs(monthly_delta_sum - result["delta_total_eur"]) < 0.001
+    assert sum(item["expected_hours"] for item in monthly) == result["expected_hours"]
+    assert sum(item["expected_days"] for item in monthly) == 2
 
     assert result["total_savings_eur"] >= 0
     assert result["total_extra_cost_eur"] >= 0
+
+
+def test_analyze_tariffs_month_expectations_handle_leap_year_and_dst() -> None:
+    local_tz = ZoneInfo("Europe/Vienna")
+    periods = [
+        (
+            datetime(2024, 2, 1, tzinfo=local_tz),
+            datetime(2024, 3, 1, tzinfo=local_tz),
+            2,
+            29 * 24,
+            29,
+        ),
+        (
+            datetime(2026, 3, 1, tzinfo=local_tz),
+            datetime(2026, 4, 1, tzinfo=local_tz),
+            3,
+            31 * 24 - 1,
+            31,
+        ),
+        (
+            datetime(2026, 10, 1, tzinfo=local_tz),
+            datetime(2026, 11, 1, tzinfo=local_tz),
+            10,
+            31 * 24 + 1,
+            31,
+        ),
+    ]
+    pricing = PricingConfig(
+        fixed_price=20.0,
+        fixed_base_fee=0.0,
+        spot_markup=0.0,
+        spot_base_fee=0.0,
+        tax_rate=0.0,
+    )
+
+    for local_start, local_end, month, expected_hours, expected_days in periods:
+        utc_start = local_start.astimezone(timezone.utc)
+        utc_end = local_end.astimezone(timezone.utc)
+        starts = []
+        current = utc_start
+        while current < utc_end:
+            starts.append(current)
+            current += timedelta(hours=1)
+
+        statistics = [{"start": start, "state": 1.0} for start in starts]
+        price_series = [{"start": start, "value": 10.0} for start in starts]
+
+        with patch(
+            "custom_components.smart_energy_insights.services.tariff_analysis_service.dt_util.as_local",
+            side_effect=lambda value: value.astimezone(local_tz),
+        ):
+            result = analyze_tariffs(statistics, price_series, pricing)
+
+        month_result = result["monthly"][month - 1]
+        assert month_result["expected_hours"] == expected_hours
+        assert month_result["expected_days"] == expected_days
 
 
 def test_analyze_tariffs_handles_no_matches() -> None:

@@ -2289,19 +2289,21 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
         const monthIndex = Math.max(1, Math.min(12, Number(item.month || 1))) - 1;
         const delta = Number(item.delta_eur || 0);
         const matchedHours = Number(item.matched_hours || 0);
-        const monthDays = new Date(2026, monthIndex + 1, 0).getDate();
-        const matchedDays = Math.max(0, Math.round(matchedHours / 24));
-        const availabilityLabel = `${matchedDays}/${monthDays}`;
+        const expectedHours = Number(item.expected_hours);
+        const hasExpectedHours = Number.isFinite(expectedHours) && expectedHours > 0;
+        const availabilityLabel = hasExpectedHours
+          ? `${formatNumber(matchedHours, 0)}/${formatNumber(expectedHours, 0)} h`
+          : `${formatNumber(matchedHours, 0)} h`;
         const intensity = Math.min(1, Math.abs(delta) / maxAbs);
-        const hasData = matchedDays > 0;
+        const hasData = matchedHours > 0;
         const badgeClass = !hasData
           ? "none"
-          : matchedDays >= monthDays
+          : hasExpectedHours && matchedHours >= expectedHours
             ? "full"
             : "partial";
         const badgeIcon = !hasData
           ? "⚠"
-          : matchedDays >= monthDays
+          : hasExpectedHours && matchedHours >= expectedHours
             ? "✓"
             : "⚠";
 

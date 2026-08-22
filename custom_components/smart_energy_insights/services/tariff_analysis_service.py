@@ -91,6 +91,8 @@ def analyze_tariffs(statistics: list, price_series: list, pricing_config) -> dic
         month: {
             "month": month,
             "matched_hours": 0,
+            "expected_hours": 0,
+            "expected_days": 0,
             "fixed_cost_eur": 0.0,
             "spot_cost_eur": 0.0,
             "delta_eur": 0.0,
@@ -118,6 +120,7 @@ def analyze_tariffs(statistics: list, price_series: list, pricing_config) -> dic
     total_consumption_kwh = sum(max(0.0, float(stat.get("state", 0.0) or 0.0)) for stat in (statistics or []))
 
     expected_hours = 0
+    expected_dates_by_month = {month: set() for month in range(1, 13)}
     if statistics:
         starts = [stat.get("start") for stat in statistics if stat.get("start") is not None]
         if starts:
@@ -125,6 +128,16 @@ def analyze_tariffs(statistics: list, price_series: list, pricing_config) -> dic
             latest_start = max(starts)
             range_hours = int((latest_start - earliest_start).total_seconds() // 3600) + 1
             expected_hours = max(0, range_hours)
+
+            current_start = earliest_start
+            while current_start <= latest_start:
+                local_start = dt_util.as_local(current_start)
+                months[local_start.month]["expected_hours"] += 1
+                expected_dates_by_month[local_start.month].add(local_start.date())
+                current_start += timedelta(hours=1)
+
+    for month, expected_dates in expected_dates_by_month.items():
+        months[month]["expected_days"] = len(expected_dates)
 
     data_completeness_ratio = (
         consumption_hours / expected_hours
@@ -192,6 +205,8 @@ def analyze_tariffs(statistics: list, price_series: list, pricing_config) -> dic
             {
                 "month": month,
                 "matched_hours": current["matched_hours"],
+                "expected_hours": current["expected_hours"],
+                "expected_days": current["expected_days"],
                 "fixed_cost_eur": round(current["fixed_cost_eur"], 4),
                 "spot_cost_eur": round(current["spot_cost_eur"], 4),
                 "delta_eur": round(current["delta_eur"], 4),
