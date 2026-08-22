@@ -1,10 +1,23 @@
 export function renderBaseCard(texts) {
   return `
     <ha-card id="mainCard" class="upload-card">
+      <div class="dashboard-toolbar">
+        <button id="integrationSettingsBtn" class="integration-settings-chip" title="${texts.integrationSettingsLabel}" aria-label="${texts.integrationSettingsLabel}" type="button">
+          <ha-icon icon="mdi:cog"></ha-icon>
+        </button>
+      </div>
+
+      <div class="workflow-phase-label">${texts.workflowPhaseSetup}</div>
       <details class="source-card" id="sourceSelector" open>
-        <summary class="source-chooser-header source-card-summary" aria-label="${texts.sourceTitle}">
+        <summary class="shared-island-summary" aria-label="${texts.sourceTitle}">
+          <span class="workflow-step-marker" aria-hidden="true">01</span>
+          <span class="shared-island-summary-text">${texts.sourceTitle}</span>
+          <span class="shared-island-summary-hint closed">${texts.sourceClosedHint}</span>
+          <span class="shared-island-summary-hint open">${texts.sourceOpenHint}</span>
+          <span class="shared-island-summary-icon" aria-hidden="true"></span>
+        </summary>
+        <div class="source-chooser-header">
           <div>
-            <div class="source-chooser-title">${texts.sourceTitle}</div>
             <div class="source-chooser-desc">${texts.sourceDescription}</div>
           </div>
           <div class="source-header-actions">
@@ -12,14 +25,8 @@ export function renderBaseCard(texts) {
               <button id="sourceSensorSwitch" class="source-switch" data-source="sensor" role="tab" aria-controls="sensorSection" aria-selected="false" type="button">${texts.sourceSensor}</button>
               <button id="sourceCsvSwitch" class="source-switch" data-source="csv" role="tab" aria-controls="csvSection" aria-selected="true" type="button">${texts.sourceCsv}</button>
             </div>
-            <button id="integrationSettingsBtn" class="integration-settings-chip" title="${texts.integrationSettingsLabel}" aria-label="${texts.integrationSettingsLabel}" type="button">
-              <ha-icon icon="mdi:cog"></ha-icon>
-            </button>
-            <span class="source-card-summary-hint closed">${texts.sourceClosedHint}</span>
-            <span class="source-card-summary-hint open">${texts.sourceOpenHint}</span>
-            <span class="source-card-summary-icon" aria-hidden="true"></span>
           </div>
-        </summary>
+        </div>
 
         <div class="source-content" id="sourceContent">
         <div class="source-section" id="csvSection" role="tabpanel" aria-labelledby="sourceCsvSwitch">
@@ -107,6 +114,9 @@ export function renderBaseCard(texts) {
         </div>
       </details>
 
+      <div class="workflow-connector source-range-connector" aria-hidden="true"></div>
+      <div id="rangePickerContainer" class="range-picker-container"></div>
+
       <div id="dashboardContainer"></div>
     </ha-card>
   `;
@@ -120,18 +130,32 @@ export function renderDashboardHtml({
   taxNote,
   texts,
   dashboardTab,
-  analysisOpen
+  analysisOpen,
+  recommendationOpen
 }) {
   return `
     <div class="dashboard-wrapper">
-      <div class="top-dashboard-grid">
-        <div class="banner-column" id="dynamicSavingsBanner"></div>
-      </div>
+      <div class="section-divider setup-results-divider" aria-hidden="true"></div>
+      <div class="workflow-phase-label results">${texts.workflowPhaseResults}</div>
 
-      <div class="card-tax-note">${taxNote}</div>
+      <details class="recommendation-island"${recommendationOpen ? " open" : ""}>
+        <summary class="shared-island-summary" aria-label="${texts.recommendationOverviewTitle}">
+          <span class="workflow-step-marker" aria-hidden="true">03</span>
+          <span class="shared-island-summary-text">${texts.recommendationOverviewTitle}</span>
+          <span class="shared-island-summary-hint closed">${texts.sourceClosedHint}</span>
+          <span class="shared-island-summary-hint open">${texts.sourceOpenHint}</span>
+          <span class="shared-island-summary-icon" aria-hidden="true"></span>
+        </summary>
+        <div class="top-dashboard-grid">
+          <div class="banner-column" id="dynamicSavingsBanner"></div>
+        </div>
+      </details>
+
+      <div class="workflow-connector results-workflow-connector" aria-hidden="true"></div>
 
       <details class="analysis-island"${analysisOpen ? " open" : ""}>
         <summary class="analysis-island-summary" aria-label="${texts.detailedAnalysisTitle}">
+          <span class="workflow-step-marker" aria-hidden="true">04</span>
           <span class="analysis-island-summary-text">${texts.detailedAnalysisTitle}</span>
           <span class="analysis-island-summary-hint closed">${texts.analysisDetailedAnalysisClosedHint}</span>
           <span class="analysis-island-summary-hint open">${texts.analysisDetailedAnalysisOpenHint}</span>
@@ -169,6 +193,9 @@ export function renderDashboardHtml({
           </div>
         </section>
       </details>
+
+      <div class="section-divider results-footer-divider" aria-hidden="true"></div>
+      <div class="card-tax-note">${taxNote}</div>
     </div>
   `;
 }

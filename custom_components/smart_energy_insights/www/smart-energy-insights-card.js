@@ -14,8 +14,9 @@ import {
   setActiveSource,
   uploadCsv
 } from "./smart-energy-insights-api.js?v=20260724a";
+import { buildDayRangePickerHtml, shiftCalendarMonth } from "./smart-energy-insights-calendar.js?v=20260822e";
 import { generateHeatmapHTML } from "./smart-energy-insights-heatmap.js?v=20260724a";
-import { renderBaseCard, renderDashboardHtml } from "./smart-energy-insights-templates.js?v=20260724c";
+import { renderBaseCard, renderDashboardHtml } from "./smart-energy-insights-templates.js?v=20260822g";
 import { formatNumber } from "./smart-energy-insights-utils.js";
 
 // Below this share of expected hourly slots actually matched to a spot price,
@@ -99,6 +100,10 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
   getTexts() {
     return {
       sourceTitle: this.localize("card.source_title", "Choose data source"),
+      setupOverviewTitle: this.localize("card.setup_overview_title", "Data source and analysis period"),
+      recommendationOverviewTitle: this.localize("card.recommendation_overview_title", "Tariff recommendation"),
+      workflowPhaseSetup: this.localize("card.workflow_phase_setup", "Setup"),
+      workflowPhaseResults: this.localize("card.workflow_phase_results", "Results"),
       dashboardTitle: this.localize("panel.title", "Smart Energy Insights"),
       sourceStateLoading: this.localize("card.source_state_loading", "No source loaded"),
       sourceStateSensor: (name) => this.localize("card.source_state_sensor", "Sensor: {name}", { name }),
@@ -181,6 +186,31 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       uploadAnotherTitle: this.localize("card.upload_another_title", "Upload another load profile"),
       lastImported: this.localize("card.last_imported", "Last imported"),
       profileTitle: this.localize("card.profile_title", "Current load profile:"),
+      calendarTitle: this.localize("card.calendar_title", "Analysis period"),
+      calendarFullRange: this.localize("card.calendar_full_range", "Entire available period"),
+      calendarRangeSummary: ({ start, end }) => this.localize(
+        "card.calendar_range_summary",
+        "{start} to {end}",
+        { start, end }
+      ),
+      calendarPreviousMonth: this.localize("card.calendar_previous_month", "Previous month"),
+      calendarNextMonth: this.localize("card.calendar_next_month", "Next month"),
+      calendarStatusComplete: this.localize("card.calendar_status_complete", "Complete data"),
+      calendarStatusPartial: this.localize("card.calendar_status_partial", "Partial data"),
+      calendarStatusNone: this.localize("card.calendar_status_none", "No data"),
+      calendarApply: this.localize("card.calendar_apply", "Apply"),
+      calendarReset: this.localize("card.calendar_reset", "Reset"),
+      calendarLoading: this.localize("card.calendar_loading", "Loading..."),
+      calendarError: this.localize("card.calendar_error", "Could not load the selected period."),
+      calendarWeekdays: [
+        this.localize("card.calendar_weekday_mon", "Mon"),
+        this.localize("card.calendar_weekday_tue", "Tue"),
+        this.localize("card.calendar_weekday_wed", "Wed"),
+        this.localize("card.calendar_weekday_thu", "Thu"),
+        this.localize("card.calendar_weekday_fri", "Fri"),
+        this.localize("card.calendar_weekday_sat", "Sat"),
+        this.localize("card.calendar_weekday_sun", "Sun")
+      ],
       currentProfileLabel: this.localize("card.current_profile_label", "Current profile:"),
       switchSourceButton: this.localize("card.switch_source_button", "Switch source"),
       sourceClosedHint: this.localize("card.source_closed_hint", "Tap to open"),
@@ -607,13 +637,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     integrationSettingsBtn.addEventListener("click", (event) => { event.stopPropagation(); this.navigateToIntegrations(); });
 
     const sourceSelector = this.querySelector("#sourceSelector");
-    const sourceCardSummary = this.querySelector("#sourceSelector > summary");
-    if (sourceSelector && sourceCardSummary) {
-      sourceCardSummary.addEventListener("click", (event) => {
-        if (!this.hasLoadedData(this.latestData)) {
-          event.preventDefault();
-        }
-      });
+    if (sourceSelector) {
       sourceSelector.addEventListener("toggle", () => {
         this._sourcePanelOpen = sourceSelector.open;
         this.saveUiState();
@@ -1114,12 +1138,20 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
 
   updateLayoutVisibility() {
     const sourceSelector = this.querySelector("#sourceSelector");
+    const sourceRangeConnector = this.querySelector(".source-range-connector");
+    const rangePickerContainer = this.querySelector("#rangePickerContainer");
     const dashboardContainer = this.querySelector("#dashboardContainer");
     const hasData = this.hasLoadedData(this.latestData);
     this.renderMonitoredDevices();
 
     if (sourceSelector) {
-      sourceSelector.open = !hasData || this._sourcePanelOpen !== false;
+      sourceSelector.open = this._sourcePanelOpen !== false;
+    }
+    if (sourceRangeConnector) {
+      sourceRangeConnector.hidden = !hasData;
+    }
+    if (rangePickerContainer) {
+      rangePickerContainer.hidden = !hasData;
     }
     if (dashboardContainer) {
       dashboardContainer.style.display = hasData ? "block" : "none";
@@ -1189,6 +1221,17 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       console.error("Failed to persist source", err);
     }
 
+    const storedRange = this._rangeBySource?.[source];
+    this._rangeStartDate = storedRange?.start || null;
+    this._rangeEndDate = storedRange?.end || null;
+    this._calendarDraftStart = this._rangeStartDate;
+    this._calendarDraftEnd = this._rangeEndDate;
+    this._calendarViewMonth = (this._rangeEndDate || "").slice(0, 7) || null;
+    if (this._rangeStartDate && this._rangeEndDate) {
+      await this.reloadAnalysisForRange(this._rangeStartDate, this._rangeEndDate);
+      return;
+    }
+
     if (source === "csv" && this._lastCsvData) {
       this.showSensorMessage("", "");
       this.renderDashboard(this._lastCsvData, { collapseSourcePanel: false });
@@ -1232,7 +1275,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     const texts = this._texts || this.getTexts();
     this.showSensorMessage(texts.sensorLoading, "loading");
     try {
-      const data = await loadSensorData(this._hass);
+      const data = await loadSensorData(this._hass, this._rangeStartDate, this._rangeEndDate);
       if (!data) {
         this.showSensorMessage(texts.sensorNoData, "error");
         return;
@@ -1284,6 +1327,13 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       this.showSuccessMessage(responseData);
       this._lastCsvData = responseData;
       this._activeSource = "csv";
+      this._rangeBySource = this._rangeBySource || {};
+      this._rangeBySource.csv = null;
+      this._rangeStartDate = null;
+      this._rangeEndDate = null;
+      this._calendarDraftStart = null;
+      this._calendarDraftEnd = null;
+      this._calendarViewMonth = null;
       this.saveUiState();
       this.renderDashboard(responseData, { collapseSourcePanel: true });
       this.resetUI();
@@ -1295,11 +1345,13 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
 
   async loadHeatmapsFromBackend() {
     try {
-      let data = await loadHeatmaps(this._hass);
+      let data = this._activeSource === "sensor"
+        ? await loadSensorData(this._hass, this._rangeStartDate, this._rangeEndDate)
+        : await loadHeatmaps(this._hass, this._rangeStartDate, this._rangeEndDate);
       if (data) {
         if (data.source && !this._storedSource) this._activeSource = data.source;
-        if (data.source === "sensor") {
-          data = await loadSensorData(this._hass);
+        if (data.source === "sensor" && this._activeSource !== "sensor") {
+          data = await loadSensorData(this._hass, this._rangeStartDate, this._rangeEndDate);
         }
         if (data.csv_available !== undefined) {
           this._csvAvailable = data.csv_available;
@@ -1357,6 +1409,115 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     this.querySelector("#cancelBtn").disabled = false;
   }
 
+  buildRangePickerHtml(response) {
+    const coverage = response.daily_coverage || {};
+    this._availableStartDate = response.available_start_date || Object.keys(coverage).sort()[0] || null;
+    this._availableEndDate = response.available_end_date || Object.keys(coverage).sort().at(-1) || null;
+    if (!this._calendarViewMonth) {
+      this._calendarViewMonth = (this._rangeEndDate || this._availableEndDate || "").slice(0, 7);
+    }
+    if (!this._calendarDraftStart && !this._calendarDraftEnd) {
+      this._calendarDraftStart = this._rangeStartDate || null;
+      this._calendarDraftEnd = this._rangeEndDate || null;
+    }
+    return buildDayRangePickerHtml({
+      texts: this._texts || this.getTexts(),
+      locale: this._hass?.locale?.language || this._hass?.language,
+      coverage,
+      availableStartDate: this._availableStartDate,
+      availableEndDate: this._availableEndDate,
+      viewMonth: this._calendarViewMonth,
+      draftStart: this._calendarDraftStart,
+      draftEnd: this._calendarDraftEnd,
+      appliedStart: this._rangeStartDate,
+      appliedEnd: this._rangeEndDate,
+      calendarOpen: this._calendarOpen === true,
+      isLoading: this._rangeLoading === true,
+      errorMessage: this._rangeError || "",
+    });
+  }
+
+  attachRangePickerListeners() {
+    const calendar = this.querySelector(".range-calendar");
+    if (!calendar) return;
+    calendar.addEventListener("toggle", () => {
+      this._calendarOpen = calendar.open;
+      this.saveUiState();
+    });
+    calendar.querySelectorAll("[data-calendar-shift]").forEach((button) => {
+      button.addEventListener("click", () => {
+        this._calendarViewMonth = shiftCalendarMonth(
+          this._calendarViewMonth,
+          Number(button.dataset.calendarShift || 0)
+        );
+        this.renderDashboard(this.latestData, { collapseSourcePanel: false });
+      });
+    });
+    calendar.querySelectorAll("[data-calendar-day]:not(:disabled)").forEach((button) => {
+      button.addEventListener("click", () => {
+        const selectedDate = button.dataset.calendarDay;
+        if (!this._calendarDraftStart || this._calendarDraftEnd) {
+          this._calendarDraftStart = selectedDate;
+          this._calendarDraftEnd = null;
+        } else if (selectedDate < this._calendarDraftStart) {
+          this._calendarDraftEnd = this._calendarDraftStart;
+          this._calendarDraftStart = selectedDate;
+        } else {
+          this._calendarDraftEnd = selectedDate;
+        }
+        this.renderDashboard(this.latestData, { collapseSourcePanel: false });
+      });
+    });
+    calendar.querySelector("[data-calendar-apply]")?.addEventListener("click", () => {
+      if (this._calendarDraftStart && this._calendarDraftEnd) {
+        this.reloadAnalysisForRange(this._calendarDraftStart, this._calendarDraftEnd);
+      }
+    });
+    calendar.querySelector("[data-calendar-reset]")?.addEventListener("click", () => {
+      this._calendarDraftStart = null;
+      this._calendarDraftEnd = null;
+      this.reloadAnalysisForRange(null, null);
+    });
+  }
+
+  async reloadAnalysisForRange(startDate, endDate) {
+    const generation = (this._rangeRequestGeneration || 0) + 1;
+    this._rangeRequestGeneration = generation;
+    this._rangeLoading = true;
+    this._rangeError = null;
+    if (this.latestData) this.renderDashboard(this.latestData, { collapseSourcePanel: false });
+
+    try {
+      const data = this._activeSource === "sensor"
+        ? await loadSensorData(this._hass, startDate, endDate, { allowEmpty: false })
+        : await loadHeatmaps(this._hass, startDate, endDate, { allowEmpty: false });
+      if (generation !== this._rangeRequestGeneration) return;
+
+      this._rangeStartDate = startDate;
+      this._rangeEndDate = endDate;
+      this._calendarDraftStart = startDate;
+      this._calendarDraftEnd = endDate;
+      this._rangeBySource = this._rangeBySource || {};
+      this._rangeBySource[this._activeSource] = startDate && endDate
+        ? { start: startDate, end: endDate }
+        : null;
+      this._deviceAnalysisProfileKey = null;
+      this._rangeLoading = false;
+      if (this._activeSource === "sensor") {
+        this._lastSensorData = data;
+      } else {
+        this._lastCsvData = data;
+      }
+      this.saveUiState();
+      this.renderDashboard(data, { collapseSourcePanel: false });
+    } catch (error) {
+      if (generation !== this._rangeRequestGeneration) return;
+      this._rangeLoading = false;
+      this._rangeError = error.message || (this._texts || this.getTexts()).calendarError;
+      if (this.latestData) this.renderDashboard(this.latestData, { collapseSourcePanel: false });
+    }
+  }
+
   renderDashboard(response) {
     const container = this.querySelector("#dashboardContainer");
     if (!container) return;
@@ -1377,9 +1538,14 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
 
     const heatmapsHtml = this.buildSeasonalHeatmapsHtml(response);
     const monthlyTariffHtml = this.buildMonthlyTariffComparisonHtml(response);
+    const rangePickerHtml = this.buildRangePickerHtml(response);
+    const rangePickerContainer = this.querySelector("#rangePickerContainer");
+    if (rangePickerContainer) {
+      rangePickerContainer.innerHTML = rangePickerHtml;
+    }
 
-    const start = response.start ? response.start.split('T')[0] : 'N/A';
-    const end = response.end ? response.end.split('T')[0] : 'N/A';
+    const start = response.analysis_start_date || (response.start ? response.start.split('T')[0] : 'N/A');
+    const end = response.analysis_end_date || (response.end ? response.end.split('T')[0] : 'N/A');
     
     const avgConsumptionStr = formatNumber(response.avg_consumption_kwh, 3);
     const avgPriceStr = formatNumber(response.avg_price_ct_kwh, 2);
@@ -1427,6 +1593,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
 
     if (!this._dashboardTab) this._dashboardTab = "monthly";
     if (typeof this._analysisOpen !== "boolean") this._analysisOpen = false;
+    if (typeof this._recommendationOpen !== "boolean") this._recommendationOpen = true;
 
     container.innerHTML = renderDashboardHtml({
       heatmapsHtml,
@@ -1436,13 +1603,24 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       taxNote: analysisViews.taxNote,
       texts,
       dashboardTab: this._dashboardTab,
-      analysisOpen: this._analysisOpen
+      analysisOpen: this._analysisOpen,
+      recommendationOpen: this._recommendationOpen
     });
+
+    this.attachRangePickerListeners();
 
     const analysisIsland = this.querySelector(".analysis-island");
     if (analysisIsland) {
       analysisIsland.addEventListener("toggle", () => {
         this._analysisOpen = analysisIsland.open;
+        this.saveUiState();
+      });
+    }
+
+    const recommendationIsland = this.querySelector(".recommendation-island");
+    if (recommendationIsland) {
+      recommendationIsland.addEventListener("toggle", () => {
+        this._recommendationOpen = recommendationIsland.open;
         this.saveUiState();
       });
     }
@@ -1523,7 +1701,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
   getDeviceAnalysisKey(response) {
     const devices = (this._monitoredDevices || []).map((device) => device.entity_id).join(",");
     const sources = (this._consumptionSources || []).map((source) => source.entity_id).join(",");
-    return `${response.source || ""}|${response.available_start || response.start || ""}|${response.available_end || response.end || ""}|${devices}|${sources}`;
+    return `${response.source || ""}|${this._rangeStartDate || "all"}|${this._rangeEndDate || "all"}|${devices}|${sources}`;
   }
 
   async refreshDeviceAnalyses(response) {
@@ -1543,7 +1721,12 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
 
     await Promise.all(analysisEntries.map(async ({ entityId, loadAnalysis }) => {
       try {
-        const analysis = await loadAnalysis(this._hass, entityId);
+        const analysis = await loadAnalysis(
+          this._hass,
+          entityId,
+          this._rangeStartDate,
+          this._rangeEndDate
+        );
         if (this._deviceAnalysisProfileKey === key) {
           this._deviceAnalysisCache.set(entityId, analysis);
         }
@@ -2633,6 +2816,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
   loadUiState() {
     this._uiStateLoaded = true;
     this._sourcePanelOpen = true;
+    this._calendarOpen = false;
     try {
       const raw = localStorage.getItem("sei_ui_state");
       if (!raw) return;
@@ -2650,9 +2834,21 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       this._optimizationMode = parsed.optimizationMode || "shift_score";
       this._dashboardTab = parsed.dashboardTab || "monthly";
       this._analysisOpen = Boolean(parsed.analysisOpen);
+      this._recommendationOpen = parsed.recommendationOpen !== undefined
+        ? Boolean(parsed.recommendationOpen)
+        : true;
       this._sourcePanelOpen = parsed.sourcePanelOpen !== undefined ? Boolean(parsed.sourcePanelOpen) : true;
+      this._calendarOpen = Boolean(parsed.calendarOpen);
       this._selectedSensor = parsed.selectedSensor || this._selectedSensor;
       this._selectedConsumptionProfile = parsed.selectedConsumptionProfile || "total";
+      this._rangeBySource = parsed.rangeBySource && typeof parsed.rangeBySource === "object"
+        ? parsed.rangeBySource
+        : {};
+      const storedRange = this._rangeBySource[this._storedSource];
+      this._rangeStartDate = storedRange?.start || null;
+      this._rangeEndDate = storedRange?.end || null;
+      this._calendarDraftStart = this._rangeStartDate;
+      this._calendarDraftEnd = this._rangeEndDate;
     } catch (err) {
       console.warn("Failed to load UI state", err);
     }
@@ -2668,9 +2864,12 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
         optimizationMode: this._optimizationMode || "shift_score",
         dashboardTab: this._dashboardTab || "monthly",
         analysisOpen: Boolean(this._analysisOpen),
+        recommendationOpen: this._recommendationOpen !== false,
         sourcePanelOpen: this._sourcePanelOpen !== false,
+        calendarOpen: this._calendarOpen === true,
         selectedSensor: this._selectedSensor || null,
-        selectedConsumptionProfile: this._selectedConsumptionProfile || "total"
+        selectedConsumptionProfile: this._selectedConsumptionProfile || "total",
+        rangeBySource: this._rangeBySource || {}
       };
       localStorage.setItem("sei_ui_state", JSON.stringify(payload));
     } catch (err) {
@@ -2682,11 +2881,17 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     const style = document.createElement("style");
     style.textContent = `
       ha-card { box-shadow: none; border-radius: 14px; overflow: hidden; background: transparent; }
+      .dashboard-toolbar { margin: 14px 24px 0; display: flex; justify-content: flex-end; }
       .integration-settings-chip { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; padding: 0; border: 1px solid var(--divider-color); border-radius: 999px; background: transparent; color: var(--secondary-text-color); cursor: pointer; }
       .integration-settings-chip:hover { color: var(--primary-color); border-color: var(--primary-color); background: rgba(var(--rgb-primary-color), 0.08); }
       .integration-settings-chip ha-icon { --mdc-icon-size: 20px; }
 
-      .source-card { margin: 24px 24px 0; border-radius: 12px; overflow: clip; background: color-mix(in srgb, var(--card-background-color) 90%, black 10%); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28); }
+      .source-card, .range-calendar, .recommendation-island { margin: 14px 24px 0; padding: 0; border-radius: 12px; background: color-mix(in srgb, var(--card-background-color) 90%, black 10%); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28); overflow: clip; }
+      .workflow-phase-label { margin: 8px 24px 0; color: var(--secondary-text-color); font-size: 11px; font-weight: 700; letter-spacing: 1.2px; line-height: 1; text-transform: uppercase; }
+      .workflow-phase-label.results { margin: 14px 0 12px; }
+      .workflow-step-marker { width: 28px; height: 28px; flex: 0 0 28px; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; border: 1px solid var(--divider-color); border-radius: 50%; background: var(--card-background-color); color: var(--secondary-text-color); font-size: 11px; font-weight: 800; letter-spacing: 0; transition: border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease; }
+      .source-card[open] .workflow-step-marker, .range-calendar[open] .workflow-step-marker, .recommendation-island[open] .workflow-step-marker, .analysis-island[open] .workflow-step-marker { border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(var(--rgb-primary-color), 0.12); color: var(--primary-color); }
+      .source-card { min-width: 0; box-sizing: border-box; }
       .source-chooser-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 18px 20px; }
       .source-chooser-title { font-size: 14px; font-weight: 600; color: var(--primary-text-color); }
       .source-chooser-desc { font-size: 12px; color: var(--secondary-text-color); }
@@ -2694,23 +2899,27 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       .source-selector-buttons { display: inline-flex; border: 1px solid var(--divider-color); border-radius: 999px; overflow: hidden; background: var(--secondary-background-color); }
       .source-switch { padding: 6px 14px; border: none; background: transparent; color: var(--primary-text-color); cursor: pointer; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
       .source-switch.active { background: var(--primary-color); color: white; }
-      .source-card-summary { cursor: pointer; list-style: none; user-select: none; }
-      .source-card-summary::-webkit-details-marker { display: none; }
-      .source-card-summary-hint { font-size: 11px; color: var(--secondary-text-color); letter-spacing: 0.2px; white-space: nowrap; }
-      .source-card-summary-hint.open { display: none; }
-      .source-card[open] .source-card-summary-hint.closed { display: none; }
-      .source-card[open] .source-card-summary-hint.open { display: inline; }
-      .source-card-summary-icon { position: relative; width: 14px; height: 14px; flex: 0 0 auto; color: var(--secondary-text-color); transition: transform 0.2s ease, color 0.2s ease; }
-      .source-card-summary-icon::before { content: ""; position: absolute; inset: 0; margin: auto; width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); }
-      .source-card[open] .source-card-summary-icon { transform: translateY(2px); color: var(--primary-color); }
-      .source-card[open] .source-card-summary-icon::before { transform: rotate(225deg); }
-      .source-card-summary:hover .source-chooser-title,
-      .source-card-summary:focus-visible .source-chooser-title,
-      .source-card-summary:hover .source-card-summary-hint,
-      .source-card-summary:focus-visible .source-card-summary-hint { color: var(--primary-text-color); }
-      .source-card-summary:focus-visible { outline: 2px solid var(--primary-color); outline-offset: -2px; }
+      .shared-island-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px; cursor: pointer; list-style: none; user-select: none; }
+      .shared-island-summary::-webkit-details-marker { display: none; }
+      .shared-island-summary-text { font-size: 11px; color: var(--secondary-text-color); text-transform: uppercase; letter-spacing: 0.8px; font-weight: 700; }
+      .shared-island-summary-hint { margin-left: auto; font-size: 11px; color: var(--secondary-text-color); letter-spacing: 0.2px; white-space: nowrap; }
+      .shared-island-summary-hint.open { display: none; }
+      .source-card[open] .shared-island-summary-hint.closed, .range-calendar[open] .shared-island-summary-hint.closed, .recommendation-island[open] .shared-island-summary-hint.closed { display: none; }
+      .source-card[open] .shared-island-summary-hint.open, .range-calendar[open] .shared-island-summary-hint.open, .recommendation-island[open] .shared-island-summary-hint.open { display: inline; }
+      .shared-island-summary-icon { position: relative; width: 14px; height: 14px; flex: 0 0 auto; color: var(--secondary-text-color); transition: transform 0.2s ease, color 0.2s ease; }
+      .shared-island-summary-icon::before { content: ""; position: absolute; inset: 0; margin: auto; width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); }
+      .source-card[open] .shared-island-summary-icon, .range-calendar[open] .shared-island-summary-icon, .recommendation-island[open] .shared-island-summary-icon { transform: translateY(2px); color: var(--primary-color); }
+      .source-card[open] .shared-island-summary-icon::before, .range-calendar[open] .shared-island-summary-icon::before, .recommendation-island[open] .shared-island-summary-icon::before { transform: rotate(225deg); }
+      .shared-island-summary:hover .shared-island-summary-text, .shared-island-summary:focus-visible .shared-island-summary-text, .shared-island-summary:hover .shared-island-summary-hint, .shared-island-summary:focus-visible .shared-island-summary-hint { color: var(--primary-text-color); }
+      .shared-island-summary:focus-visible { outline: 2px solid var(--primary-color); outline-offset: -2px; }
 
       .upload-card { width: 100%; max-width: 1200px; margin: 0 auto; height: fit-content; }
+      .section-divider { height: 1px; background: var(--divider-color); }
+      .setup-results-divider { margin: 0; }
+      .results-footer-divider { margin-top: 14px; }
+      .workflow-connector { position: relative; height: 24px; margin: 0 24px; }
+      .workflow-connector::before { content: ""; position: absolute; left: 29px; top: 0; bottom: 0; width: 1px; background: color-mix(in srgb, var(--divider-color) 72%, var(--primary-color) 28%); }
+      .source-range-connector + .range-picker-container .range-calendar { margin-top: 0; }
       .source-content { padding: 20px; display: grid; gap: 16px; }
       .source-section { background: rgba(var(--rgb-primary-text-color), 0.02); border-radius: 10px; padding: 16px 20px; }
       .source-section-header { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
@@ -2744,11 +2953,47 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       .sensor-message.success { color: #4caf50; background: rgba(76, 175, 80, 0.08); }
       
       /* Dashboard Wrapper */
-      .dashboard-wrapper { padding: 24px; }
+      .dashboard-wrapper { padding: 14px 24px 24px; }
+        .range-picker-container { min-width: 0; }
+        .range-picker-container[hidden] { display: none; }
+        .range-calendar { font-family: inherit; font-size: 14px; box-sizing: border-box; }
+        .range-calendar-summary { min-height: 52px; box-sizing: border-box; }
+        .range-calendar-heading { min-width: 0; display: flex; align-items: baseline; gap: 12px; white-space: nowrap; }
+        .range-calendar-summary strong { color: var(--secondary-text-color); font-size: 12px; font-weight: 400; }
+        .range-calendar-panel { width: min(100%, 720px); margin: 0 auto; padding: 6px 24px 20px; display: grid; gap: 12px; box-sizing: border-box; }
+        .range-calendar-navigation { display: grid; grid-template-columns: 40px minmax(0, 1fr) 40px; align-items: center; padding-bottom: 4px; border-bottom: 1px solid rgba(var(--rgb-divider-color), 0.45); }
+        .range-calendar-month { text-align: center; color: var(--primary-text-color); font-size: 14px; font-weight: 700; text-transform: capitalize; }
+        .range-calendar-icon-button { width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 50%; background: transparent; color: var(--primary-text-color); cursor: pointer; font: inherit; transition: color 0.15s ease, background-color 0.15s ease; }
+        .range-calendar-icon-button:hover:not(:disabled) { color: var(--primary-color); background: rgba(var(--rgb-primary-color), 0.1); }
+        .range-calendar-icon-button:disabled { opacity: 0.3; cursor: default; }
+        .range-calendar-weekdays, .range-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+        .range-calendar-weekdays span { padding: 2px 0 4px; color: var(--secondary-text-color); text-align: center; font-size: 11px; font-weight: 600; }
+        .range-calendar-day { position: relative; min-width: 0; height: 40px; padding: 4px; display: grid; place-items: center; border: 0; border-radius: 8px; background: transparent; color: var(--primary-text-color); cursor: pointer; font: inherit; font-size: 13px; }
+        .range-calendar-day:hover:not(:disabled) { background: rgba(var(--rgb-primary-color), 0.1); }
+        .range-calendar-day:disabled { cursor: default; }
+        .range-calendar-day.outside-month { visibility: hidden; }
+        .range-calendar-day.none { color: var(--disabled-text-color, var(--secondary-text-color)); opacity: 0.35; }
+        .range-calendar-day-status { position: absolute; bottom: 4px; width: 6px; height: 6px; border-radius: 50%; }
+        .range-calendar-day.complete .range-calendar-day-status { background: var(--success-color, #4caf50); }
+        .range-calendar-day.partial .range-calendar-day-status { box-sizing: border-box; border: 2px solid #d7a72f; background: linear-gradient(90deg, #d7a72f 50%, transparent 50%); }
+        .range-calendar-day.in-range { background: rgba(var(--rgb-primary-color), 0.14); }
+        .range-calendar-day.range-start, .range-calendar-day.range-end { border-radius: 8px; background: var(--primary-color); color: var(--text-primary-color, white); font-weight: 700; }
+        .range-calendar-legend { display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; padding-top: 4px; color: var(--secondary-text-color); font-size: 11px; }
+        .range-calendar-legend span { display: inline-flex; align-items: center; gap: 5px; }
+        .range-calendar-legend i { width: 8px; height: 8px; border-radius: 50%; }
+        .range-calendar-legend i.complete { background: var(--success-color, #4caf50); }
+        .range-calendar-legend i.partial { border: 2px solid #d7a72f; background: linear-gradient(90deg, #d7a72f 50%, transparent 50%); box-sizing: border-box; }
+        .range-calendar-legend i.none { background: var(--disabled-text-color, var(--secondary-text-color)); opacity: 0.35; }
+        .range-calendar-message:empty { display: none; }
+        .range-calendar-message { color: var(--error-color); font-size: 12px; }
+        .range-calendar-actions { display: flex; justify-content: center; gap: 8px; padding-top: 2px; }
+        .range-calendar-actions button { font-family: inherit; font-size: 14px; }
       .source-toggle-text-btn { border: none; background: transparent; color: var(--primary-color); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.45px; cursor: pointer; padding: 0; }
       .source-toggle-text-btn:hover { color: var(--primary-text-color); }
 
-      .top-dashboard-grid { margin-bottom: 24px; }
+      .recommendation-island { margin: 14px 0 0; }
+      .recommendation-island > .top-dashboard-grid { padding: 0 16px 16px; }
+      .top-dashboard-grid { margin-bottom: 0; }
       .banner-column { display: flex; flex-direction: column; gap: 16px; }
       .recommendation-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: stretch; }
       .recommendation-card { box-sizing: border-box; min-width: 0; border: 1px solid rgba(var(--rgb-divider-color), 0.5); border-radius: 16px; background: rgba(var(--rgb-primary-text-color), 0.04); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16); padding: 22px 24px; }
@@ -2789,7 +3034,9 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       .kpi-info-marker { width: 16px; height: 16px; min-width: 16px; border-radius: 50%; color: var(--secondary-text-color); display: inline-flex; align-items: center; justify-content: center; cursor: help; opacity: 0.82; }
       .kpi-info-marker ha-icon { --mdc-icon-size: 14px; }
       .kpi-info-marker:hover, .kpi-info-marker:focus-visible { color: var(--primary-color); opacity: 1; outline: none; }
-      .analysis-island { margin-top: 0; padding: 0; border-radius: 12px; background: color-mix(in srgb, var(--card-background-color) 90%, black 10%); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.26); overflow: clip; }
+      .analysis-island { margin-top: 14px; padding: 0; border-radius: 12px; background: color-mix(in srgb, var(--card-background-color) 90%, black 10%); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.26); overflow: clip; }
+      .results-workflow-connector { margin: 0; }
+      .results-workflow-connector + .analysis-island { margin-top: 0; }
       .analysis-island[open] { padding-bottom: 4px; }
       .analysis-island-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px; cursor: pointer; list-style: none; user-select: none; }
       .analysis-island-summary::-webkit-details-marker { display: none; }
@@ -2970,7 +3217,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       .monthly-cell-card.neutral .monthly-cell-center { color: #8f7a26; }
       .monthly-cell-card.extra .monthly-cell-center { color: #9b3b3b; }
       .monthly-cell-card.nodata .monthly-cell-center { color: #8f7a26; }
-      .card-tax-note { margin: 0 0 20px; padding: 12px 4px 0; border-top: 1px solid var(--divider-color); color: var(--secondary-text-color); text-align: center; font-size: 12px; opacity: 0.9; }
+      .card-tax-note { margin: 0; padding: 14px 4px 0; color: var(--secondary-text-color); text-align: center; font-size: 12px; opacity: 0.9; }
 
       /* Upload Formular wenn Daten geladen sind */
       #uploadContent.data-loaded { padding: 24px; background: rgba(var(--rgb-primary-text-color), 0.02); border-top: 1px solid var(--divider-color); margin-top: 24px; }
@@ -3002,6 +3249,11 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       .cancel-button { background-color: var(--secondary-background-color); color: var(--primary-text-color); }
       .cancel-button:hover:not(:disabled) { background-color: var(--divider-color); }
       @media(max-width: 600px) {
+        .workflow-step-marker { width: 26px; height: 26px; flex-basis: 26px; }
+        .workflow-connector::before { left: 28px; }
+        .range-calendar-panel { width: 100%; padding: 4px 12px 16px; }
+        .range-calendar-heading { gap: 8px; }
+        .range-calendar-day { height: 38px; }
         .source-chooser-header { align-items: flex-start; flex-direction: column; }
         .source-header-actions { width: 100%; justify-content: space-between; }
         .recommendation-hero { grid-template-columns: 1fr; gap: 12px; }

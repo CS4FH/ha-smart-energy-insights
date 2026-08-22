@@ -263,6 +263,44 @@ def test_analyze_tariffs_reports_negative_price_stats_and_completeness_gap() -> 
     assert abs(result["effective_spot_price_ct_kwh"] - 5.0) < 0.0001
 
 
+def test_analyze_tariffs_uses_explicit_range_for_missing_edge_hours() -> None:
+    range_start = datetime(2026, 1, 1, 0, tzinfo=timezone.utc)
+    range_end = datetime(2026, 1, 1, 4, tzinfo=timezone.utc)
+    statistics = [
+        {"start": datetime(2026, 1, 1, 1, tzinfo=timezone.utc), "state": 1.0},
+        {"start": datetime(2026, 1, 1, 2, tzinfo=timezone.utc), "state": 1.0},
+    ]
+    price_series = [
+        {"start": item["start"], "value": 10.0}
+        for item in statistics
+    ]
+    pricing = PricingConfig(
+        fixed_price=20.0,
+        fixed_base_fee=0.0,
+        spot_markup=0.0,
+        spot_base_fee=0.0,
+        tax_rate=0.0,
+    )
+
+    with patch(
+        "custom_components.smart_energy_insights.services.tariff_analysis_service.dt_util.as_local",
+        side_effect=lambda value: value,
+    ):
+        result = analyze_tariffs(
+            statistics,
+            price_series,
+            pricing,
+            range_start=range_start,
+            range_end=range_end,
+        )
+
+    assert result["consumption_hours"] == 2
+    assert result["expected_hours"] == 4
+    assert result["data_completeness_ratio"] == 0.5
+    assert result["monthly"][0]["expected_hours"] == 4
+    assert result["monthly"][0]["expected_days"] == 1
+
+
 def test_analyze_tariffs_risk_and_optimization_metrics_daily_6h() -> None:
     statistics = [
         {"start": datetime(2026, 1, 1, h, tzinfo=timezone.utc), "state": 1.0}

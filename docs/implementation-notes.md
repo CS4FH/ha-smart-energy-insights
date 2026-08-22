@@ -230,14 +230,18 @@ tariff parameters echoed back: `fixed_price_ct`, `fixed_base_fee_eur`, `spot_mar
 
 ### 6.4 `analyze_tariffs` — the cost model (Section 5.3 / Ch. 4.2 maths). File: `tariff_analysis_service.py`
 Docstring: *"single source of truth for tariff comparisons."* Signature: **[UPDATED]**
-`analyze_tariffs(statistics, price_series, pricing_config) -> dict` (no `inputs_are_net`).
+`analyze_tariffs(statistics, price_series, pricing_config, range_start=None, range_end=None) -> dict`
+(no `inputs_are_net`).
 
 Key mechanics (line ranges authoritative):
 - **Matching (L11–47):** builds `price_dict = {start: value}`; keeps only stats whose `start` has a
   matching spot price → `matched_points = [(start, consumption, spot_price)]`. `matched_hours`,
   `matched_consumption`, `base_spot_cost_cents = Σ consumption*spot_price`,
-  `duration_months = matched_hours / 730.5`, `total_consumption_kwh`,
-  `expected_hours` from `(latest−earliest)`+1h, `data_completeness_ratio = consumption_hours/expected_hours`.
+  `duration_months = matched_hours / 730.5`, `total_consumption_kwh`. For a selected analysis range,
+  `expected_hours` covers the complete half-open interval `[range_start, range_end)` rather than
+  shrinking to the first and last available measurement; the legacy measurement-bound fallback is
+  retained for callers without explicit bounds. `data_completeness_ratio =
+  consumption_hours/expected_hours` therefore includes missing hours at either edge.
 - **Gross prices and taxation (L50–69) [UPDATED]:** `tax_multiplier = 1 + tax_rate/100` is applied
   **only to the wholesale spot price** (always, not conditionally). All entered tariff parameters are
   already gross: `fix_price`, `fix_base`, `spot_markup`, `spot_base` are used as-is. Base fees spread
@@ -293,6 +297,15 @@ Key mechanics (line ranges authoritative):
 - **Templates:** `renderBaseCard` (source chooser: sensor vs CSV tabs, sensor picker, monitored
   devices), `renderDashboardHtml` (savings banner + a collapsible "detailed analysis" island with
   four tabs).
+- **Analysis-period calendar [UPDATED]:** a compact, collapsible custom day-range picker is rendered
+  above the dashboard. It has no presets or time-of-day controls. Start and end dates are inclusive
+  in the UI and converted to the backend's half-open `[start, end)` range. Days with at least one
+  total-consumption value are selectable: complete local days have a green marker, partial days a
+  yellow half-filled marker, and days without data are disabled. Local-day expectations are
+  DST-aware (23, 24 or 25 hours). Selection is a draft until **Apply** is pressed; reset restores the
+  full available period. The applied range is persisted per CSV/sensor source, included in
+  monitored-device and consumption-source analysis requests, and protected against stale main
+  responses by a monotonically increasing request generation.
 - **Four dashboard tabs:** `monthly` (Monthly comparison), `usage` (Usage behaviour: seasonal
   heatmaps), `risk` (Risk & optimisation: cost-projection range + timing profile), `technical`
   (Technical details: raw figures + tariff parameters).
@@ -312,7 +325,7 @@ Key mechanics (line ranges authoritative):
   `computePriceDeltaHeatmap`, `computeConsumptionDisplayHeatmap`, symmetric/robust/absolute scale
   helpers, seasonal coverage warnings (<50 % of a season's hours flagged).
 - **UI state** persisted in `localStorage["sei_ui_state"]` (active source, selected season/modes,
-  active tab, analysis-open, selected sensor/consumption profile).
+  active tab, analysis-open, selected sensor/consumption profile, and applied range per source).
 - **Utils:** `formatNumber` uses **comma decimal** (European); `formatUploadDate`; `debounce`.
 - **i18n:** all strings via `this.localize(key, fallback, placeholders)`; English fallbacks in code.
 
@@ -326,7 +339,9 @@ Key mechanics (line ranges authoritative):
 - `test_spot_price_service.py` — EUR/MWh→ct/kWh conversion, `missing_only` dedupe, empty API,
   metadata (`unit_of_measurement == "ct/kWh"`, arithmetic mean).
 - `test_tariff_analysis_service.py` — monthly/total consistency, no-match handling, negative prices +
-  completeness gap, daily-6h risk metrics, weighted peak/off-peak exposure.
+  completeness gap, explicit-range edge gaps, daily-6h risk metrics, weighted peak/off-peak exposure.
+- `test_date_range_coverage.py` — local-day availability, duplicate-hour handling, partial days and
+  23/25-hour DST transitions.
 - `test_statistics_repository.py` — sync/async add/import, query on executor.
 - `test_monitored_devices.py` — energy-sensor acceptance (kWh/Wh), power-sensor rejection,
   device-only heatmaps, completeness ratio.

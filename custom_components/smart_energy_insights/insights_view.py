@@ -103,20 +103,37 @@ class SmartEnergyInsightsUploadView(HomeAssistantView):
                 if not start_time or not end_time or start_time >= end_time:
                     return await _error_response(hass, "api.error.invalid_date_range")
 
-                fetch_start = start_time - timedelta(hours=1)
+                cached_coverage = csv_data.get("daily_coverage")
+                query_start = default_start if not cached_coverage else start_time
+                query_end = default_end if not cached_coverage else end_time
+                fetch_start = query_start - timedelta(hours=1)
                 stats = await async_get_statistics_during_period(
                     hass,
                     fetch_start,
-                    end_time,
+                    query_end,
                     {stat_id},
                     period="hour",
                     types={"sum", "state"},
                     units=None,
                 )
                 rows = stats.get(stat_id, [])
-                statistics = _statistics_from_rows(rows, min_start=start_time, prefer_state=True)
+                queried_statistics = _statistics_from_rows(
+                    rows, min_start=query_start, prefer_state=True
+                )
+                statistics = [
+                    point
+                    for point in queried_statistics
+                    if start_time <= point["start"] < end_time
+                ]
                 if not statistics:
                     return await _error_response(hass, "api.error.no_data_in_range")
+
+                daily_coverage = cached_coverage or _build_daily_coverage(queried_statistics)
+                if not cached_coverage:
+                    await async_update_cache(
+                        hass,
+                        {"csv_data": {**csv_data, "daily_coverage": daily_coverage}},
+                    )
 
                 available_start = csv_data.get("available_start") or csv_data.get("start")
                 available_end = csv_data.get("available_end") or csv_data.get("end")
@@ -132,6 +149,9 @@ class SmartEnergyInsightsUploadView(HomeAssistantView):
                     csv_data.get("upload_date") or dt_util.now().isoformat(),
                     available_start=available_start,
                     available_end=available_end,
+                    analysis_start=start_time,
+                    analysis_end=end_time,
+                    daily_coverage=daily_coverage,
                 )
                 return Response(
                     status=200,
@@ -270,6 +290,8 @@ class SmartEnergyInsightsUploadView(HomeAssistantView):
                 upload_date_iso,
                 available_start=statistics[0]["start"].isoformat(),
                 available_end=statistics[-1]["start"].isoformat(),
+                analysis_start=statistics[0]["start"],
+                analysis_end=statistics[-1]["start"] + timedelta(hours=1),
             )
 
             await async_update_cache(
@@ -557,6 +579,33 @@ def _get_active_profile_range(cached: dict) -> tuple[datetime | None, datetime |
     return dt_util.as_utc(start), dt_util.as_utc(end) + timedelta(hours=1)
 
 
+def _build_daily_coverage(statistics: list) -> dict[str, dict]:
+    """Return measured and expected hourly slots for each local calendar day."""
+    starts_by_date: dict[date, set[datetime]] = {}
+    for stat in statistics or []:
+        start = stat.get("start")
+        if start is None:
+            continue
+        start_utc = _stat_start_to_datetime(start)
+        local_date = dt_util.as_local(start_utc).date()
+        starts_by_date.setdefault(local_date, set()).add(start_utc)
+
+    timezone = dt_util.get_default_time_zone()
+    coverage = {}
+    for local_date in sorted(starts_by_date):
+        next_date = local_date + timedelta(days=1)
+        day_start = dt_util.as_utc(datetime.combine(local_date, time.min, tzinfo=timezone))
+        day_end = dt_util.as_utc(datetime.combine(next_date, time.min, tzinfo=timezone))
+        expected_hours = int((day_end - day_start).total_seconds() // 3600)
+        available_hours = len(starts_by_date[local_date])
+        coverage[local_date.isoformat()] = {
+            "available_hours": available_hours,
+            "expected_hours": expected_hours,
+            "status": "complete" if available_hours >= expected_hours else "partial",
+        }
+    return coverage
+
+
 def _device_analysis_response(
     entity_id: str,
     name: str,
@@ -704,6 +753,9 @@ async def _build_analysis_response(
     available_start: str | None = None,
     available_end: str | None = None,
     sensor_entity_ids: list[str] | None = None,
+    analysis_start: datetime | None = None,
+    analysis_end: datetime | None = None,
+    daily_coverage: dict[str, dict] | None = None,
 ) -> dict:
     """Build the analysis response.
 
@@ -718,6 +770,9 @@ async def _build_analysis_response(
     """
     start_iso = consumption_statistics[0]["start"].isoformat()
     end_iso = consumption_statistics[-1]["start"].isoformat()
+    resolved_analysis_start = analysis_start or consumption_statistics[0]["start"]
+    resolved_analysis_end = analysis_end or (consumption_statistics[-1]["start"] + timedelta(hours=1))
+    resolved_daily_coverage = daily_coverage or _build_daily_coverage(consumption_statistics)
     avg_consumption = sum(item["state"] for item in consumption_statistics) / len(consumption_statistics)
 
     price_result = {"imported_count": 0, "average_price": None, "series_count": 0}
@@ -750,6 +805,8 @@ async def _build_analysis_response(
         cost_statistics,
         price_series,
         pricing_config,
+        range_start=resolved_analysis_start,
+        range_end=resolved_analysis_end,
     )
     break_even_fixed = tariff_analysis.get("break_even_fixed_ct_kwh")
     spot_cheaper_share = tariff_analysis.get("spot_cheaper_share")
@@ -757,6 +814,17 @@ async def _build_analysis_response(
 
     range_start = available_start or start_iso
     range_end = available_end or end_iso
+    coverage_dates = sorted(resolved_daily_coverage)
+    available_start_date = coverage_dates[0] if coverage_dates else dt_util.as_local(
+        consumption_statistics[0]["start"]
+    ).date().isoformat()
+    available_end_date = coverage_dates[-1] if coverage_dates else dt_util.as_local(
+        consumption_statistics[-1]["start"]
+    ).date().isoformat()
+    analysis_start_date = dt_util.as_local(resolved_analysis_start).date().isoformat()
+    analysis_end_date = dt_util.as_local(
+        resolved_analysis_end - timedelta(microseconds=1)
+    ).date().isoformat()
 
     response_data = {
         "source": source,
@@ -769,6 +837,13 @@ async def _build_analysis_response(
         "end": end_iso,
         "available_start": range_start,
         "available_end": range_end,
+        "available_start_date": available_start_date,
+        "available_end_date": available_end_date,
+        "analysis_start": resolved_analysis_start.isoformat(),
+        "analysis_end": resolved_analysis_end.isoformat(),
+        "analysis_start_date": analysis_start_date,
+        "analysis_end_date": analysis_end_date,
+        "daily_coverage": resolved_daily_coverage,
         "avg_consumption_kwh": avg_consumption,
         "total_consumption_kwh": summary["total_consumption_kwh"],
         "avg_consumption_kwh_per_hour": summary["avg_consumption_kwh_per_hour"],
@@ -857,6 +932,9 @@ class SmartEnergyInsightsSensorView(HomeAssistantView):
         range_start = payload.get("start")
         range_end = payload.get("end")
 
+        cached = await async_load_cache(hass)
+        cached_sensor = cached.get("sensor_data") if cached else None
+
         end_time = dt_util.now()
         start_time = end_time - timedelta(days=365)
 
@@ -871,6 +949,20 @@ class SmartEnergyInsightsSensorView(HomeAssistantView):
                 return await _error_response(hass, "api.error.invalid_date_range")
             start_time = range_start_time
             end_time = range_end_time
+
+        query_start = start_time
+        query_end = end_time
+        cached_coverage = (cached_sensor or {}).get("daily_coverage")
+        if (range_start or range_end) and cached_sensor and not cached_coverage:
+            cached_start = dt_util.parse_datetime(
+                cached_sensor.get("available_start") or cached_sensor.get("start")
+            )
+            cached_end = dt_util.parse_datetime(
+                cached_sensor.get("available_end") or cached_sensor.get("end")
+            )
+            if cached_start and cached_end:
+                query_start = dt_util.as_utc(cached_start)
+                query_end = dt_util.as_utc(cached_end) + timedelta(hours=1)
 
         # Skip (and log) sources whose sensor is no longer a valid/available
         # energy sensor rather than failing the whole analysis - a household
@@ -890,11 +982,11 @@ class SmartEnergyInsightsSensorView(HomeAssistantView):
         if not valid_sources:
             return await _error_response(hass, "api.error.no_sensor_data")
 
-        fetch_start = start_time - timedelta(hours=1)
+        fetch_start = query_start - timedelta(hours=1)
         stats_by_id = await async_get_statistics_during_period(
             hass,
             fetch_start,
-            end_time,
+            query_end,
             {source["entity_id"] for source in valid_sources},
             period="hour",
             types={"sum", "state"},
@@ -913,7 +1005,7 @@ class SmartEnergyInsightsSensorView(HomeAssistantView):
             if not rows:
                 continue
             source_statistics = _statistics_from_rows(
-                rows, unit_factor=source["unit_factor"], min_start=start_time
+                rows, unit_factor=source["unit_factor"], min_start=query_start
             )
             if not source_statistics:
                 continue
@@ -921,18 +1013,31 @@ class SmartEnergyInsightsSensorView(HomeAssistantView):
             if source["cost_relevant"]:
                 cost_series.append(source_statistics)
 
-        total_statistics = _merge_hourly_statistics(total_series)
+        all_total_statistics = _merge_hourly_statistics(total_series)
+        if not all_total_statistics:
+            return await _error_response(hass, "api.error.no_sensor_data")
+
+        all_cost_statistics = _merge_hourly_statistics(cost_series)
+        total_statistics = [
+            point for point in all_total_statistics if start_time <= point["start"] < end_time
+        ]
+        cost_statistics = [
+            point for point in all_cost_statistics if start_time <= point["start"] < end_time
+        ]
         if not total_statistics:
             return await _error_response(hass, "api.error.no_sensor_data")
 
-        cost_statistics = _merge_hourly_statistics(cost_series)
+        daily_coverage = cached_coverage or _build_daily_coverage(all_total_statistics)
+        if cached_sensor and not cached_coverage:
+            await async_update_cache(
+                hass,
+                {"sensor_data": {**cached_sensor, "daily_coverage": daily_coverage}},
+            )
 
         upload_date_iso = dt_util.now().isoformat()
         sensor_entity_ids = [source["entity_id"] for source in valid_sources]
         display_name = ", ".join(source["name"] for source in valid_sources)
 
-        cached = await async_load_cache(hass)
-        cached_sensor = cached.get("sensor_data") if cached else None
         available_start = None
         available_end = None
         if cached_sensor:
@@ -954,6 +1059,9 @@ class SmartEnergyInsightsSensorView(HomeAssistantView):
             available_start=available_start,
             available_end=available_end,
             sensor_entity_ids=sensor_entity_ids,
+            analysis_start=start_time if range_start or range_end else total_statistics[0]["start"],
+            analysis_end=end_time if range_start or range_end else total_statistics[-1]["start"] + timedelta(hours=1),
+            daily_coverage=daily_coverage,
         )
 
         if not (range_start or range_end):
@@ -1078,14 +1186,12 @@ class SmartEnergyInsightsDeviceAnalysisView(HomeAssistantView):
                 content_type="application/json",
             )
 
-        analysis_start = max(start_time, statistics[0]["start"])
-        analysis_end = min(end_time, statistics[-1]["start"] + timedelta(hours=1))
         response_data = _device_analysis_response(
             entity_id,
             device["name"],
             statistics,
-            analysis_start,
-            analysis_end,
+            start_time,
+            end_time,
         )
         return Response(status=200, text=json.dumps(response_data), content_type="application/json")
 
@@ -1222,13 +1328,11 @@ class SmartEnergyInsightsConsumptionSourceAnalysisView(HomeAssistantView):
                 content_type="application/json",
             )
 
-        analysis_start = max(start_time, statistics[0]["start"])
-        analysis_end = min(end_time, statistics[-1]["start"] + timedelta(hours=1))
         response_data = _device_analysis_response(
             entity_id,
             source["name"],
             statistics,
-            analysis_start,
-            analysis_end,
+            start_time,
+            end_time,
         )
         return Response(status=200, text=json.dumps(response_data), content_type="application/json")

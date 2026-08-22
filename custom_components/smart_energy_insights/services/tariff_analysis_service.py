@@ -73,7 +73,13 @@ def compute_price_exposure(statistics: list, price_series: list) -> dict:
     }
 
 
-def analyze_tariffs(statistics: list, price_series: list, pricing_config) -> dict:
+def analyze_tariffs(
+    statistics: list,
+    price_series: list,
+    pricing_config,
+    range_start=None,
+    range_end=None,
+) -> dict:
     """Compute canonical tariff totals, monthly deltas, and derived metrics.
 
     This function is the single source of truth for tariff comparisons.
@@ -121,20 +127,22 @@ def analyze_tariffs(statistics: list, price_series: list, pricing_config) -> dic
 
     expected_hours = 0
     expected_dates_by_month = {month: set() for month in range(1, 13)}
-    if statistics:
+    expectation_start = range_start
+    expectation_end = range_end
+    if expectation_start is None or expectation_end is None:
         starts = [stat.get("start") for stat in statistics if stat.get("start") is not None]
         if starts:
-            earliest_start = min(starts)
-            latest_start = max(starts)
-            range_hours = int((latest_start - earliest_start).total_seconds() // 3600) + 1
-            expected_hours = max(0, range_hours)
+            expectation_start = min(starts)
+            expectation_end = max(starts) + timedelta(hours=1)
 
-            current_start = earliest_start
-            while current_start <= latest_start:
-                local_start = dt_util.as_local(current_start)
-                months[local_start.month]["expected_hours"] += 1
-                expected_dates_by_month[local_start.month].add(local_start.date())
-                current_start += timedelta(hours=1)
+    if expectation_start is not None and expectation_end is not None:
+        current_start = expectation_start
+        while current_start < expectation_end:
+            local_start = dt_util.as_local(current_start)
+            months[local_start.month]["expected_hours"] += 1
+            expected_dates_by_month[local_start.month].add(local_start.date())
+            expected_hours += 1
+            current_start += timedelta(hours=1)
 
     for month, expected_dates in expected_dates_by_month.items():
         months[month]["expected_days"] = len(expected_dates)
