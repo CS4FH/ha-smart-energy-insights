@@ -45,7 +45,7 @@ async def _get_spot_price_statistic_id(hass):
     return None
 
 
-async def _get_existing_price_starts(hass, stat_id, start_time, end_time):
+async def _get_existing_price_series(hass, stat_id, start_time, end_time):
     stats = await async_get_statistics_during_period(
         hass,
         start_time,
@@ -56,15 +56,23 @@ async def _get_existing_price_starts(hass, stat_id, start_time, end_time):
         types={"mean"},
     )
 
+    series = []
     starts = set()
     for row in stats.get(stat_id, []):
         start = row.get("start")
-        if start:
-            if isinstance(start, (int, float)):
-                starts.add(dt_util.utc_from_timestamp(start))
-            else:
-                starts.add(dt_util.as_utc(start))
-    return starts
+        if start is None:
+            continue
+        if isinstance(start, (int, float)):
+            start = dt_util.utc_from_timestamp(start)
+        else:
+            start = dt_util.as_utc(start)
+        starts.add(start)
+        value = _safe_float(row.get("mean"))
+        if value is None:
+            continue
+        series.append({"start": start, "value": value})
+    series.sort(key=lambda item: item["start"])
+    return series, starts
 
 
 async def _fetch_spot_prices(hass, start_time, end_time):
@@ -183,30 +191,28 @@ async def async_import_spot_prices_for_range(
 
     _LOGGER.debug("Spot price statistic_id resolved to %s", stat_id)
 
-    series = await _fetch_spot_prices(hass, start_time, end_time)
-    average_price = _average([point["value"] for point in series])
-
-    _LOGGER.debug(
-        "Spot price series_count=%s average_price=%s",
-        len(series),
-        average_price,
+    fetched_series = await _fetch_spot_prices(hass, start_time, end_time)
+    existing_series, existing_starts = await _get_existing_price_series(
+        hass,
+        stat_id,
+        start_time,
+        end_time,
     )
 
-    existing_starts = set()
-    if missing_only and series:
-        existing_starts = await _get_existing_price_starts(
-            hass,
-            stat_id,
-            start_time,
-            end_time,
-        )
+    _LOGGER.debug(
+        "Spot price fetched_count=%s existing_count=%s",
+        len(fetched_series),
+        len(existing_series),
+    )
 
     if existing_starts:
         series_to_write = [
-            point for point in series if dt_util.as_utc(point["start"]) not in existing_starts
+            point
+            for point in fetched_series
+            if not missing_only or dt_util.as_utc(point["start"]) not in existing_starts
         ]
     else:
-        series_to_write = series
+        series_to_write = fetched_series
 
     _LOGGER.debug(
         "Spot price series_to_write=%s missing_only=%s existing_starts=%s",
@@ -216,6 +222,13 @@ async def async_import_spot_prices_for_range(
     )
 
     await _write_price_statistics(hass, stat_id, series_to_write, None)
+
+    merged_by_start = {point["start"]: point for point in existing_series}
+    merged_by_start.update(
+        {dt_util.as_utc(point["start"]): point for point in fetched_series}
+    )
+    series = [merged_by_start[start] for start in sorted(merged_by_start)]
+    average_price = _average([point["value"] for point in series])
 
     return {
         "imported_count": len(series_to_write),

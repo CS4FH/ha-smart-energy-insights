@@ -153,3 +153,39 @@ async def test_import_handles_empty_api_gracefully(
     assert result["imported_count"] == 0
     assert result["average_price"] is None
     mock_repo["import"].assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_import_returns_recorder_history_when_api_range_is_partial(
+    mock_hass: MagicMock,
+    mock_entity_registry: MagicMock,
+    mock_http_client: AsyncMock,
+    mock_repo: dict,
+) -> None:
+    """Keep tariff analysis complete when the API omits already stored hours."""
+    start_time = datetime(2026, 5, 1, 0, 0, tzinfo=timezone.utc)
+    end_time = datetime(2026, 5, 1, 3, 0, tzinfo=timezone.utc)
+    stat_id = "sensor.mock_entry_id_sei_spot_price"
+
+    mock_http_client.json.return_value = {
+        "data": [
+            {"start_timestamp": 1777597200000, "marketprice": 30.0},
+        ]
+    }
+    mock_repo["get"].return_value = {
+        stat_id: [
+            {"start": 1777593600.0, "mean": 2.0},
+            {"start": 1777597200.0, "mean": 3.0},
+            {"start": 1777600800.0, "mean": 4.0},
+        ]
+    }
+
+    result = await async_import_spot_prices_for_range(
+        mock_hass, start_time, end_time, missing_only=True
+    )
+
+    assert result["imported_count"] == 0
+    assert result["series_count"] == 3
+    assert [point["value"] for point in result["series"]] == [2.0, 3.0, 4.0]
+    assert result["average_price"] == 3.0
+    mock_repo["import"].assert_not_called()

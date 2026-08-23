@@ -413,15 +413,14 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
         "Scope: {range}",
         { range }
       ),
-      heatmapDataCoverageSeason: ({ hours, days }) => this.localize(
+      heatmapDataCoverageSeason: ({ coverage }) => this.localize(
         "card.heatmap_data_coverage_season",
-        "Data available in this view: {hours} matched hours ({days} days).",
-        { hours, days }
-      ),
-      heatmapCoverageWarningLow: ({ coverage }) => this.localize(
-        "card.heatmap_coverage_warning_low",
-        "Coverage warning: Less than 50% of this season is available ({coverage}% matched).",
+        "Data coverage: {coverage}%",
         { coverage }
+      ),
+      heatmapCoverageWarningLow: () => this.localize(
+        "card.heatmap_coverage_warning_low",
+        "Limited coverage: These heatmaps may not be representative of the full period."
       ),
       heatmapLegendLower: this.localize("card.heatmap_legend_lower", "Lower"),
       heatmapLegendHigher: this.localize("card.heatmap_legend_higher", "Higher"),
@@ -444,7 +443,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       ),
       monthlyTariffInfo: this.localize(
         "card.monthly_tariff_info",
-        "Each month shows the cost difference of dynamic tariff versus fixed tariff. Negative means savings with dynamic, positive means extra cost."
+        "Each month shows the cost difference of dynamic versus fixed tariff. Negative means savings, positive means extra cost. A warning marks incomplete monthly data."
       ),
       monthlyTariffSavingsLabel: this.localize("card.monthly_tariff_savings_label", "Savings vs fixed"),
       monthlyTariffExtraLabel: this.localize("card.monthly_tariff_extra_label", "Extra costs vs fixed"),
@@ -1941,16 +1940,14 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     const panels = seasons
       .map((season) => {
         const seasonHoursRaw = seasonMatchedHours(season.key);
-        const seasonHours = formatNumber(seasonHoursRaw, 0);
-        const seasonDays = formatNumber(seasonHoursRaw > 0 ? seasonHoursRaw / 24 : 0, 1);
         const potentialSeasonHours = this.getFullSeasonHours(season.key);
         const coverageRatio = potentialSeasonHours > 0 ? (seasonHoursRaw / potentialSeasonHours) : null;
         const showCoverageWarning = Number.isFinite(coverageRatio) && coverageRatio < 0.5;
         const coveragePct = Number.isFinite(coverageRatio) ? formatNumber(coverageRatio * 100, 1) : "0.0";
         const seasonScopeText = texts.heatmapSeasonScope({ range: seasonRanges[season.key] || season.label });
-        const seasonCoverageText = texts.heatmapDataCoverageSeason({ hours: seasonHours, days: seasonDays });
+        const seasonCoverageText = texts.heatmapDataCoverageSeason({ coverage: coveragePct });
         const seasonCoverageWarningText = showCoverageWarning
-          ? texts.heatmapCoverageWarningLow({ coverage: coveragePct })
+          ? texts.heatmapCoverageWarningLow()
           : "";
         const seasonIndex = seasons.findIndex((item) => item.key === season.key);
         const data = seasonHeatmaps[seasonIndex] || wholeYearHeatmaps;
@@ -2428,8 +2425,10 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     if (months.length === 0 || matchedHoursTotal === 0) {
       return `
         <div class="monthly-tariff-panel">
-          <div class="monthly-tariff-title">${texts.monthlyTariffTitle}</div>
-          <div class="monthly-tariff-info">${texts.monthlyTariffInfo}</div>
+          <div class="monthly-tariff-heading">
+            <div class="monthly-tariff-title">${texts.monthlyTariffTitle}</div>
+            <span class="metric-info-marker" role="img" tabindex="0" aria-label="${this.escapeAttribute(texts.monthlyTariffInfo)}" title="${this.escapeAttribute(texts.monthlyTariffInfo)}"><ha-icon icon="mdi:information-outline"></ha-icon></span>
+          </div>
           <div class="monthly-tariff-empty">${texts.monthlyTariffNoData}</div>
         </div>
       `;
@@ -2457,8 +2456,10 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     if (renderedMonths.length === 0) {
       return `
         <div class="monthly-tariff-panel">
-          <div class="monthly-tariff-title">${texts.monthlyTariffTitle}</div>
-          <div class="monthly-tariff-info">${texts.monthlyTariffInfo}</div>
+          <div class="monthly-tariff-heading">
+            <div class="monthly-tariff-title">${texts.monthlyTariffTitle}</div>
+            <span class="metric-info-marker" role="img" tabindex="0" aria-label="${this.escapeAttribute(texts.monthlyTariffInfo)}" title="${this.escapeAttribute(texts.monthlyTariffInfo)}"><ha-icon icon="mdi:information-outline"></ha-icon></span>
+          </div>
           <div class="monthly-tariff-empty">${texts.monthlyTariffNoData}</div>
         </div>
       `;
@@ -2474,21 +2475,18 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
         const matchedHours = Number(item.matched_hours || 0);
         const expectedHours = Number(item.expected_hours);
         const hasExpectedHours = Number.isFinite(expectedHours) && expectedHours > 0;
+        const availabilityPercent = hasExpectedHours
+          ? Math.max(0, Math.min(100, (matchedHours / expectedHours) * 100))
+          : null;
         const availabilityLabel = hasExpectedHours
-          ? `${formatNumber(matchedHours, 0)}/${formatNumber(expectedHours, 0)} h`
-          : `${formatNumber(matchedHours, 0)} h`;
+          ? `${formatNumber(availabilityPercent, availabilityPercent >= 99.95 ? 0 : 1)} %`
+          : "–";
+        const availabilityTooltip = hasExpectedHours
+          ? `${texts.monthlyTariffTooltipHours}: ${formatNumber(matchedHours, 0)}/${formatNumber(expectedHours, 0)}`
+          : texts.monthlyTariffNoData;
         const intensity = Math.min(1, Math.abs(delta) / maxAbs);
         const hasData = matchedHours > 0;
-        const badgeClass = !hasData
-          ? "none"
-          : hasExpectedHours && matchedHours >= expectedHours
-            ? "full"
-            : "partial";
-        const badgeIcon = !hasData
-          ? "⚠"
-          : hasExpectedHours && matchedHours >= expectedHours
-            ? "✓"
-            : "⚠";
+        const showCoverageWarning = hasExpectedHours && availabilityPercent < 99.95;
 
         let cellClass = "neutral";
         if (!hasData) {
@@ -2500,12 +2498,12 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
         }
 
         const centerValue = !hasData
-          ? `${formatNumber(0, 2)} €`
+          ? "–"
           : `${delta > 0 ? "+" : ""}${formatNumber(delta, 2)} €`;
 
         return `
-          <div class="monthly-cell-card ${cellClass}" title="${monthLabels[monthIndex]} | ${texts.monthlyTariffTooltipHours}: ${formatNumber(matchedHours, 0)}" style="--intensity:${intensity.toFixed(3)}">
-            <div class="monthly-cell-badge ${badgeClass}"><span class="monthly-cell-badge-icon" aria-hidden="true">${badgeIcon}</span><span>${availabilityLabel}</span></div>
+          <div class="monthly-cell-card ${cellClass}" title="${monthLabels[monthIndex]} | ${availabilityTooltip}" style="--intensity:${intensity.toFixed(3)}">
+            ${showCoverageWarning ? `<div class="monthly-cell-badge partial"><span class="monthly-cell-badge-icon" aria-hidden="true">⚠</span><span>${availabilityLabel}</span></div>` : ""}
             <div class="monthly-cell-head">${monthLabels[monthIndex]}</div>
             <div class="monthly-cell-center">${centerValue}</div>
           </div>
@@ -2515,8 +2513,10 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
 
     return `
       <div class="monthly-tariff-panel">
-        <div class="monthly-tariff-title">${texts.monthlyTariffTitle}</div>
-        <div class="monthly-tariff-info">${texts.monthlyTariffInfo}</div>
+        <div class="monthly-tariff-heading">
+          <div class="monthly-tariff-title">${texts.monthlyTariffTitle}</div>
+          <span class="metric-info-marker" role="img" tabindex="0" aria-label="${this.escapeAttribute(texts.monthlyTariffInfo)}" title="${this.escapeAttribute(texts.monthlyTariffInfo)}"><ha-icon icon="mdi:information-outline"></ha-icon></span>
+        </div>
         <div class="monthly-tariff-grid">${cells}</div>
       </div>
     `;
@@ -3199,33 +3199,29 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       .heatmap-header-x { min-width: 0; overflow: hidden; text-align: center; color: var(--secondary-text-color); padding-bottom: 4px; }
       .heatmap-cell { min-width: 0; aspect-ratio: 1; border-radius: 2px; cursor: crosshair; transition: transform 0.1s; }
       .heatmap-cell:hover { transform: scale(1.2); box-shadow: 0 0 4px rgba(0,0,0,0.3); z-index: 2; position: relative; }
-      .monthly-tariff-panel { background: linear-gradient(160deg, rgba(var(--rgb-primary-text-color), 0.02), rgba(var(--rgb-primary-text-color), 0.04)); border: 1px solid rgba(var(--rgb-divider-color), 0.6); border-radius: 10px; padding: 14px; }
-      .monthly-tariff-title { font-size: 15px; font-weight: 600; color: var(--primary-text-color); margin-bottom: 10px; }
-      .monthly-tariff-info { font-size: 12px; color: var(--secondary-text-color); line-height: 1.45; margin: -2px 0 12px; background: rgba(var(--rgb-primary-text-color), 0.03); border: 1px solid rgba(var(--rgb-divider-color), 0.45); border-radius: 8px; padding: 8px 10px; }
+      .monthly-tariff-panel { background: rgba(var(--rgb-primary-text-color), 0.025); border: 1px solid rgba(var(--rgb-divider-color), 0.5); border-radius: 8px; padding: 14px; }
+      .monthly-tariff-heading { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; }
+      .monthly-tariff-title { font-size: 15px; font-weight: 600; color: var(--primary-text-color); }
       .monthly-tariff-empty { font-size: 13px; color: var(--secondary-text-color); padding: 8px 4px; }
-      .monthly-tariff-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-      @media(min-width: 900px) { .monthly-tariff-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-      @media(min-width: 1300px) { .monthly-tariff-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-      .monthly-cell-card { position: relative; border: 1px solid rgba(var(--rgb-divider-color), 0.45); border-radius: 10px; padding: 16px 10px 10px; min-height: 84px; display: grid; grid-template-rows: auto 1fr; align-items: center; justify-items: center; text-align: center; gap: 8px; }
-      .monthly-cell-card.savings { background: color-mix(in srgb, #c9ebd9 calc(78% + var(--intensity) * 20%), rgba(var(--rgb-card-background-color), 0.9)); border-color: rgba(49, 122, 78, 0.35); }
-      .monthly-cell-card.neutral { background: color-mix(in srgb, #ece0b8 calc(78% + var(--intensity) * 20%), rgba(var(--rgb-card-background-color), 0.9)); border-color: rgba(143, 122, 38, 0.35); }
-      .monthly-cell-card.extra { background: color-mix(in srgb, #efcbc8 calc(78% + var(--intensity) * 20%), rgba(var(--rgb-card-background-color), 0.9)); border-color: rgba(155, 59, 59, 0.35); }
-      .monthly-cell-card.nodata { background: color-mix(in srgb, #ece0b8 78%, rgba(var(--rgb-card-background-color), 0.9)); border-color: rgba(155, 122, 31, 0.35); }
-      .monthly-cell-badge { position: absolute; top: 8px; right: 8px; display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; border-radius: 999px; font-size: 10px; line-height: 1; font-weight: 700; letter-spacing: 0.15px; background: rgba(var(--rgb-primary-text-color), 0.08); color: var(--secondary-text-color); }
+      .monthly-tariff-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+      .monthly-cell-card { min-width: 0; min-height: 76px; box-sizing: border-box; border: 1px solid rgba(var(--rgb-divider-color), 0.45); border-radius: 6px; padding: 8px 9px; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto 1fr auto; align-items: center; gap: 4px 6px; }
+      .monthly-cell-card.savings { background: color-mix(in srgb, #b7e4c7 calc(68% + var(--intensity) * 20%), var(--card-background-color)); border-color: rgba(35, 112, 66, 0.45); }
+      .monthly-cell-card.neutral { background: color-mix(in srgb, #eadf9d 78%, var(--card-background-color)); border-color: rgba(111, 88, 12, 0.42); }
+      .monthly-cell-card.extra { background: color-mix(in srgb, #efb7b3 calc(68% + var(--intensity) * 20%), var(--card-background-color)); border-color: rgba(139, 43, 43, 0.45); }
+      .monthly-cell-card.nodata { background: color-mix(in srgb, var(--card-background-color) 82%, #8a8a8a 18%); border-color: rgba(var(--rgb-divider-color), 0.65); }
+      .monthly-cell-badge { grid-column: 2; grid-row: 3; justify-self: end; align-self: end; display: inline-flex; align-items: center; gap: 3px; padding: 0; font-size: 9px; line-height: 1; font-weight: 700; letter-spacing: 0; color: var(--secondary-text-color); white-space: nowrap; }
       .monthly-cell-badge-icon { font-size: 11px; line-height: 1; }
-      .monthly-cell-badge.full { color: #2f7a4d; background: rgba(47, 122, 77, 0.14); }
-      .monthly-cell-badge.partial { color: #9b7a1f; background: rgba(155, 122, 31, 0.16); }
-      .monthly-cell-badge.none { color: #9b7a1f; background: rgba(155, 122, 31, 0.16); }
-      .monthly-cell-head { font-size: 12px; font-weight: 800; letter-spacing: 0.45px; text-transform: uppercase; color: #2d3640; padding: 2px 8px; border-radius: 999px; background: rgba(45, 54, 64, 0.12); }
-      .monthly-cell-center { font-size: 15px; font-weight: 700; text-align: center; color: var(--primary-text-color); letter-spacing: 0.1px; display: flex; align-items: center; justify-content: center; min-height: 28px; }
-      .monthly-cell-card.savings .monthly-cell-head { color: #225a3d; background: rgba(34, 90, 61, 0.12); }
-      .monthly-cell-card.neutral .monthly-cell-head { color: #7f6721; background: rgba(127, 103, 33, 0.14); }
-      .monthly-cell-card.extra .monthly-cell-head { color: #893737; background: rgba(137, 55, 55, 0.12); }
-      .monthly-cell-card.nodata .monthly-cell-head { color: #7f6721; background: rgba(127, 103, 33, 0.14); }
-      .monthly-cell-card.savings .monthly-cell-center { color: #317a4e; }
-      .monthly-cell-card.neutral .monthly-cell-center { color: #8f7a26; }
-      .monthly-cell-card.extra .monthly-cell-center { color: #9b3b3b; }
-      .monthly-cell-card.nodata .monthly-cell-center { color: #8f7a26; }
+      .monthly-cell-badge.partial { color: #704f00; }
+      .monthly-cell-head { grid-column: 1 / -1; grid-row: 1; justify-self: center; font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: var(--secondary-text-color); }
+      .monthly-cell-center { grid-column: 1 / -1; grid-row: 2; justify-self: center; min-height: 24px; display: flex; align-items: center; justify-content: center; color: var(--primary-text-color); font-size: 16px; font-weight: 700; letter-spacing: 0.1px; text-align: center; }
+      .monthly-cell-card.savings .monthly-cell-head { color: #245c39; }
+      .monthly-cell-card.neutral .monthly-cell-head { color: #604f0d; }
+      .monthly-cell-card.extra .monthly-cell-head { color: #7a2929; }
+      .monthly-cell-card.nodata .monthly-cell-head { color: var(--secondary-text-color); }
+      .monthly-cell-card.savings .monthly-cell-center { color: #174d2c; }
+      .monthly-cell-card.neutral .monthly-cell-center { color: #5d4a00; }
+      .monthly-cell-card.extra .monthly-cell-center { color: #751f1f; }
+      .monthly-cell-card.nodata .monthly-cell-center { color: var(--secondary-text-color); }
       .card-tax-note { margin: 0; padding: 14px 4px 0; color: var(--secondary-text-color); text-align: center; font-size: 12px; opacity: 0.9; }
 
       /* Upload Formular wenn Daten geladen sind */
