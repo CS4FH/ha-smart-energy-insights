@@ -2940,6 +2940,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       .monitored-device-fields { display: grid; gap: 3px; min-width: 0; }
       .monitored-device-entity { overflow: hidden; color: var(--secondary-text-color); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
       .monitored-device-actions { display: flex; gap: 4px; }
+      .consumption-source-cost-relevant-row { display: flex; align-items: center; gap: 4px; }
       .consumption-source-cost-relevant { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--secondary-text-color); }
       .device-icon-button { width: 44px; height: 44px; padding: 10px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--divider-color); border-radius: 8px; background: transparent; color: var(--primary-text-color); cursor: pointer; box-sizing: border-box; transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease; }
       .device-icon-button:hover { border-color: var(--primary-color); color: var(--primary-color); }

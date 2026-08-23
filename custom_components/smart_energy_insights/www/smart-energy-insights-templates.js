@@ -69,11 +69,13 @@ export function renderBaseCard(texts) {
             <div class="sensor-message info" id="consumptionSourceSensorMessage" style="display: none;"></div>
             <label class="sensor-label" for="consumptionSourceNameInput">${texts.consumptionSourceNameLabel}</label>
             <input id="consumptionSourceNameInput" class="device-name-input" type="text" maxlength="80" />
-            <label class="consumption-source-cost-relevant" for="consumptionSourceCostRelevantInput">
-              <input type="checkbox" id="consumptionSourceCostRelevantInput" />
-              ${texts.consumptionSourceCostRelevantLabel}
-            </label>
-            <div class="sensor-hint">${texts.consumptionSourceCostRelevantHelp}</div>
+            <div class="consumption-source-cost-relevant-row">
+              <label class="consumption-source-cost-relevant" for="consumptionSourceCostRelevantInput">
+                <input type="checkbox" id="consumptionSourceCostRelevantInput" />
+                ${texts.consumptionSourceCostRelevantLabel}
+              </label>
+              <span class="metric-info-marker" role="img" tabindex="0" aria-label="${texts.consumptionSourceCostRelevantHelp}" title="${texts.consumptionSourceCostRelevantHelp}"><ha-icon icon="mdi:information-outline"></ha-icon></span>
+            </div>
             <div class="section-actions">
               <button id="cancelConsumptionSourceBtn" class="cancel-button" type="button">${texts.cancelButton}</button>
               <button id="saveConsumptionSourceBtn" class="upload-button" type="button">${texts.consumptionSourceSave}</button>
