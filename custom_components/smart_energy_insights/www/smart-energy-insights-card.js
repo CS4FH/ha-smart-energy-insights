@@ -2588,16 +2588,12 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       : metricValue(placeholderValue, "");
     const maxSpotValue = summary.maxSpotPrice !== null && summary.maxSpotPrice !== undefined
       ? metricValue(formatNumber(summary.maxSpotPrice, 2), "ct/kWh")
+        + (summary.maxSpotPriceAt ? ` <span class="technical-metric-unit">(${this.formatDateTimeEuropean(summary.maxSpotPriceAt)})</span>` : "")
       : metricValue(placeholderValue, "");
     const minSpotValue = summary.minSpotPrice !== null && summary.minSpotPrice !== undefined
       ? metricValue(formatNumber(summary.minSpotPrice, 2), "ct/kWh")
+        + (summary.minSpotPriceAt ? ` <span class="technical-metric-unit">(${this.formatDateTimeEuropean(summary.minSpotPriceAt)})</span>` : "")
       : metricValue(placeholderValue, "");
-    const maxSpotHelp = summary.maxSpotPriceAt
-      ? `${texts.analysisMaxSpotPriceHelp} ${texts.analysisOccurredOnLabel}: ${this.formatDateTimeEuropean(summary.maxSpotPriceAt)}`
-      : texts.analysisMaxSpotPriceHelp;
-    const minSpotHelp = summary.minSpotPriceAt
-      ? `${texts.analysisMinSpotPriceHelp} ${texts.analysisOccurredOnLabel}: ${this.formatDateTimeEuropean(summary.minSpotPriceAt)}`
-      : texts.analysisMinSpotPriceHelp;
     const variableConsumptionPercent = summary.variableConsumptionPercent !== null
       && summary.variableConsumptionPercent !== undefined
       ? Number(summary.variableConsumptionPercent)
@@ -2718,8 +2714,8 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       { label: texts.analysisEffectiveSpotLabel, value: effectiveSpotValue, help: texts.analysisEffectiveSpotHelp },
       { label: texts.analysisNegativePriceHoursLabel, value: negativePriceValue, help: texts.analysisNegativePriceHoursHelp },
       { label: texts.analysisSpotCheaperLabel, value: spotCheaperValue, help: texts.analysisSpotCheaperHelp },
-      { label: texts.analysisMaxSpotPriceLabel, value: maxSpotValue, help: maxSpotHelp },
-      { label: texts.analysisMinSpotPriceLabel, value: minSpotValue, help: minSpotHelp },
+      { label: texts.analysisMaxSpotPriceLabel, value: maxSpotValue, help: texts.analysisMaxSpotPriceHelp },
+      { label: texts.analysisMinSpotPriceLabel, value: minSpotValue, help: texts.analysisMinSpotPriceHelp },
       { label: texts.analysisDailySpreadLabel, value: dailySpreadValue, help: texts.analysisDailySpreadHelp },
       { label: texts.analysisSpotStdDevLabel, value: breakEvenFixedValue, help: texts.analysisSpotStdDevHelp }
     ];
