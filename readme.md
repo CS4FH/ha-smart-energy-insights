@@ -1,116 +1,210 @@
 # Smart Energy Insights
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
+[![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
+[![Home Assistant 2026.3+](https://img.shields.io/badge/Home%20Assistant-2026.3%2B-blue.svg)](https://www.home-assistant.io/)
 
-A Home Assistant integration that helps households decide between a **fixed** and a **dynamic (day-ahead spot) electricity tariff**, based on their own historical consumption data — either uploaded as a CSV load profile or loaded directly from an existing Home Assistant energy sensor.
+Smart Energy Insights uses your own historical electricity consumption to answer a practical question: **Would a fixed tariff or an dynamic spot tariff have been cheaper for my household?**
 
-## 📌 Project Overview
-Smart Energy Insights is being developed as part of an ongoing Master's Thesis at FH JOANNEUM. It is implemented as a local Home Assistant integration with its own sidebar panel, custom Lovelace card, and analysis dashboard — no cloud services or external accounts required.
+The integration runs locally in Home Assistant. It combines your consumption profile with historical aWATTar day-ahead prices and presents the result in a dedicated sidebar dashboard. No external account or cloud service is required for your consumption data.
 
-## 🛠 Features
-* **Data import:** Load historical consumption either by uploading a 15-minute CSV load profile, or by selecting an existing Home Assistant energy sensor (imports up to the last 12 months of long-term statistics).
-* **Day-ahead spot prices:** Automatically fetches and stores Austrian EPEX day-ahead spot prices (via the aWATTar API) as long-term statistics and exposes them as a sensor entity.
-* **Tariff comparison:** Compares your real consumption against a configurable fixed tariff and a configurable dynamic/spot tariff (markup, base fees, tax rate), and projects potential savings or additional cost.
-* **Analysis dashboard:** A dedicated sidebar panel with a multi-tab dashboard — monthly comparison, usage behavior, risk & optimization, and technical details.
-* **Seasonal heatmaps:** Consumption and price visualized by hour-of-day and weekday, split by season.
-* **Monitored devices:** Attach additional per-device energy sensors to break down consumption and cost by individual appliance.
-* **No manual dashboard setup:** The custom card resource and sidebar panel are registered automatically when the integration is set up.
+## What you get
 
-## 🚀 Installation
+- A direct comparison of fixed and dynamic tariff costs for a selectable period
+- Consumption data from Home Assistant energy sensors or a CSV load profile
+- Multiple consumption sources, with separate control over which sources affect tariff costs
+- Monthly results and warnings for incomplete data
+- Seasonal heatmaps for consumption, spot prices, and load-shifting opportunities
+- A theoretical best/worst-case range for shifting flexible consumption
+- Optional appliance-level heatmaps using additional energy sensors
+- Automatic registration of the sidebar panel and Lovelace resource
+- English and German UI, following your Home Assistant language
+
+> [!IMPORTANT]
+> The recommendation is a retrospective model based on the selected data, tariff settings, and historical spot prices. It is not a price forecast or a guarantee of future savings. Volumetric grid fees and other identical surcharges are excluded because they do not change the comparison.
+
+## Requirements
+
+- Home Assistant **2026.3.0** or newer
+- The `recorder` integration and long-term statistics
+- Internet access for market data from the [aWATTar API](https://api.awattar.at/)
+- For sensor-based analysis: at least one compatible cumulative energy sensor with historical statistics
+
+A compatible sensor has:
+
+- device class `energy`
+- state class `total` or `total_increasing`
+- unit `kWh` or `Wh`
+
+## Installation with HACS
+
 1. Open **HACS** in Home Assistant.
-2. Navigate to **Integrations** -> **Custom repositories** (three-dot menu).
-3. Add this repository URL and select `Integration` as the category.
-4. Click **Install** and restart Home Assistant.
-5. Go to **Settings → Devices & Services → Add Integration** and search for **Smart Energy Insights**.
+2. Select **Integrations**.
+3. Open the three-dot menu and choose **Custom repositories**.
+4. Add `https://github.com/CS4FH/ha-smart-energy-insights` with category **Integration**.
+5. Install **Smart Energy Insights** and restart Home Assistant.
+6. Go to **Settings > Devices & services > Add integration**.
+7. Search for **Smart Energy Insights** and complete the setup.
 
-After adding the integration, a **Smart Energy Insights** entry appears in the sidebar, and a `Spot Price` sensor entity is created that tracks the current day-ahead spot price.
+After setup, **Smart Energy Insights** appears in the sidebar. The dashboard and its frontend resource are created automatically.
 
-## ⚙️ Configuration
-During initial setup, tariff parameters must be entered once. They can be adjusted at any time afterwards via the integration's **Options** (Settings → Devices & Services → Smart Energy Insights → Configure):
+## Configure your tariffs
 
-| Option | Description | Default |
-|---|---|---|
-| Fixed price | Fixed tariff energy price, **gross** (tax-included) | 15.0 ct/kWh |
-| Fixed base fee | Fixed tariff monthly base fee, **gross** | 5.00 € |
-| Spot markup | Supplier markup added on top of the spot price, **gross** | 1.5 ct/kWh |
-| Spot base fee | Dynamic tariff monthly base fee, **gross** | 2.50 € |
-| Tax rate | Used only to convert the net/wholesale day-ahead spot market price into a gross retail price; not applied to the fields above, which are already gross | 20 % |
+The setup dialog asks for the values used in the comparison. You can change them later under **Settings > Devices & services > Smart Energy Insights > Configure**.
 
-All prices are entered gross (tax-included), matching what's shown on a typical utility bill or tariff sheet. If you only know your net price (excl. tax), convert it first: `gross = net × (1 + tax rate / 100)` — e.g. a net price of 12.5 ct/kWh at 20% tax becomes `12.5 × 1.20 = 15.0` ct/kWh gross.
+![Configure tariff values during setup](docs/images/00_Setup.png)
 
-## 📊 Using the Dashboard
+| Setting | Enter this value | Default |
+|---|---|---:|
+| Fixed price | Gross energy price of the fixed tariff | 15.0 ct/kWh |
+| Fixed base fee | Gross monthly base fee of the fixed tariff | EUR 5.00 |
+| Spot markup | Gross supplier markup added to the spot price | 1.5 ct/kWh |
+| Spot base fee | Gross monthly base fee of the dynamic tariff | EUR 2.50 |
+| Tax rate | Tax applied to the net wholesale spot price | 20% |
 
-Open **Smart Energy Insights** in the sidebar to access the analysis panel.
+The fixed price, both base fees, and spot markup must be entered **including tax**. The tax rate is applied only when converting the net wholesale spot price to a gross retail price.
+
+If your tariff sheet shows a net fixed price, convert it first. For example, `12.5 ct/kWh x 1.20 = 15.0 ct/kWh` gross at 20% tax.
+
+## Use the dashboard
+
+Open **Smart Energy Insights** in the Home Assistant sidebar. The dashboard guides you through four steps.
 
 ### 1. Choose a data source
 
-Pick how you want to load your consumption data — either from an existing energy sensor or from a CSV file. You can switch between them at any time.
+You can switch between **Sensor** and **CSV** at any time. Previously imported data remains available when you switch.
 
-**Sensor:** Select an energy sensor to import the last 12 months of statistics, and optionally attach **monitored devices** (additional sensors for individual appliances such as a boiler, dishwasher, or washing machine) to later see a per-device breakdown.
+![Choose a consumption source](docs/images/01_ChooseDataSource.png)
 
-![Choose data source - sensor](docs/images/ChooseDataSource.png)
+#### Sensor
 
-**CSV:** Drag & drop or select a CSV load profile file to upload instead.
+Use this option if Home Assistant already records your energy consumption. The initial analysis reads up to the latest 12 months of long-term statistics.
 
-![Choose data source - CSV upload](docs/images/CSVUpload.png)
+Under **Consumption sources**, add every sensor that contributes to the household total:
 
-### 2. Review the savings summary
+- Enable **Cost-relevant** for energy you pay your supplier for, typically grid import. Only these sources are used in the tariff comparison.
+- Disable **Cost-relevant** for sources that should appear in total consumption but are not billed under the compared tariff, such as PV self-consumption or battery discharge.
+- Do not add gross PV production or battery charging as household consumption.
 
-Once a profile is loaded, the hero cards at the top summarize the tariff comparison at a glance: the projected savings (or extra cost) of the dynamic tariff versus the fixed tariff, along with a best-case (with active load shifting) and worst-case (peak-hour heavy usage) projection.
+Multiple sources are added together hour by hour. Use **Refresh analysis** after changing a source or when new statistics should be included.
 
-![Savings summary hero cards](docs/images/HeroCard.png)
+Under **Monitored devices**, you can optionally add appliance sensors, for example a heat pump, boiler, or EV charger. These sensors provide separate usage heatmaps; they are not added to household consumption and do not change the tariff recommendation.
 
-### 3. Detailed analysis tabs
+#### CSV
 
-Below the summary, a **Detailed analysis** panel with four tabs breaks the data down further:
+The CSV importer is primarily a legacy tool that was used while developing and debugging the integration. Prefer the **Sensor** source for normal use. If you already have a compatible or converted load-profile file, select or drag it into the upload area. See [CSV format](#csv-format) for the accepted structure and limitations.
 
-**Monthly comparison** — the cost difference between the dynamic and fixed tariff for each month, including data completeness per month.
+### 2. Select the analysis period
 
-![Monthly comparison tab](docs/images/monthly.png)
+The calendar shows which days have complete, partial, or no hourly data. Select a continuous period and apply it, or reset the selection to use the entire available range.
 
-**Usage behavior** — heatmaps of consumption, spot price, and cost gradient by hour-of-day and weekday, filterable by season, to spot when you consume the most and when energy is cheapest.
+![Select an analysis period](docs/images/02_SelectPeriod.png)
 
-![Usage behavior tab](docs/images/UsageBehaviour.png)
+Prefer a period with high data completeness. Missing consumption or spot-price hours can make the comparison less representative; the dashboard warns when coverage is low.
 
-**Risk & optimization** — the cost projection range between best and worst case, plus your consumption timing profile (flexibility potential, share of cheap/expensive/average hours).
+### 3. Read the tariff recommendation
 
-![Risk and optimization tab](docs/images/RiskAndOptimization.png)
+The recommendation compares total fixed-tariff cost with total dynamic-tariff cost for the selected period. A positive saving means the dynamic tariff was cheaper; an extra-cost result means the fixed tariff was cheaper.
 
-**Technical details** — the underlying figures: measurement window, consumption statistics, spot market analysis, and the tariff parameters used for the calculation.
+![Tariff recommendation](docs/images/03_TariffRecommendation.png)
 
-![Technical details tab](docs/images/TechnicalDetails.png)
+The calculation includes the configured energy prices, supplier markup, tax, and prorated monthly base fees. It uses only consumption sources marked **Cost-relevant**.
 
-### CSV File Format
+### 4. Explore the details
 
-The integration supports importing historical load profiles from CSV files with the following format:
+#### Monthly comparison
 
-| Column Name | Format | Example |
+See the difference between dynamic and fixed costs by month. Green values indicate savings with the dynamic tariff; red values indicate extra cost. Coverage warnings identify incomplete months.
+
+![Monthly tariff comparison](docs/images/04.01_MonthlyComparison.png)
+
+#### Usage behavior
+
+Compare average consumption by weekday and hour, filter by season, and switch between total consumption and configured appliance profiles.
+
+![Seasonal consumption heatmap](docs/images/04.021_UsageBehaviour.png)
+
+The spot view can show net wholesale prices in absolute terms or relative to your fixed tariff. The optimization view combines price and consumption patterns to highlight costly hours and possible target hours for load shifting.
+
+![Spot price and optimization heatmaps](docs/images/04.022_UsageBehaviour.png)
+
+Heatmaps describe historical patterns. A favorable target hour does not mean that every appliance can technically or safely be shifted there.
+
+#### Risk and optimization
+
+The cost projection shows theoretical best and worst cases if flexible, cost-relevant consumption were moved to cheaper or more expensive hours. The timing profile shows how much consumption currently falls into each day's six cheapest, average, and six most expensive hours.
+
+![Risk and optimization analysis](docs/images/04.03_RiskOptimization.png)
+
+The variable consumption share is an estimate above the detected nightly base load. Treat it as an upper bound, not as the amount that can necessarily be shifted in practice.
+
+#### Technical details
+
+Use this tab to verify the measurement window, completeness, consumption totals, market statistics, break-even price, and tariff parameters behind the recommendation.
+
+![Technical analysis details](docs/images/04.04_DetailedAnalysis.png)
+
+## CSV format
+
+> [!NOTE]
+> The importer is tailored to a specific load-profile format based on exports from **Energienetze Steiermark** and is therefore only of limited use with files from other providers. It is not exactly plug and play: getting data into the required shape may involve some spreadsheet cleanup or a small Python conversion detour.
+>
+> In the original development workflow, even obtaining a complete year was not available through the provider's usual download interface. It required adjusting the API request in the Firefox developer console; the response then arrived Base64-encoded and still had to be decoded and converted. That worked well enough for debugging, but it is not intended or recommended as a regular user workflow. Most providers do not appear to offer a convenient full-year export in this format, so consider CSV an experimental escape hatch rather than the main entrance.
+
+The importer expects a semicolon-separated file. Only the four columns below are required; additional columns from a supplier export are ignored.
+
+| Required column | Format | Example |
 |---|---|---|
-| `Anlagennummer` | String | 1234567890 |
-| `Zählpunkt` | String | AT001230045670000000000000012345678 |
-| `Tarif` | String | (optional) |
-| `Statistikzeitraum Beginn` | `DD.MM.YYYY HH:MM` | 01.01.2025 00:00 |
-| `Statistikzeitraum Ende` | `DD.MM.YYYY HH:MM` | 01.01.2025 00:15 |
-| `Wert` | Number (comma as decimal) | 0,135 |
-| `Einheit` | String | kWh |
-| `Messart` | String (optional) | VAL |
+| `Statistikzeitraum Beginn` | `DD.MM.YYYY HH:MM` | `01.01.2025 00:00` |
+| `Statistikzeitraum Ende` | `DD.MM.YYYY HH:MM` | `01.01.2025 00:15` |
+| `Wert` | Consumption during the interval | `0,135` |
+| `Einheit` | `kWh` | `kWh` |
 
-**Requirements:**
-* Delimiter: **Semicolon** (`;`)
-* Time intervals: **15 minutes** exactly
-* Unit: **kWh** (case-insensitive)
-* Timestamps: **Local timezone** (converted to UTC on import)
-* Numeric values: Comma (`,`) as decimal separator
-* Max file size: 50 MB
+Example:
 
-### Imported Statistics
+```csv
+Statistikzeitraum Beginn;Statistikzeitraum Ende;Wert;Einheit
+01.01.2025 00:00;01.01.2025 00:15;0,135;kWh
+01.01.2025 00:15;01.01.2025 00:30;0,112;kWh
+```
 
-Imported load profiles are stored as Home Assistant Long-Term Statistics and can be inspected in **Developer Tools → Statistics**, alongside the standard `Spot Price` sensor.
+CSV rules:
 
-## 🏗 Requirements
-* Home Assistant **2026.3.0** or newer.
-* The `recorder` integration (enabled by default via `default_config` in a standard Home Assistant setup) for long-term statistics.
-* An internet connection to fetch day-ahead spot prices from the aWATTar API (Austrian market).
+- Maximum file size: **50 MB**
+- Timestamps are interpreted in the Home Assistant local timezone
+- Decimal comma and decimal point are accepted
+- Unit matching is case-insensitive, but only `kWh` is supported
+- Typical 15-minute meter values are summed into hourly consumption for analysis
+- UTF-8 and common Western European encodings are supported
 
----
-*Created by Christoph Seidlinger as part of the Master's Program Software and Digital Experience Engineering at FH JOANNEUM, supervised by [FH-Prof. DI Dr. Alexander Nischelwitzer](https://www.fh-joanneum.at/hochschule/person/alexander-nischelwitzer/).*
+Uploaded profiles are stored as Home Assistant long-term statistics and can be inspected under **Developer tools > Statistics**. The generated **Spot Price (statistics only, no live state)** entity is also a statistics carrier; it is not a sensor for displaying the current price on a dashboard.
+
+## Data and calculation notes
+
+- Consumption data stays in your Home Assistant instance.
+- Spot prices are fetched and stored as long-term statistics.
+- Dynamic energy price = net wholesale spot price + configured tax + gross supplier markup.
+- Base fees are prorated to the matched analysis duration.
+- Only hours with matching consumption and spot-price data contribute to tariff costs.
+- Results become less reliable when the selected period is short, seasonal coverage is uneven, or data completeness is low.
+
+## Troubleshooting
+
+**No sensor appears in the picker**
+
+Check the sensor's device class, state class, unit, and long-term statistics under **Developer tools > Statistics**. A power sensor in `W` or `kW` is not an energy sensor and cannot be used directly.
+
+**The selected period contains no result**
+
+Choose days marked as complete or partial in the calendar. Sensor history is limited by your recorder retention and available long-term statistics; the default sensor import covers the latest 12 months.
+
+**The dashboard or sidebar entry is missing after installation**
+
+Restart Home Assistant, confirm that the integration is loaded under **Settings > Devices & services**, and refresh the browser without using its cached frontend files.
+
+**The comparison differs from my electricity bill**
+
+Verify that all tariff values are gross and that only grid-billed consumption sources are marked **Cost-relevant**. The comparison does not reproduce the entire bill: volumetric grid fees and identical static charges are intentionally excluded.
+
+## Project background
+
+Smart Energy Insights is developed as part of a Master's thesis in the Software and Digital Experience Engineering program at FH JOANNEUM. It was created by Christoph Seidlinger and supervised by [FH-Prof. DI Dr. Alexander Nischelwitzer](https://www.fh-joanneum.at/hochschule/person/alexander-nischelwitzer/).
