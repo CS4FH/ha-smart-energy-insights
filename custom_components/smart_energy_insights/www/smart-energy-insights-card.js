@@ -277,7 +277,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       analysisOccurredOnLabel: this.localize("card.analysis_occurred_on_label", "Occurred on"),
       analysisSectionRiskTitle: this.localize("card.analysis_section_risk_title", "RISK AND OPTIMIZATION"),
       analysisVariableConsumptionLabel: this.localize("card.analysis_variable_consumption_label", "Variable consumption share"),
-      analysisVariableConsumptionHelp: this.localize("card.analysis_variable_consumption_help", "Share of total consumption above the estimated base load. This is a theoretical upper bound, not automatically technically shiftable consumption."),
+      analysisVariableConsumptionHelp: this.localize("card.analysis_variable_consumption_help", "Estimated share of total consumption above the nightly base load. It is the theoretical maximum available for load shifting; actual shiftability depends on the devices."),
       analysisRecommendationTitle: this.localize("card.analysis_recommendation_title", "Recommendation"),
       analysisRecommendationComparisonTitle: this.localize("card.analysis_recommendation_comparison_title", "Tariff comparison"),
       analysisRecommendationStatusSavings: this.localize("card.analysis_recommendation_status_savings", "Spot tariff is currently cheaper"),
@@ -292,7 +292,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       analysisStatusQuoFixedHigherLabel: this.localize("card.analysis_status_quo_fixed_higher_label", "Fixed higher"),
       analysisStatusQuoBalancedLabel: this.localize("card.analysis_status_quo_balanced_label", "Balanced"),
       analysisCostProjectionTitle: this.localize("card.analysis_cost_projection_title", "Cost projection range"),
-      analysisCostProjectionHelp: this.localize("card.analysis_cost_projection_help", "Projected spot-cost corridor from best to worst case compared against your fixed-tariff baseline."),
+      analysisCostProjectionHelp: this.localize("card.analysis_cost_projection_help", "Estimated range in which active shifting of variable, cost-relevant load can move spot costs relative to the fixed tariff. The endpoints are theoretical best and worst cases."),
       analysisCostProjectionFixedLabel: this.localize("card.analysis_cost_projection_fixed_label", "Fixed baseline"),
       analysisCostProjectionSpotLabel: this.localize("card.analysis_cost_projection_spot_label", "Current spot"),
       analysisCostProjectionBestLabel: this.localize("card.analysis_cost_projection_best_label", "Best case spot"),
@@ -303,7 +303,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       analysisCostProjectionSavingsZone: this.localize("card.analysis_cost_projection_savings_zone", "Savings zone"),
       analysisCostProjectionRiskZone: this.localize("card.analysis_cost_projection_risk_zone", "Risk zone"),
       analysisTimingProfileTitle: this.localize("card.analysis_timing_profile_title", "Consumption timing profile"),
-      analysisTimingProfileHelp: this.localize("card.analysis_timing_profile_help", "Distribution of your consumption between expensive, average and cheap market hours."),
+      analysisTimingProfileHelp: this.localize("card.analysis_timing_profile_help", "Cheap and expensive show the share of matched consumption in each day's six cheapest and six most expensive spot-price hours. Average is the remainder."),
       analysisTimingExpensiveLabel: this.localize("card.analysis_timing_expensive_label", "Expensive hours"),
       analysisTimingAverageLabel: this.localize("card.analysis_timing_average_label", "Average hours"),
       analysisTimingCheapLabel: this.localize("card.analysis_timing_cheap_label", "Cheap hours"),
@@ -365,7 +365,7 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
       heatmapOptimizationCostGradientTitle: this.localize("card.heatmap_optimization_cost_gradient_title", "Cost gradient heatmap (ct/h)"),
       heatmapOptimizationInfo: this.localize(
         "card.heatmap_optimization_info",
-        "Shift score compares each hour with the selected period average. Hours where consumption and price are both above average get negative values because they are expensive and hard to shift. Hours where both are below average get positive values because they are good shift opportunities. Values around 0 are neutral."
+        "The shift score compares each hour with the period average. High consumption at high prices scores negative; low consumption at low prices marks a potentially favorable target time. Values near 0 are neutral. Technical shiftability is not assessed."
       ),
       heatmapOptimizationCostGradientInfo: this.localize(
         "card.heatmap_optimization_cost_gradient_info",
@@ -2747,8 +2747,8 @@ class SmartEnergyInsightsUploadCard extends HTMLElement {
     const profileItems = [
       { label: texts.analysisVariableConsumptionLabel, value: variableConsumptionValue, help: texts.analysisVariableConsumptionHelp },
       { label: texts.analysisTimingCheapLabel, value: cheapShareValue, help: texts.analysisTimingProfileHelp },
-      { label: texts.analysisTimingExpensiveLabel, value: expensiveShareValue, help: texts.analysisTimingProfileHelp },
-      { label: texts.analysisTimingAverageLabel, value: averageShareValue, help: texts.analysisTimingProfileHelp }
+      { label: texts.analysisTimingAverageLabel, value: averageShareValue, help: texts.analysisTimingProfileHelp },
+      { label: texts.analysisTimingExpensiveLabel, value: expensiveShareValue, help: texts.analysisTimingProfileHelp }
     ];
 
     return {
