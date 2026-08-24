@@ -25,7 +25,6 @@ The integration runs locally in Home Assistant. It combines your consumption pro
 ## Requirements
 
 - Home Assistant **2026.3.0** or newer
-- The `recorder` integration and long-term statistics
 - Internet access for market data from the [aWATTar API](https://api.awattar.at/)
 - For sensor-based analysis: at least one compatible cumulative energy sensor with historical statistics
 
